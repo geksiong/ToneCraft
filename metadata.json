@@ -1,0 +1,10 @@
+{
+  "name": "ToneCraft - Pro Guitar & Bass Pedalboard Modeler",
+  "description": "Real-time guitar and bass pedalboard modeling engine with drag-and-drop signal chain, NAM amp profiles, IR cabinet impulses, VST plugin integration, pitch shifter, harmonizer, looper, and cloud preset sharing.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

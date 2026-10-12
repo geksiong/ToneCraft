@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-display: 'Chakra Petch', sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #0c0d0e;
+    color: #e6e8eb;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+}
+
+/* Custom metal and vintage pedalboard textures */
+.metal-brushed {
+  background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.3) 100%),
+              radial-gradient(circle at 50% 0%, rgba(255,255,255,0.1), transparent 70%);
+}
+
+.pedal-shadow {
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.8),
+              0 8px 16px -6px rgba(0, 0, 0, 0.6),
+              inset 0 1px 0 rgba(255, 255, 255, 0.25),
+              inset 0 -2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.knob-shadow {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.6),
+              inset 0 1px 1px rgba(255, 255, 255, 0.4),
+              inset 0 -2px 3px rgba(0, 0, 0, 0.7);
+}
+
+.footswitch-shadow {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.7),
+              inset 0 2px 3px rgba(255, 255, 255, 0.7),
+              inset 0 -2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.led-glow-amber {
+  box-shadow: 0 0 12px 3px rgba(245, 158, 11, 0.8), inset 0 0 4px #ffffff;
+}
+
+.led-glow-red {
+  box-shadow: 0 0 14px 4px rgba(239, 68, 68, 0.85), inset 0 0 4px #ffffff;
+}
+
+.led-glow-blue {
+  box-shadow: 0 0 14px 4px rgba(59, 130, 246, 0.85), inset 0 0 4px #ffffff;
+}
+
+.led-glow-emerald {
+  box-shadow: 0 0 14px 4px rgba(16, 185, 129, 0.85), inset 0 0 4px #ffffff;
+}
+
+.led-glow-purple {
+  box-shadow: 0 0 14px 4px rgba(168, 85, 247, 0.85), inset 0 0 4px #ffffff;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(18, 18, 20, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(60, 64, 72, 0.8);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 110, 125, 1);
+}
