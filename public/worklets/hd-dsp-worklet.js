@@ -26,9 +26,13 @@ class HdCoreProcessor extends AudioWorkletProcessor {
     // Tube Preamp State (12AX7 Triode Physical Model)
     this.tubeGain = 5.0;
     this.tubeBias = 0.08;
-    this.tubeSag = 0.5; // Dynamic cathode capacitor charging
+    this.tubeSag = 0.4; // Dynamic cathode capacitor charging
     this.cathodeVoltage = 0.0; // Dynamic Vk state
     this.gridCapCharge = 0.0;   // Dynamic Vgc blocking distortion state
+
+    // Sub-audio DC-blocking coupling capacitor state (22nF / 1M Ohm equivalent)
+    this.dcPrevIn = 0.0;
+    this.dcPrevOut = 0.0;
 
     // Oversampling buffers (4x)
     this.oversampleFactor = 4;
@@ -43,7 +47,7 @@ class HdCoreProcessor extends AudioWorkletProcessor {
     ];
 
     // Diode Clipper State (Shockley Antiparallel Diodes)
-    this.diodeDrive = 5.0;
+    this.diodeDrive = 3.5;
     this.diodeType = 'silicon'; // 'silicon' (0.65V) or 'germanium' (0.28V)
     this.diodeFilterCap = 0.0;
 
@@ -95,6 +99,8 @@ class HdCoreProcessor extends AudioWorkletProcessor {
           this.diodeFilterCap = 0.0;
           this.svfIc1eq = 0.0;
           this.svfIc2eq = 0.0;
+          this.dcPrevIn = 0.0;
+          this.dcPrevOut = 0.0;
           break;
       }
     };
@@ -102,65 +108,66 @@ class HdCoreProcessor extends AudioWorkletProcessor {
 
   /**
    * Evaluates the Norman Koren vacuum tube triode model with dynamic cathode sag.
-   *
-   * Physical Triode Equations:
-   * Vgk = Vin - Vk
-   * As Vin increases, grid current charges cathode capacitor (dynamic Vk sag).
-   * Duty cycle shifts dynamically, producing authentic touch-responsive tube compression.
+   * Calibrated for authentic touch-responsive tube dynamics and high dynamic headroom
+   * matching the Neural Amp Modeler (NAM) engine output levels.
    */
   processTubeTriode(x) {
     // 1. Grid Conduction & Blocking Distortion:
-    // When input swings above cathode, grid diode conducts
+    // When input swings above cathode voltage, grid current flows into coupling capacitor
     const vgk = x - this.cathodeVoltage - this.gridCapCharge;
     if (vgk > 0.0) {
-      // Grid current flows into coupling capacitor
-      this.gridCapCharge += vgk * 0.008;
+      this.gridCapCharge += vgk * 0.003;
     } else {
-      // Leak through grid resistor (1M Ohm / 22nF ~ 22ms time constant)
-      this.gridCapCharge *= 0.9992;
+      this.gridCapCharge *= 0.9996;
     }
 
-    // 2. Norman Koren Soft-Knee Triode Transfer Curve
-    const effDrive = this.tubeGain * 1.8;
-    const v = vgk * effDrive + this.tubeBias;
+    // 2. Calibrated Tube Drive & Grid Bias:
+    // Musical drive scaling preventing harsh oversaturation while preserving touch sensitivity
+    const normGain = Math.max(0.1, this.tubeGain / 5.0);
+    const effDrive = 1.0 + Math.pow(normGain, 1.2) * 1.35;
+    const v = vgk * effDrive + (this.tubeBias || 0.06);
 
-    // Non-linear triode plate transfer with asymmetrical saturation
-    let y = 0.0;
-    if (v < -2.2) {
-      // Deep cutoff
-      y = -0.98;
-    } else if (v > 1.8) {
-      // Hard grid saturation
-      y = 0.95 + 0.05 * Math.tanh((v - 1.8) * 0.5);
-    } else {
-      // Active amplification region: Taylor / Norman Koren approximation
-      y = Math.tanh(v * 0.85) - 0.12 * Math.tanh(v * v * 0.4);
-    }
+    // 3. Smooth, Continuous Norman Koren Triode Transfer Characteristic:
+    // Completely eliminates piecewise step discontinuities that caused buzzing/clipping.
+    // Models 12AX7 grid conduction soft compression on positive swings and
+    // progressive plate current cutoff (Child-Langmuir 3/2 law) on negative swings.
+    const asym = 0.12;
+    const vEffective = v + asym * Math.tanh(v * 0.75) * Math.abs(v);
+    const rawY = Math.tanh(vEffective * 0.82) - 0.06 * Math.tanh(vEffective * vEffective * 0.22);
 
-    // 3. Dynamic Cathode Capacitor Sag
-    // Tube current charges bypass capacitor, narrowing bias headroom
-    const instantaneousCurrent = Math.max(0, y + 0.5);
-    const targetVk = instantaneousCurrent * 0.35 * this.tubeSag;
-    // RC filter time constant ~ 70ms
-    this.cathodeVoltage += (targetVk - this.cathodeVoltage) * 0.0015;
+    // 4. Dynamic Cathode Capacitor Sag (RC time constant ~ 70ms)
+    // Tube current charges bypass capacitor, creating organic tube bloom and compression
+    const instantaneousCurrent = Math.max(0, rawY + 0.4);
+    const targetVk = instantaneousCurrent * 0.22 * (this.tubeSag || 0.4);
+    this.cathodeVoltage += (targetVk - this.cathodeVoltage) * 0.0012;
 
-    return y;
+    // 5. Output Headroom Calibration (calibrated to ~0.44 peak to match NAM loader engine)
+    const scaledY = rawY * 0.44;
+
+    // 6. Sub-audio DC-Blocking Coupling Capacitor Filter (fc ~ 12Hz at 48kHz)
+    // Strips DC offset caused by bias shifts before feeding downstream tone stack and cabinet
+    const alpha = 0.9985;
+    const dcBlocked = scaledY - this.dcPrevIn + alpha * this.dcPrevOut;
+    this.dcPrevIn = scaledY;
+    this.dcPrevOut = Number.isFinite(dcBlocked) ? dcBlocked : 0.0;
+
+    return this.dcPrevOut;
   }
 
   /**
    * Component-level Shockley Antiparallel Diode Clipper
-   * i = 2 * Is * sinh(V / (N * Vt))
+   * Calibrated with matched headroom and soft-knee curvature
    */
   processDiodeClipper(x) {
-    const drive = this.diodeDrive * 2.2;
+    const drive = 1.0 + (this.diodeDrive / 5.0) * 1.4;
     const vin = x * drive;
     const vt = this.diodeType === 'silicon' ? 0.65 : 0.28;
 
-    // Fast numerical approximation of antiparallel Shockley diode characteristic
+    // Smooth numerical approximation of antiparallel Shockley diode characteristic
     const scaled = vin / vt;
-    const clipped = Math.tanh(scaled * 0.8) * vt;
+    const clipped = Math.tanh(scaled * 0.75) * (vt * 0.7);
 
-    // Low-pass filter across diode capacitor (cuts harsh fuzz fizz)
+    // Low-pass filter across diode capacitor (cuts harsh fizz)
     this.diodeFilterCap += (clipped - this.diodeFilterCap) * 0.65;
     return this.diodeFilterCap;
   }
@@ -256,9 +263,10 @@ class HdCoreProcessor extends AudioWorkletProcessor {
       // 1. Vacuum Tube Preamp Stage vs Clean Solid-State Headroom
       if (this.mode === 'clean-solid-state') {
         // Pure solid-state Class-AB / linear clean amplifier with huge headroom
-        // Passes 100% linear with zero THD; smooth soft-clip only if peaks exceed 1.15
-        if (Math.abs(s) > 1.15) {
-          s = Math.sign(s) * (1.15 + 0.1 * Math.tanh(Math.abs(s) - 1.15));
+        // Passes 100% linear with zero THD; calibrated output level matching NAM and tube stages
+        s = s * 0.55;
+        if (Math.abs(s) > 0.48) {
+          s = Math.sign(s) * (0.48 + 0.04 * Math.tanh((Math.abs(s) - 0.48) * 4.0));
         }
       } else {
         s = this.processTubeTriode(s);

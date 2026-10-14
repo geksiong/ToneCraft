@@ -1,5 +1,21 @@
 import { NamModelConfig } from '../types/pedal';
 
+/**
+ * Helper to determine if an amp config is a real Neural Amp Modeler (NAM) profile
+ * with neural network weights that must run via the WASM NAM engine.
+ */
+export function isNamModelProfile(model?: NamModelConfig | null): boolean {
+  if (!model) return false;
+  return Boolean(
+    model.isRealNam ||
+    model.modelUrl ||
+    model.customProfileName ||
+    model.rawJson ||
+    model.id === 'ac10' ||
+    model.id === 'deluxe'
+  );
+}
+
 export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
   {
     id: 'ac10',
@@ -71,7 +87,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.0,
     saturationCurve: 3.2,
     bias: 0.08,
-    weightsCount: 16384
+    weightsCount: 16384,
+    isRealNam: false,
+    engineMode: 'hd-triode'
   },
   {
     id: 'tweed-59',
@@ -87,7 +105,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.0,
     saturationCurve: 1.8,
     bias: 0.04,
-    weightsCount: 12288
+    weightsCount: 12288,
+    isRealNam: false,
+    engineMode: 'hd-triode'
   },
   {
     id: 'pv-5150',
@@ -103,7 +123,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 6.5,
     saturationCurve: 4.5,
     bias: 0.15,
-    weightsCount: 32768
+    weightsCount: 32768,
+    isRealNam: false,
+    engineMode: 'hd-triode'
   },
   {
     id: 'ampeg-svt',
@@ -119,7 +141,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.0,
     saturationCurve: 2.6,
     bias: 0.06,
-    weightsCount: 18432
+    weightsCount: 18432,
+    isRealNam: false,
+    engineMode: 'hd-triode'
   },
   {
     id: 'darkglass-b7k',
@@ -135,7 +159,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.2,
     saturationCurve: 3.4,
     bias: 0.1,
-    weightsCount: 14336
+    weightsCount: 14336,
+    isRealNam: false,
+    engineMode: 'hd-triode'
   },
   {
     id: 'vox-ac30',
@@ -151,7 +177,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.5,
     saturationCurve: 2.2,
     bias: 0.05,
-    weightsCount: 12288
+    weightsCount: 12288,
+    isRealNam: false,
+    engineMode: 'hd-triode'
   },
   {
     id: 'roland-jc120',
@@ -168,6 +196,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     saturationCurve: 1.0,
     bias: 0.0,
     weightsCount: 16384,
+    isRealNam: false,
     engineMode: 'waveshaper'
   },
   {
@@ -185,6 +214,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     saturationCurve: 1.2,
     bias: 0.02,
     weightsCount: 16384,
+    isRealNam: false,
     engineMode: 'waveshaper'
   },
   {
@@ -202,6 +232,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     saturationCurve: 1.3,
     bias: 0.03,
     weightsCount: 16384,
+    isRealNam: false,
     engineMode: 'waveshaper'
   },
   {
@@ -219,6 +250,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     saturationCurve: 1.0,
     bias: 0.0,
     weightsCount: 8192,
+    isRealNam: false,
     engineMode: 'waveshaper'
   },
   {
@@ -236,6 +268,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     saturationCurve: 1.0,
     bias: 0.0,
     weightsCount: 12288,
+    isRealNam: false,
     engineMode: 'waveshaper'
   }
 ];

@@ -1,5 +1,5 @@
 import { Preset } from '../types/pedal';
-import { BUILT_IN_NAM_MODELS } from '../audio/namModels';
+import { BUILT_IN_NAM_MODELS, isNamModelProfile } from '../audio/namModels';
 import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 
 export const INITIAL_PRESETS: Preset[] = [
@@ -1154,7 +1154,23 @@ export function getStoredPresets(): Preset[] {
         merged.push(initPreset);
       }
     }
-    return merged;
+
+    // Sanitize engineMode and isRealNam on all loaded presets
+    return merged.map((p: Preset) => {
+      if (!p.namModel) return p;
+      const isNam = isNamModelProfile(p.namModel);
+      const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isNam
+        ? 'wasm-nam'
+        : (p.namModel.engineMode && p.namModel.engineMode !== 'wasm-nam' ? p.namModel.engineMode : 'hd-triode');
+      return {
+        ...p,
+        namModel: {
+          ...p.namModel,
+          isRealNam: isNam,
+          engineMode: targetEngine
+        }
+      };
+    });
   } catch {
     return INITIAL_PRESETS;
   }

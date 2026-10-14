@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { NamModelConfig, IrCabinetConfig } from '../types/pedal';
-import { BUILT_IN_NAM_MODELS, parseNamJson } from '../audio/namModels';
+import { BUILT_IN_NAM_MODELS, parseNamJson, isNamModelProfile } from '../audio/namModels';
 import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 import { RotaryKnob } from './RotaryKnob';
 import {
@@ -43,6 +43,11 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
   const handleSelectNam = (id: string) => {
     const selected = BUILT_IN_NAM_MODELS.find(m => m.id === id);
     if (selected) {
+      const isSelectedNam = isNamModelProfile(selected);
+      const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isSelectedNam
+        ? 'wasm-nam'
+        : (selected.engineMode && selected.engineMode !== 'wasm-nam' ? selected.engineMode : 'hd-triode');
+
       onUpdateNam({
         ...selected,
         gain: selected.gain,
@@ -50,10 +55,12 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
         mid: selected.mid,
         treble: selected.treble,
         presence: selected.presence,
-        master: selected.master
+        master: selected.master,
+        isRealNam: isSelectedNam,
+        engineMode: targetEngine
       });
-      if (selected.engineMode && onSetAmpEngineMode) {
-        onSetAmpEngineMode(selected.engineMode);
+      if (onSetAmpEngineMode) {
+        onSetAmpEngineMode(targetEngine);
       }
     }
   };
@@ -137,7 +144,8 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
     e.target.value = '';
   };
 
-  const isRealNamActive = ampEngineMode === 'wasm-nam' && (namModel.isRealNam || namModel.modelUrl || namModel.customProfileName);
+  const isNamProfile = isNamModelProfile(namModel);
+  const isRealNamActive = ampEngineMode === 'wasm-nam' && isNamProfile;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
@@ -241,39 +249,86 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
           </div>
 
           {/* Engine Selector Segmented Control on Amp Head */}
-          <div className="flex items-center justify-between gap-2 mt-2 px-1 text-xs">
-            <span className="text-[10px] font-mono text-neutral-400 uppercase">Preamp Engine:</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-2 px-1 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase">Preamp Engine:</span>
+              {isNamProfile ? (
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <Zap size={9} /> NAM Profile Locked
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono text-neutral-400 bg-neutral-800/80 border border-neutral-700/60 px-1.5 py-0.5 rounded">
+                  Component Modeled Amp
+                </span>
+              )}
+            </div>
+
             <div className="flex items-center gap-1 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800">
               <button
-                onClick={() => onSetAmpEngineMode && onSetAmpEngineMode('wasm-nam')}
-                className={`w-20 text-center py-0.5 rounded text-[11px] font-mono transition-colors ${
-                  ampEngineMode === 'wasm-nam'
+                disabled={!isNamProfile}
+                onClick={() => {
+                  if (isNamProfile && onSetAmpEngineMode) {
+                    onSetAmpEngineMode('wasm-nam');
+                  }
+                }}
+                className={`w-22 text-center py-0.5 rounded text-[11px] font-mono transition-colors ${
+                  !isNamProfile
+                    ? 'opacity-25 cursor-not-allowed text-neutral-600'
+                    : ampEngineMode === 'wasm-nam'
                     ? 'bg-amber-500 text-black font-bold shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="TONE3000 WebAssembly Neural Amp Modeler Core"
+                title={
+                  !isNamProfile
+                    ? 'Disabled: this amp is not a .nam neural profile (select HD Worklet or Waveshaper)'
+                    : 'TONE3000 WebAssembly Neural Amp Modeler Core'
+                }
               >
                 WASM NAM
               </button>
+
               <button
-                onClick={() => onSetAmpEngineMode && onSetAmpEngineMode('hd-triode')}
+                disabled={isNamProfile}
+                onClick={() => {
+                  if (!isNamProfile && onSetAmpEngineMode) {
+                    onSetAmpEngineMode('hd-triode');
+                  }
+                }}
                 className={`w-22 text-center py-0.5 rounded text-[11px] font-mono transition-colors ${
-                  ampEngineMode === 'hd-triode'
+                  isNamProfile
+                    ? 'opacity-25 cursor-not-allowed text-neutral-600'
+                    : ampEngineMode === 'hd-triode'
                     ? 'bg-purple-500 text-white font-bold shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="HD AudioWorklet Norman Koren 12AX7 Tube Physics"
+                title={
+                  isNamProfile
+                    ? 'Disabled: real .nam profile requires the WASM NAM neural engine'
+                    : 'HD AudioWorklet Norman Koren 12AX7 Tube Physics'
+                }
               >
                 HD Worklet
               </button>
+
               <button
-                onClick={() => onSetAmpEngineMode && onSetAmpEngineMode('waveshaper')}
+                disabled={isNamProfile}
+                onClick={() => {
+                  if (!isNamProfile && onSetAmpEngineMode) {
+                    onSetAmpEngineMode('waveshaper');
+                  }
+                }}
                 className={`w-22 text-center py-0.5 rounded text-[11px] font-mono transition-colors ${
-                  ampEngineMode === 'waveshaper'
+                  isNamProfile
+                    ? 'opacity-25 cursor-not-allowed text-neutral-600'
+                    : ampEngineMode === 'waveshaper'
                     ? 'bg-sky-500 text-black font-bold shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Lightweight polynomial wave-shaper fallback"
+                title={
+                  isNamProfile
+                    ? 'Disabled: real .nam profile requires the WASM NAM neural engine'
+                    : 'Lightweight polynomial wave-shaper fallback'
+                }
               >
                 Waveshaper
               </button>

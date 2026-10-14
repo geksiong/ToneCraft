@@ -21,6 +21,7 @@ import {
   TunerData
 } from '../types/pedal';
 import { NamEngine, NamEngineStatus } from './namEngine';
+import { isNamModelProfile } from './namModels';
 import { LooperEngine } from './looperEngine';
 import { TunerEngine } from './tunerEngine';
 import {
@@ -443,9 +444,20 @@ export class ToneCraftEngine {
   }
 
   public setAmpEngineMode(mode: 'wasm-nam' | 'hd-triode' | 'waveshaper'): void {
-    this.namEngine.setEngineMode(mode);
+    const isNam = isNamModelProfile(this.currentNamConfig);
+    let target = mode;
+    if (isNam) {
+      target = 'wasm-nam';
+    } else if (target === 'wasm-nam') {
+      target = (this.currentNamConfig?.engineMode && this.currentNamConfig.engineMode !== 'wasm-nam')
+        ? this.currentNamConfig.engineMode
+        : 'hd-triode';
+    }
+
+    this.namEngine.setEngineMode(target);
     if (this.currentNamConfig) {
-      this.currentNamConfig.engineMode = mode;
+      this.currentNamConfig.engineMode = target;
+      this.currentNamConfig.isRealNam = isNam;
     }
     this.dispatchLatencyUpdate();
   }

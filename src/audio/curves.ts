@@ -83,8 +83,8 @@ export function createFuzzCurve(fuzz: number): Float32Array {
 
 /**
  * Models 12AX7 tube grid conduction and plate saturation with dynamic bias.
- * Crucially compensated with zero DC offset: f(0) is strictly 0.0 so that silent
- * inputs remain completely silent and do not bias downstream filters or convolvers.
+ * Crucially calibrated with high dynamic headroom and zero DC offset to match
+ * the Neural Amp Modeler (NAM) engine output levels and eliminate harsh digital clipping.
  *
  * @param gain Preamp gain (0 - 10)
  * @param saturation Tube saturation curve factor (1.0 - 5.0)
@@ -99,22 +99,43 @@ export function createNamSaturationCurve(
   const n = 4096;
   const curve = new Float32Array(n);
 
-  // If gain is clean (<= 3.0) or saturation <= 1.2 (pure solid-state/clean amp), pass strictly linear with zero distortion
-  if (gain <= 3.0 || saturation <= 1.2) {
+  // Output headroom calibration factor: matches NAM neural engine nominal peak (~0.44)
+  // leaving clean dynamic headroom through downstream tone stack and IR cabinet
+  const outputScale = 0.44;
+
+  // If gain is clean (<= 2.5) or saturation <= 1.2 (pure solid-state / clean amp),
+  // pass linear transfer curve scaled to match NAM engine nominal headroom
+  if (gain <= 2.5 || saturation <= 1.2) {
     for (let i = 0; i < n; i++) {
-      curve[i] = (i * 2) / n - 1;
+      const x = (i * 2) / n - 1;
+      curve[i] = x * outputScale;
     }
     return curve;
   }
 
-  const drive = 1.0 + (gain / 10) * saturation * 2.5;
-  const b = bias * 0.3;
-  const zeroOffset = Math.tanh(b);
+  // Calibrated drive: provides smooth edge-of-breakup and organic tube compression
+  // matching the touch response and headroom of real NAM neural models
+  const normGain = Math.max(0.1, gain / 5.0);
+  const effSaturation = Math.max(1.0, saturation || 2.5);
+  const drive = 0.9 + Math.pow(normGain, 1.2) * (effSaturation * 0.38);
+  const b = (bias || 0.06) * 0.2;
 
   for (let i = 0; i < n; i++) {
     const x = (i * 2) / n - 1;
-    // Asymmetric tube grid saturation centered at 0 DC offset
-    curve[i] = (Math.tanh(x * drive + b) - zeroOffset) * 0.95;
+    // Asymmetric 12AX7 tube transfer curve with smooth soft-knee compression
+    // f(0) = 0 strictly guaranteed
+    let rawY = 0;
+    if (x >= 0) {
+      // Grid conduction soft compression on positive swing
+      const v = x * drive + b;
+      rawY = Math.tanh(v * 0.85) - Math.tanh(b * 0.85) - 0.06 * Math.tanh(Math.pow(x * drive, 2) * 0.25);
+    } else {
+      // Plate cutoff smooth compression on negative swing
+      const v = x * drive * 0.92 + b;
+      rawY = Math.tanh(v * 0.80) - Math.tanh(b * 0.80) + 0.05 * Math.tanh(Math.pow(x * drive, 2) * 0.20);
+    }
+
+    curve[i] = rawY * outputScale;
   }
   return curve;
 }

@@ -18,6 +18,7 @@ import { HdWorkletEngine } from './hdWorkletEngine';
 import { NamModelConfig, IrCabinetConfig } from '../types/pedal';
 import { createNamSaturationCurve } from './curves';
 import { generateSyntheticCabIr } from './irData';
+import { isNamModelProfile } from './namModels';
 
 export interface NamEngineStatus {
   activeEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper';
@@ -356,8 +357,23 @@ export class NamEngine {
     const canUseWasm = Boolean(this.isWasmReady && this.namWasmNode);
     const canUseWorklet = Boolean(this.hdWorkletEngine.isReady && this.hdWorkletEngine.workletNode);
 
-    // Resolve runnable target mode with graceful fallbacks
+    // Strict profile-engine constraint:
+    // If amp is a real NAM profile, it MUST use wasm-nam (cannot select hd-triode or waveshaper).
+    // If amp is NOT a real NAM profile, it CANNOT use wasm-nam (must use hd-triode or waveshaper).
+    const isRealNam = isNamModelProfile(this.lastModelConfig);
     let target: 'wasm-nam' | 'hd-triode' | 'waveshaper' = mode;
+    if (isRealNam) {
+      target = 'wasm-nam';
+    } else if (target === 'wasm-nam') {
+      target = (this.lastModelConfig?.engineMode && this.lastModelConfig.engineMode !== 'wasm-nam')
+        ? this.lastModelConfig.engineMode
+        : 'hd-triode';
+    }
+
+    if (this.lastModelConfig) {
+      this.lastModelConfig.engineMode = target;
+    }
+
     if (target === 'wasm-nam' && !canUseWasm) {
       target = canUseWorklet ? 'hd-triode' : 'waveshaper';
     }
@@ -387,6 +403,30 @@ export class NamEngine {
       this.workletOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperInputGain.gain.setTargetAtTime(1.0, now, fadeTime);
       this.waveshaperOutputGain.gain.setTargetAtTime(1.0, now, fadeTime);
+    }
+
+    // Refresh model configuration for active engine to maintain headroom calibration
+    if (this.lastModelConfig) {
+      if (this.waveShaper) {
+        this.waveShaper.curve = createNamSaturationCurve(
+          this.lastModelConfig.gain,
+          this.lastModelConfig.saturationCurve,
+          this.lastModelConfig.bias
+        ) as any;
+      }
+      const isCleanSolidState =
+        this.lastModelConfig.saturationCurve <= 1.2 ||
+        this.lastModelConfig.id === 'roland-jc120' ||
+        this.lastModelConfig.id.includes('clean') ||
+        this.lastModelConfig.id.includes('acoustic') ||
+        this.lastModelConfig.id.includes('jc120');
+
+      this.hdWorkletEngine.setParameters({
+        gain: this.lastModelConfig.gain,
+        bias: this.lastModelConfig.bias || 0.08,
+        mode: isCleanSolidState ? 'clean-solid-state' : 'tube-amp',
+        enabled: !this.isAmpBypassed
+      });
     }
 
     this.notifyStatus();
@@ -531,12 +571,20 @@ export class NamEngine {
       this.setAmpBypass(!config.enabled);
     }
 
-    // Determine engine mode
-    if (config.engineMode) {
-      this.setEngineMode(config.engineMode);
-    } else if (config.isRealNam || config.modelUrl) {
-      this.setEngineMode('wasm-nam');
+    // Strictly determine engine mode: real NAM profiles MUST use wasm-nam; non-NAM profiles CANNOT use wasm-nam
+    const isRealNam = isNamModelProfile(config);
+    config.isRealNam = isRealNam;
+
+    let targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper';
+    if (isRealNam) {
+      targetEngine = 'wasm-nam';
+    } else {
+      targetEngine = (config.engineMode && config.engineMode !== 'wasm-nam')
+        ? config.engineMode
+        : 'hd-triode';
     }
+    config.engineMode = targetEngine;
+    this.setEngineMode(targetEngine);
 
     // If real model URL is specified and not yet loaded, load it
     if (config.modelUrl && config.modelUrl !== this.currentLoadedModelUrl && this.isWasmReady) {
@@ -553,7 +601,12 @@ export class NamEngine {
     this.ampPreampInput.gain.setTargetAtTime(preGain, this.ctx.currentTime, 0.015);
 
     // Update HD AudioWorklet tube parameters
-    const isCleanSolidState = config.saturationCurve <= 1.2 || config.id === 'roland-jc120' || config.engineMode === 'waveshaper';
+    const isCleanSolidState =
+      config.saturationCurve <= 1.2 ||
+      config.id === 'roland-jc120' ||
+      config.id.includes('clean') ||
+      config.id.includes('acoustic') ||
+      config.id.includes('jc120');
     this.hdWorkletEngine.setParameters({
       gain: config.gain,
       bias: config.bias || 0.08,
@@ -660,7 +713,7 @@ export class NamEngine {
       architecture: model?.type?.toUpperCase() || (this.lastModelInfo ? 'WAVENET' : 'TUBE PHYSICAL'),
       weightsCount: model?.weightsCount || (this.currentEngineMode === 'wasm-nam' ? 28440 : 18432),
       sampleRate: this.ctx?.sampleRate || 48000,
-      isRealNam: this.currentEngineMode === 'wasm-nam' && (model?.isRealNam || !!this.currentLoadedModelUrl),
+      isRealNam: this.currentEngineMode === 'wasm-nam' && isNamModelProfile(model),
       isWasmReady: this.isWasmReady,
       irName: cab?.name || 'Celestion Vintage 30 4x12',
       isRealIr: this.isCurrentIrReal,
