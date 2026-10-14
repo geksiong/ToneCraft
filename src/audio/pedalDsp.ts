@@ -62,12 +62,11 @@ import {
 export interface PitchShifterNodes {
   input: GainNode;
   output: GainNode;
-  delay1: DelayNode;
-  delay2: DelayNode;
-  gain1: GainNode;
-  gain2: GainNode;
+  processor: ScriptProcessorNode;
   dryGain: GainNode;
   wetGain: GainNode;
+  setShift: (semitones: number) => void;
+  dispose?: () => void;
 }
 
 export interface PedalNodeWrapper {
@@ -452,32 +451,167 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
 }
 
 /**
- * Dual delay-ramp crossfade pitch shifter architecture
+ * Real-time Polyphonic Doppler Pitch Shifter Architecture.
+ * Uses a dual-grain circular delay buffer with continuous Hann window crossfading.
+ * Mathematically accurate Doppler pitch shifting:
+ * - When shifting down by -12 semitones (octave down, ratio = 0.5), read pointer moves at 0.5x speed.
+ * - When shifting up by +12 semitones (octave up, ratio = 2.0), read pointer moves at 2.0x speed.
+ * - Dry and Wet gains smoothly crossfade so at 100% mix, dry is 0% and wet is 100%.
  */
 function createPitchShifterDsp(ctx: AudioContext, input: GainNode, output: GainNode): PitchShifterNodes {
-  const delay1 = ctx.createDelay(0.15);
-  const delay2 = ctx.createDelay(0.15);
-  const gain1 = ctx.createGain();
-  const gain2 = ctx.createGain();
+  // 512 samples buffer for ultra-low 10.6ms latency
+  const processor = ctx.createScriptProcessor(512, 1, 1);
   const dryGain = ctx.createGain();
   const wetGain = ctx.createGain();
+  dryGain.gain.value = 0.5;
+  wetGain.gain.value = 0.5;
 
   input.connect(dryGain);
   dryGain.connect(output);
 
-  input.connect(delay1);
-  input.connect(delay2);
-  delay1.connect(gain1);
-  delay2.connect(gain2);
-  gain1.connect(wetGain);
-  gain2.connect(wetGain);
+  input.connect(processor);
+  processor.connect(wetGain);
   wetGain.connect(output);
 
-  // Ultra-Low Latency Pitch Shifter delay window (8ms and 15ms instead of 40ms/80ms)
-  delay1.delayTime.value = 0.008;
-  delay2.delayTime.value = 0.015;
+  // Prevent premature garbage collection of ScriptProcessorNode by V8 GC
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
 
-  return { input, output, delay1, delay2, gain1, gain2, dryGain, wetGain };
+  // Circular Delay Buffer (16384 samples ~340ms at 48kHz)
+  const bufferSize = 16384;
+  const buffer = new Float32Array(bufferSize);
+  let writeIndex = 0;
+
+  // Pitch shift ratio tracking
+  let targetRatio = 1.0;
+  let currentRatio = 1.0;
+
+  // Window size in samples: ~38ms (ideal compromise between low-frequency tracking and transient responsiveness)
+  const sampleRate = ctx.sampleRate || 48000;
+  const sweepSize = Math.max(512, Math.min(4096, Math.round(0.038 * sampleRate)));
+  const minDelay = 64; // Small margin to prevent read from overtaking write
+
+  let phase = 0.0;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inputChannel = e.inputBuffer.getChannelData(0);
+      const outputChannel = e.outputBuffer.getChannelData(0);
+      if (!inputChannel || !outputChannel) return;
+      const len = inputChannel.length;
+
+      // Smooth ratio with exponential one-pole filter (alpha ~ 0.002 = ~25ms glide)
+      // Completely eliminates explosive ratio accumulation, oscillations, or NaN!
+      const alpha = 0.002;
+
+      for (let i = 0; i < len; i++) {
+        if (Math.abs(targetRatio - currentRatio) > 0.00001) {
+          currentRatio += (targetRatio - currentRatio) * alpha;
+        } else {
+          currentRatio = targetRatio;
+        }
+        if (!Number.isFinite(currentRatio)) currentRatio = 1.0;
+        currentRatio = Math.max(0.125, Math.min(8.0, currentRatio));
+
+        // Write current incoming sample with NaN protection
+        const rawIn = inputChannel[i];
+        const inSample = Number.isFinite(rawIn) ? rawIn : 0.0;
+        buffer[writeIndex] = inSample;
+
+        let shiftedSample = 0;
+
+        if (Math.abs(currentRatio - 1.0) < 0.0005) {
+          // Direct pass-through when shift is 0 semitones
+          const readIdx = (writeIndex - minDelay + bufferSize) % bufferSize;
+          shiftedSample = buffer[readIdx];
+        } else {
+          const phase0 = phase;
+          const phase1 = (phase + 0.5) % 1.0;
+
+          // Hann window gains: sin^2(pi * phase0) + cos^2(pi * phase0) = 1.0 at all times!
+          const s0 = Math.sin(Math.PI * phase0);
+          const win0 = s0 * s0;
+
+          const s1 = Math.sin(Math.PI * phase1);
+          const win1 = s1 * s1;
+
+          let delay0 = 0;
+          let delay1 = 0;
+
+          if (currentRatio < 1.0) {
+            // Downward shift: delay ramps UP
+            delay0 = minDelay + phase0 * sweepSize;
+            delay1 = minDelay + phase1 * sweepSize;
+          } else {
+            // Upward shift: delay ramps DOWN
+            delay0 = minDelay + (1.0 - phase0) * sweepSize;
+            delay1 = minDelay + (1.0 - phase1) * sweepSize;
+          }
+
+          // Interpolated read Grain 0
+          const safeDelay0 = Number.isFinite(delay0) ? Math.max(0, Math.min(bufferSize - 1, delay0)) : minDelay;
+          const rPos0 = (writeIndex - safeDelay0 + bufferSize * 4) % bufferSize;
+          const i0 = Math.floor(rPos0);
+          const f0 = rPos0 - i0;
+          const next0 = (i0 + 1) % bufferSize;
+          const g0_a = buffer[i0] !== undefined ? buffer[i0] : 0;
+          const g0_b = buffer[next0] !== undefined ? buffer[next0] : 0;
+          const grain0 = g0_a * (1 - f0) + g0_b * f0;
+
+          // Interpolated read Grain 1
+          const safeDelay1 = Number.isFinite(delay1) ? Math.max(0, Math.min(bufferSize - 1, delay1)) : minDelay;
+          const rPos1 = (writeIndex - safeDelay1 + bufferSize * 4) % bufferSize;
+          const i1 = Math.floor(rPos1);
+          const f1 = rPos1 - i1;
+          const next1 = (i1 + 1) % bufferSize;
+          const g1_a = buffer[i1] !== undefined ? buffer[i1] : 0;
+          const g1_b = buffer[next1] !== undefined ? buffer[next1] : 0;
+          const grain1 = g1_a * (1 - f1) + g1_b * f1;
+
+          shiftedSample = grain0 * win0 + grain1 * win1;
+
+          // Advance phase
+          const deltaPhase = Math.abs(1.0 - currentRatio) / sweepSize;
+          phase = (phase + deltaPhase) % 1.0;
+          if (!Number.isFinite(phase)) phase = 0.0;
+        }
+
+        outputChannel[i] = Number.isFinite(shiftedSample) ? shiftedSample : inSample;
+        writeIndex = (writeIndex + 1) % bufferSize;
+      }
+    } catch {
+      // Safe fallback: never silence audio thread if an error occurs
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    input,
+    output,
+    processor,
+    dryGain,
+    wetGain,
+    setShift: (semitones: number) => {
+      const safe = Number.isFinite(semitones) ? Math.max(-36, Math.min(36, semitones)) : 0;
+      targetRatio = Math.pow(2, safe / 12);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
 }
 
 /**
@@ -629,14 +763,12 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
     case 'pitchShifter': {
       const p = pedal as PitchShifterPedal;
       const shifter = nodes.shifter as PitchShifterNodes;
-      const semitones = p.shift + p.detune / 100;
-      const ratio = Math.pow(2, semitones / 12);
-      // Fast low-latency tracking window
-      shifter.delay1.delayTime.setTargetAtTime(Math.max(0.003, Math.min(0.03, 0.008 / ratio)), ctx.currentTime, 0.02);
-      shifter.delay2.delayTime.setTargetAtTime(Math.max(0.003, Math.min(0.03, 0.015 / ratio)), ctx.currentTime, 0.02);
-      const mix = p.mix / 100;
+      const semitones = p.shift + (p.detune || 0) / 100;
+      shifter.setShift(semitones);
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      // At 100% mix, dryGain is 0.0 and wetGain is 1.0 (ONLY shifted pitch heard)
+      shifter.dryGain.gain.setTargetAtTime(1.0 - mix, ctx.currentTime, 0.02);
       shifter.wetGain.gain.setTargetAtTime(mix, ctx.currentTime, 0.02);
-      shifter.dryGain.gain.setTargetAtTime(1.0, ctx.currentTime, 0.02);
       break;
     }
 
@@ -650,10 +782,8 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       else if (p.interval === 'octave') semitones = 12;
       else if (p.interval === 'double_octave') semitones = 24;
 
-      const ratio = Math.pow(2, semitones / 12);
-      // Fast low-latency tracking window
-      shifter.delay1.delayTime.setTargetAtTime(Math.max(0.003, Math.min(0.03, 0.008 / ratio)), ctx.currentTime, 0.02);
-      shifter.delay2.delayTime.setTargetAtTime(Math.max(0.003, Math.min(0.03, 0.015 / ratio)), ctx.currentTime, 0.02);
+      shifter.setShift(semitones);
+      shifter.dryGain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
       shifter.wetGain.gain.setTargetAtTime(p.harmonyLevel / 100, ctx.currentTime, 0.02);
       nodes.directGain.gain.setTargetAtTime(p.directLevel / 100, ctx.currentTime, 0.02);
       break;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AnyPedal, VstPluginPedal } from '../types/pedal';
 import { PedalCard } from './PedalCard';
-import { Plus, ArrowRight, CornerDownRight, Move } from 'lucide-react';
+import { Plus, ArrowRight } from 'lucide-react';
 
 interface PedalboardProps {
   pedals: AnyPedal[];
@@ -21,6 +21,7 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
   onOpenVstEditor
 }) => {
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const handleMoveLeft = (idx: number) => {
     if (idx <= 0) return;
@@ -40,21 +41,39 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
     onReorderPedals(newArr);
   };
 
-  const handleDragStart = (idx: number) => {
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
     setDraggedIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', String(idx));
+    } catch {
+      // ignore
+    }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIdx !== idx) {
+      setDragOverIdx(idx);
+    }
   };
 
-  const handleDrop = (targetIdx: number) => {
-    if (draggedIdx === null || draggedIdx === targetIdx) return;
-    const newArr = [...pedals];
-    const item = newArr.splice(draggedIdx, 1)[0];
-    newArr.splice(targetIdx, 0, item);
-    onReorderPedals(newArr);
+  const handleDragEnd = () => {
     setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIdx: number) => {
+    e.preventDefault();
+    if (draggedIdx !== null && draggedIdx !== targetIdx) {
+      const newArr = [...pedals];
+      const item = newArr.splice(draggedIdx, 1)[0];
+      newArr.splice(targetIdx, 0, item);
+      onReorderPedals(newArr);
+    }
+    setDraggedIdx(null);
+    setDragOverIdx(null);
   };
 
   return (
@@ -72,7 +91,7 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
           <ArrowRight size={12} className="text-neutral-400" />
           <span className="text-neutral-200 font-semibold">{pedals.length} Effects</span>
           <ArrowRight size={12} className="text-neutral-400" />
-          <span>Amp & IR Cab</span>
+          <span>Amp &amp; IR Cab</span>
           <ArrowRight size={12} className="text-neutral-400" />
           <span>Looper</span>
           <ArrowRight size={12} className="text-neutral-400" />
@@ -85,16 +104,25 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
       </div>
 
       {/* Scrollable / Horizontally Wrapped Pedal Bay */}
-      <div className="relative flex flex-wrap items-stretch gap-6 min-h-[380px] p-2">
+      <div
+        className="relative flex flex-wrap items-stretch gap-6 min-h-[380px] p-2"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDragEnd}
+      >
         {pedals.map((pedal, idx) => (
           <div
             key={pedal.id}
             draggable
-            onDragStart={() => handleDragStart(idx)}
-            onDragOver={handleDragOver}
-            onDrop={() => handleDrop(idx)}
-            className={`relative flex items-center transition-all ${
-              draggedIdx === idx ? 'opacity-40 scale-95' : 'opacity-100'
+            onDragStart={(e) => handleDragStart(e, idx)}
+            onDragEnd={handleDragEnd}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={(e) => handleDrop(e, idx)}
+            className={`relative flex items-center transition-all duration-150 cursor-grab active:cursor-grabbing ${
+              draggedIdx === idx
+                ? 'opacity-40 scale-95'
+                : dragOverIdx === idx && draggedIdx !== null
+                ? 'scale-105 ring-2 ring-amber-500/80 rounded-xl shadow-lg shadow-amber-500/20'
+                : 'opacity-100'
             }`}
           >
             {/* Visual Patch Cable connecting to previous pedal */}

@@ -126,13 +126,13 @@ export class NamEngine {
     this.waveshaperInputGain = ctx.createGain();
     this.waveshaperOutputGain = ctx.createGain();
 
-    // Default to WASM NAM active
-    this.wasmInputGain.gain.value = 1.0;
-    this.wasmOutputGain.gain.value = 1.0;
+    // Default to waveshaper active until WASM / HD Worklet are verified ready
+    this.waveshaperInputGain.gain.value = 1.0;
+    this.waveshaperOutputGain.gain.value = 1.0;
+    this.wasmInputGain.gain.value = 0.0;
+    this.wasmOutputGain.gain.value = 0.0;
     this.workletInputGain.gain.value = 0.0;
     this.workletOutputGain.gain.value = 0.0;
-    this.waveshaperInputGain.gain.value = 0.0;
-    this.waveshaperOutputGain.gain.value = 0.0;
 
     this.ampPreampInput.connect(this.wasmInputGain);
     this.ampPreampInput.connect(this.workletInputGain);
@@ -272,38 +272,63 @@ export class NamEngine {
    * Asynchronously loads WASM NAM and HD AudioWorklet processors
    */
   private async initAsyncEngines(ctx: AudioContext): Promise<void> {
-    // A. Initialize Tone3000 WASM NAM Engine
+    // 1. Initialize HD AudioWorklet Engine FIRST (instantaneous and resilient)
+    try {
+      const workletNode = await this.hdWorkletEngine.init(ctx);
+      if (workletNode && this.workletInputGain && this.workletOutputGain) {
+        this.workletInputGain.connect(workletNode);
+        workletNode.connect(this.workletOutputGain);
+        this.hdWorkletEngine.onError = () => {
+          console.warn('[NamEngine] HD Worklet reported error, falling back to waveshaper');
+          this.setEngineMode('waveshaper');
+        };
+      }
+    } catch (err) {
+      console.warn('HD AudioWorklet init fallback (will use classic WaveShaper):', err);
+    }
+
+    // 2. Initialize Tone3000 WASM NAM Engine
     try {
       this.tone3000Engine = await Tone3000NamEngine.attach(ctx, { assetBaseUrl: '/engine/' });
       this.namWasmNode = await this.tone3000Engine.createNode();
 
+      // Auto-recovery if worklet throws an error
+      (this.namWasmNode as any).onprocessorerror = (err: any) => {
+        console.warn('[NamEngine] NAM WASM processor error, auto-recovering to HD Triode modeling:', err);
+        this.isWasmReady = false;
+        this.setEngineMode(this.hdWorkletEngine.isReady ? 'hd-triode' : 'waveshaper');
+      };
+
       // Connect WASM node into routing
-      this.wasmInputGain?.connect(this.namWasmNode);
-      this.namWasmNode.connect(this.wasmOutputGain!);
+      if (this.wasmInputGain && this.wasmOutputGain) {
+        this.wasmInputGain.connect(this.namWasmNode);
+        this.namWasmNode.connect(this.wasmOutputGain);
+      }
       this.isWasmReady = true;
 
-      // If a model was already waiting, load it now
+      // Load model if specified, or default AC10
+      let modelLoaded = false;
       if (this.lastModelConfig) {
         this.updateNamModel(this.lastModelConfig);
+        modelLoaded = true;
       } else {
-        // Load default real model: Vox AC10
-        this.loadNamModelFromUrl('/models/ac10.nam');
+        modelLoaded = await this.loadNamModelFromUrl('/models/ac10.nam');
+      }
+
+      // Transition to wasm-nam if currently requested and model successfully verified
+      if (this.currentEngineMode === 'wasm-nam') {
+        if (modelLoaded && this.isWasmReady) {
+          this.setEngineMode('wasm-nam');
+        } else {
+          this.setEngineMode(this.hdWorkletEngine.isReady ? 'hd-triode' : 'waveshaper');
+        }
       }
     } catch (err) {
       console.warn('WASM NAM engine attach fallback (will use HD Worklet / Waveshaper):', err);
-      // Fallback to HD Worklet or Waveshaper if WASM fails
+      this.isWasmReady = false;
       if (this.currentEngineMode === 'wasm-nam') {
-        this.setEngineMode('hd-triode');
+        this.setEngineMode(this.hdWorkletEngine.isReady ? 'hd-triode' : 'waveshaper');
       }
-    }
-
-    // B. Initialize HD AudioWorklet Engine
-    try {
-      const workletNode = await this.hdWorkletEngine.init(ctx);
-      this.workletInputGain?.connect(workletNode);
-      workletNode.connect(this.workletOutputGain!);
-    } catch (err) {
-      console.warn('HD AudioWorklet init fallback:', err);
     }
 
     this.notifyStatus();
@@ -314,6 +339,8 @@ export class NamEngine {
    * - 'wasm-nam': Real TONE3000 Neural Amp Modeler WASM core
    * - 'hd-triode': High-Definition AudioWorklet Norman Koren tube physics & sag
    * - 'waveshaper': Standard Web Audio polynomial saturation
+   *
+   * FAILSOUND-PROOF: Never mutes or routes audio into an uninitialized or disconnected engine!
    */
   public setEngineMode(mode: 'wasm-nam' | 'hd-triode' | 'waveshaper'): void {
     if (!this.ctx || !this.wasmInputGain || !this.workletInputGain || !this.waveshaperInputGain ||
@@ -326,14 +353,26 @@ export class NamEngine {
     const now = this.ctx.currentTime;
     const fadeTime = 0.03; // 30ms smooth crossfade without clicks
 
-    if (mode === 'wasm-nam' && this.isWasmReady) {
+    const canUseWasm = Boolean(this.isWasmReady && this.namWasmNode);
+    const canUseWorklet = Boolean(this.hdWorkletEngine.isReady && this.hdWorkletEngine.workletNode);
+
+    // Resolve runnable target mode with graceful fallbacks
+    let target: 'wasm-nam' | 'hd-triode' | 'waveshaper' = mode;
+    if (target === 'wasm-nam' && !canUseWasm) {
+      target = canUseWorklet ? 'hd-triode' : 'waveshaper';
+    }
+    if (target === 'hd-triode' && !canUseWorklet) {
+      target = 'waveshaper';
+    }
+
+    if (target === 'wasm-nam') {
       this.wasmInputGain.gain.setTargetAtTime(1.0, now, fadeTime);
       this.wasmOutputGain.gain.setTargetAtTime(1.0, now, fadeTime);
       this.workletInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
-    } else if (mode === 'hd-triode' || (mode === 'wasm-nam' && !this.isWasmReady)) {
+    } else if (target === 'hd-triode') {
       this.wasmInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.wasmOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletInputGain.gain.setTargetAtTime(1.0, now, fadeTime);
@@ -341,6 +380,7 @@ export class NamEngine {
       this.waveshaperInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
     } else {
+      // Robust standard WaveShaper fallback (always available and active)
       this.wasmInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.wasmOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletInputGain.gain.setTargetAtTime(0.0, now, fadeTime);

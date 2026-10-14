@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ShieldAlert,
-  Sliders,
   Sparkles,
   Zap,
   VolumeX,
@@ -57,11 +56,12 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-neutral-950 border border-neutral-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      {/* Fixed-height modal container prevents entire window from shifting up and down */}
+      <div className="bg-neutral-950 border border-neutral-800 w-full max-w-4xl h-[88vh] max-h-[800px] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-neutral-800 bg-neutral-900/60 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-inner shrink-0">
               <ShieldAlert size={20} />
             </div>
             <div>
@@ -107,25 +107,26 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Body */}
+        {/* Modal Body with internal scrolling */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-          {/* Real-time Telemetry & Noise Floor Bar */}
+          {/* Real-time Telemetry & Noise Floor Bar with stable non-shifting dimensions */}
           <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4 shadow-inner space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            {/* Stable header row with fixed-width badges */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
                 <Activity size={15} className="text-emerald-400 animate-pulse shrink-0" />
-                <span className="text-xs font-bold uppercase tracking-wider text-neutral-200">
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-200 truncate">
                   Live Input Envelope &amp; Gate State
                 </span>
-                <span className="text-[11px] font-mono text-neutral-400">
+                <span className="text-[11px] font-mono text-neutral-400 shrink-0 hidden sm:inline">
                   ({inputSource === 'mic' ? 'Live Microphone' : 'Sample Riff'})
                 </span>
               </div>
 
-              {/* Live Gate Status Indicator with constant width */}
-              <div className="flex items-center gap-2">
+              {/* Fixed-width status indicators */}
+              <div className="flex items-center gap-2 shrink-0">
                 <div
-                  className={`w-52 justify-center flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-colors shrink-0 ${
+                  className={`w-48 justify-center flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-colors shrink-0 ${
                     telemetry.gateState === 'open'
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
                       : telemetry.gateState === 'hold'
@@ -142,7 +143,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                         : 'bg-amber-400 shadow-[0_0_8px_#fbbf24]'
                     }`}
                   />
-                  <span className="w-44 text-center inline-block truncate">
+                  <span className="w-40 text-center inline-block truncate">
                     {telemetry.gateState === 'open'
                       ? 'GATE OPEN'
                       : telemetry.gateState === 'hold'
@@ -151,8 +152,12 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   </span>
                 </div>
 
-                <div className="w-32 text-center text-xs font-mono text-neutral-300 bg-neutral-950 px-2 py-1 rounded border border-neutral-800 shrink-0">
-                  Input: <span className="text-emerald-400 font-bold tabular-nums w-14 text-right inline-block">{telemetry.inputDb} dB</span>
+                {/* Constant-width Input dB display with tabular numbers so width never jitters */}
+                <div className="w-28 text-center text-xs font-mono text-neutral-300 bg-neutral-950 px-2 py-1 rounded border border-neutral-800 shrink-0 flex items-center justify-center gap-1">
+                  <span className="text-neutral-500 text-[10px]">IN:</span>
+                  <span className="text-emerald-400 font-bold tabular-nums w-14 text-right inline-block">
+                    {Number.isFinite(telemetry.inputDb) ? `${telemetry.inputDb} dB` : '-∞ dB'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -186,26 +191,31 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
               </div>
 
               <div className="flex justify-between items-center text-[10px] font-mono text-neutral-400 px-1">
-                <span>Signal level must exceed yellow marker to open the gate</span>
+                <span>Signal level must exceed yellow marker to open the gate (with 4.5dB hysteresis)</span>
                 <span className="text-amber-400">Marker: {config.gateThreshold} dB</span>
               </div>
             </div>
 
-            {/* High-Pitch Whine Warning Alert if Detected */}
-            {telemetry.highPitchNoiseDetected && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs animate-in fade-in">
-                <AlertTriangle size={15} className="text-amber-400 shrink-0" />
-                <div className="flex-1">
-                  <span className="font-bold">High-Frequency Mic Whine Detected ({telemetry.highPitchEnergyDb} dB):</span>{' '}
-                  The De-Hiss Filter is actively suppressing high-frequency interference to stop harsh squeals.
+            {/* Reserved fixed-height slot for noise/whine status to avoid layout shifting */}
+            <div className="h-8 flex items-center">
+              {telemetry.highPitchNoiseDetected ? (
+                <div className="w-full flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                  <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+                  <span className="font-bold shrink-0">High-Frequency Mic Whine Detected ({telemetry.highPitchEnergyDb} dB):</span>
+                  <span className="truncate text-amber-200/90 text-[11px]">De-Hiss Filter is suppressing interference to stop harsh squeals.</span>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="w-full flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neutral-950/40 border border-neutral-800/60 text-neutral-400 text-xs">
+                  <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                  <span className="text-neutral-300 text-[11px]">Input frequencies clean · Anti-whine notch and click-free noise gate active.</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quick Action Presets */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+            <span className="text-xs font-bold uppercase tracking-wider text-neutral-400 shrink-0">
               Instant Presets:
             </span>
 
@@ -213,7 +223,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
             <button
               onClick={onApplyWhineKiller}
               className="w-56 justify-center px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/50 hover:border-amber-400 text-amber-300 hover:text-white text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-sm group shrink-0"
-              title="Immediately applies 6.5kHz lowpass steep filter and -50dB gate to silence feedback squeals"
+              title="Immediately applies 6.5kHz lowpass steep filter and smooth gate to silence feedback squeals"
             >
               <Zap size={13} className="text-amber-400 group-hover:scale-110 transition-transform shrink-0" />
               <span className="w-44 text-center inline-block truncate">⚡ Whine &amp; Screech Killer</span>
@@ -240,10 +250,10 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   enabled: true,
                   gateEnabled: true,
                   gateThreshold: -46,
-                  gateAttackMs: 2,
-                  gateHoldMs: 15,
-                  gateReleaseMs: 40,
-                  gateReductionDb: -70,
+                  gateAttackMs: 4,
+                  gateHoldMs: 20,
+                  gateReleaseMs: 60,
+                  gateReductionDb: -54,
                   highCutEnabled: true,
                   highCutFreq: 6000,
                   highCutSlope: '24db',
@@ -262,11 +272,11 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                 onUpdateConfig({
                   enabled: true,
                   gateEnabled: true,
-                  gateThreshold: -58,
-                  gateAttackMs: 4,
+                  gateThreshold: -54,
+                  gateAttackMs: 6,
                   gateHoldMs: 40,
-                  gateReleaseMs: 220,
-                  gateReductionDb: -50,
+                  gateReleaseMs: 200,
+                  gateReductionDb: -42,
                   highCutEnabled: true,
                   highCutFreq: 8000,
                   highCutSlope: '12db',
@@ -362,7 +372,6 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
               </div>
 
               <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${!config.highCutEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                {/* Cutoff Frequency Slider */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-neutral-300 font-medium">Cutoff Frequency</span>
@@ -370,61 +379,56 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   </div>
                   <input
                     type="range"
-                    min="2500"
+                    min="3000"
                     max="12000"
-                    step="100"
+                    step="250"
                     value={config.highCutFreq}
                     onChange={(e) => onUpdateConfig({ highCutFreq: Number(e.target.value) })}
                     className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
                   />
                   <div className="flex justify-between text-[10px] font-mono text-neutral-500">
-                    <span>2.5 kHz (Warm / Heavy)</span>
-                    <span className="text-amber-500 font-bold">6.5 kHz (Guitar Sweet Spot)</span>
-                    <span>12 kHz (Bright)</span>
+                    <span>3 kHz (Warm Vintage)</span>
+                    <span className="text-amber-400 font-bold">6.5 kHz (Studio Cab)</span>
+                    <span>12 kHz (Ultra Open)</span>
                   </div>
                 </div>
 
-                {/* Filter Slope Selection */}
                 <div className="space-y-1.5">
-                  <label className="text-xs text-neutral-300 font-medium block">
-                    Filter Rolloff Steepness
-                  </label>
+                  <span className="text-xs text-neutral-300 font-medium block">Filter Slope</span>
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => onUpdateConfig({ highCutSlope: '24db' })}
-                      className={`py-2 px-3 rounded-lg border text-xs font-mono font-bold transition-all text-left ${
-                        config.highCutSlope === '24db'
-                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
-                          : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
-                      }`}
-                    >
-                      <div>24 dB/oct Steep</div>
-                      <div className="text-[10px] text-neutral-400 font-normal">Best for High-Gain Distortion</div>
-                    </button>
-
-                    <button
                       onClick={() => onUpdateConfig({ highCutSlope: '12db' })}
-                      className={`py-2 px-3 rounded-lg border text-xs font-mono font-bold transition-all text-left ${
+                      className={`py-1.5 px-3 rounded-lg text-xs font-mono font-bold border transition-colors ${
                         config.highCutSlope === '12db'
                           ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
-                          : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                       }`}
                     >
-                      <div>12 dB/oct Smooth</div>
-                      <div className="text-[10px] text-neutral-400 font-normal">Gentle rolloff for acoustic</div>
+                      12 dB/Oct (Gentle)
+                    </button>
+                    <button
+                      onClick={() => onUpdateConfig({ highCutSlope: '24db' })}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-mono font-bold border transition-colors ${
+                        config.highCutSlope === '24db'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      24 dB/Oct (Steep)
                     </button>
                   </div>
+                  <p className="text-[10px] text-neutral-500">
+                    24 dB/Oct cuts severe whistle feedback twice as aggressively
+                  </p>
                 </div>
               </div>
 
-              {/* Anti-Whine Notch & Low-Cut Sub-Row */}
-              <div className="pt-3 border-t border-neutral-800 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* 8kHz USB Whine Notch */}
+              {/* Sub-Filters: Anti-Whine Notch & Low-Cut Rumble */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-neutral-800/80">
+                {/* Anti-Whine Notch Filter */}
                 <div className="bg-neutral-950/60 border border-neutral-800/80 rounded-lg p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-neutral-200">8 kHz Anti-Whine Notch</span>
-                    </div>
+                    <span className="text-xs font-bold text-neutral-200">Anti-Whine Notch (USB 8kHz)</span>
                     <input
                       type="checkbox"
                       checked={config.notchEnabled}
@@ -433,18 +437,18 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                     />
                   </div>
                   <p className="text-[10px] text-neutral-400">
-                    Notches out narrow USB audio interface frame rate harmonics &amp; laptop coil squeal
+                    Targets sharp computer power supply whine without altering guitar tones
                   </p>
                   <div className={`space-y-1 ${!config.notchEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
                     <div className="flex justify-between text-[11px] font-mono">
-                      <span className="text-neutral-400">Notch Freq:</span>
+                      <span className="text-neutral-400">Notch Center:</span>
                       <span className="text-amber-400">{config.notchFreq} Hz</span>
                     </div>
                     <input
                       type="range"
                       min="2000"
                       max="12000"
-                      step="200"
+                      step="250"
                       value={config.notchFreq}
                       onChange={(e) => onUpdateConfig({ notchFreq: Number(e.target.value) })}
                       className="w-full h-1 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
@@ -496,10 +500,10 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      Dynamic Studio Noise Gate
+                      Click-Free Dynamic Noise Gate
                     </h3>
                     <p className="text-[11px] text-neutral-400">
-                      Silences background mic noise when not playing; opens instantly in 3ms on note attack
+                      Silences background mic noise when not playing; opens smoothly with 4.5dB hysteresis and zero click artifacts
                     </p>
                   </div>
                 </div>
@@ -534,8 +538,8 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                     className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
                   />
                   <div className="flex justify-between text-[10px] font-mono text-neutral-500">
-                    <span>-75 dB (Gentle / Sensitive)</span>
-                    <span className="text-teal-400 font-bold">-52 dB (Standard)</span>
+                    <span>-75 dB (Sensitive)</span>
+                    <span className="text-teal-400 font-bold">-50 dB (Standard)</span>
                     <span>-25 dB (Heavy Metal)</span>
                   </div>
                 </div>
@@ -548,7 +552,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   </div>
                   <input
                     type="range"
-                    min="20"
+                    min="30"
                     max="450"
                     step="10"
                     value={config.gateReleaseMs}
@@ -556,8 +560,8 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                     className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
                   />
                   <div className="flex justify-between text-[10px] font-mono text-neutral-500">
-                    <span>20 ms (Fast Chug)</span>
-                    <span>120 ms (Balanced)</span>
+                    <span>30 ms (Fast Chug)</span>
+                    <span>140 ms (Balanced)</span>
                     <span>450 ms (Long Sustain)</span>
                   </div>
                 </div>
@@ -570,7 +574,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   </div>
                   <input
                     type="range"
-                    min="1"
+                    min="2"
                     max="20"
                     step="1"
                     value={config.gateAttackMs}
@@ -578,13 +582,13 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                     className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
                   />
                   <div className="flex justify-between text-[10px] font-mono text-neutral-500">
-                    <span>1 ms (Instant Pluck)</span>
-                    <span>3 ms (Recommended)</span>
-                    <span>20 ms (Soft Swell)</span>
+                    <span>2 ms (Ultra Fast)</span>
+                    <span>6 ms (Smooth &amp; Click-Free)</span>
+                    <span>20 ms (Slow Fade)</span>
                   </div>
                 </div>
 
-                {/* Reduction Depth */}
+                {/* Gate Reduction Depth */}
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-neutral-300 font-medium">Attenuation Depth</span>
@@ -592,7 +596,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   </div>
                   <input
                     type="range"
-                    min="-80"
+                    min="-75"
                     max="-18"
                     step="2"
                     value={config.gateReductionDb}
@@ -600,9 +604,9 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                     className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
                   />
                   <div className="flex justify-between text-[10px] font-mono text-neutral-500">
-                    <span>-80 dB (Total Silence)</span>
-                    <span>-60 dB (Studio Standard)</span>
-                    <span>-18 dB (Subtle Expansion)</span>
+                    <span>-75 dB (Silence)</span>
+                    <span>-48 dB (Studio Standard)</span>
+                    <span>-18 dB (Subtle Expand)</span>
                   </div>
                 </div>
               </div>
@@ -647,7 +651,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3.5 border-t border-neutral-800 bg-neutral-900/60 flex items-center justify-between">
+        <div className="px-6 py-3.5 border-t border-neutral-800 bg-neutral-900/60 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
             <CheckCircle2 size={13} className="text-emerald-400" />
             <span>0.00 ms Added Algorithmic Latency (Direct IIR Cascade)</span>

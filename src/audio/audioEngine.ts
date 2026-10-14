@@ -173,6 +173,31 @@ export class ToneCraftEngine {
       await this.ctx.resume();
     }
 
+    // Automatically recover if browser/OS suspends context midway
+    this.ctx.onstatechange = () => {
+      console.log(`[ToneCraftEngine] AudioContext state: ${this.ctx?.state}`);
+      if (this.ctx?.state === 'suspended' && this.isRunning) {
+        this.ctx.resume().catch(() => {});
+      }
+    };
+
+    // Global user-gesture audio recovery: any click, touch, or keypress resumes suspended AudioContext
+    if (typeof window !== 'undefined' && !(window as any).__toneCraftGestureAttached) {
+      (window as any).__toneCraftGestureAttached = true;
+      const gestureResume = () => {
+        if (this.isRunning && this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      };
+      window.addEventListener('pointerdown', gestureResume, { passive: true });
+      window.addEventListener('keydown', gestureResume, { passive: true });
+      window.addEventListener('touchstart', gestureResume, { passive: true });
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).__toneCraftEngine = this;
+    }
+
     // 1. Input Stage
     this.inputGainNode = this.ctx.createGain();
     this.inputGainNode.gain.value = 1.0;
@@ -684,6 +709,9 @@ export class ToneCraftEngine {
         try { nodeWrap.output.disconnect(); } catch {}
         try { nodeWrap.input.disconnect(); } catch {}
         if (nodeWrap.dspNodes?.state?.timer) clearInterval(nodeWrap.dspNodes.state.timer);
+        if (nodeWrap.dspNodes?.shifter?.dispose) {
+          try { nodeWrap.dspNodes.shifter.dispose(); } catch {}
+        }
         this.pedalNodes.delete(id);
       }
     });
@@ -702,9 +730,8 @@ export class ToneCraftEngine {
       if (!wrapper) {
         wrapper = createPedalDspNodes(this.ctx!, pedal);
         this.pedalNodes.set(pedal.id, wrapper);
-      } else {
-        updatePedalParameters(this.ctx!, pedal, wrapper);
       }
+      updatePedalParameters(this.ctx!, pedal, wrapper);
 
       previousNode.connect(wrapper.input);
       previousNode = wrapper.output;
@@ -833,6 +860,41 @@ export class ToneCraftEngine {
       if (nodeWrap.dspNodes?.state?.timer) clearInterval(nodeWrap.dspNodes.state.timer);
     });
     this.pedalNodes.clear();
+  }
+
+  /**
+   * Complete recovery restart: disposes stale context/nodes and reinitializes cleanly.
+   * Restores full audio without requiring a browser page reload!
+   */
+  public async restart(): Promise<void> {
+    console.log('[ToneCraftEngine] Restarting audio engine from scratch for clean recovery...');
+    const savedPedals = [...this.currentPedals];
+    const savedNamConfig = this.currentNamConfig;
+    const savedCabConfig = this.currentCabConfig;
+    const savedVolume = this.currentMasterVolume;
+    const savedSource = this.currentInputSource;
+
+    this.disposeContextOnly();
+    await this.init();
+
+    if (savedPedals.length > 0) {
+      this.updatePedalboardChain(savedPedals);
+    }
+    if (savedNamConfig) {
+      this.updateNamModel(savedNamConfig);
+    }
+    if (savedCabConfig) {
+      this.updateIrCabinet(savedCabConfig);
+    }
+    this.setMasterGain(savedVolume);
+
+    if (savedSource === 'mic') {
+      await this.setInputSource('mic');
+    } else {
+      this.playSampleRiff(savedSource || 'riff-clean-funk');
+    }
+    this.isRunning = true;
+    console.log('[ToneCraftEngine] Audio engine recovery restart completed successfully.');
   }
 
   public dispose(): void {

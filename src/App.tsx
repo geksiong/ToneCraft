@@ -145,17 +145,35 @@ export default function App() {
     }
   };
 
-  const toggleEngine = () => {
-    if (!isRunning) {
-      startAudioEngine();
+  const toggleEngine = async () => {
+    if (!isRunning || !audioEngine.ctx || audioEngine.ctx.state === 'closed') {
+      await startAudioEngine();
     } else {
-      if (audioEngine.ctx?.state === 'running') {
-        audioEngine.ctx.suspend();
+      if (audioEngine.ctx.state === 'running') {
+        try {
+          await audioEngine.ctx.suspend();
+        } catch {}
         setIsRunning(false);
       } else {
-        audioEngine.ctx?.resume();
-        setIsRunning(true);
+        try {
+          await audioEngine.ctx.resume();
+          setIsRunning(true);
+        } catch {
+          await startAudioEngine();
+        }
       }
+    }
+  };
+
+  const handleRestartEngine = async () => {
+    try {
+      await audioEngine.restart();
+      setIsRunning(true);
+      if (inputSource !== 'mic') {
+        setIsRiffPlaying(true);
+      }
+    } catch (err) {
+      console.error('Failed to restart audio engine:', err);
     }
   };
 
@@ -384,6 +402,7 @@ export default function App() {
       <Header
         isRunning={isRunning}
         onToggleEngine={toggleEngine}
+        onRestartEngine={handleRestartEngine}
         inputSource={inputSource}
         onSelectInputSource={handleSelectInputSource}
         inputGain={inputGain}
@@ -461,7 +480,7 @@ export default function App() {
 
         {/* Real-time Oscilloscope & Spectrum Analyzer Deck */}
         <div className="mb-4">
-          <SpectrumVisualizer />
+          <SpectrumVisualizer isRunning={isRunning} />
         </div>
 
         {/* Pedalboard Stage */}

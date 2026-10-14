@@ -18,6 +18,7 @@ export class HdWorkletEngine {
   public isReady: boolean = false;
 
   public onTelemetry: ((stats: HdWorkletTelemetry) => void) | null = null;
+  public onError: (() => void) | null = null;
   private pendingPingCallback: ((latencyMs: number) => void) | null = null;
 
   /**
@@ -53,6 +54,14 @@ export class HdWorkletEngine {
           this.pendingPingCallback(data.latencyMs);
           this.pendingPingCallback = null;
         }
+      }
+    };
+
+    this.workletNode.onprocessorerror = (err) => {
+      console.warn('[HdWorkletEngine] AudioWorklet processor error detected:', err);
+      this.isReady = false;
+      if (this.onError) {
+        this.onError();
       }
     };
 

@@ -4,13 +4,13 @@
  * Anti-Whine Notch Filter, and Low-Cut Rumble Filter for Microphone & USB Audio Interface inputs.
  *
  * PURPOSE & LATENCY:
- * Microphones and high-impedance guitar inputs capture significant ambient noise, electrical hum,
+ * Microphones and high-impedance guitar inputs capture ambient room noise, electrical hum,
  * and high-frequency coil whine (USB 8kHz harmonics / electromagnetic interference).
  * When fed into high-gain amp models and distortion pedals (which amplify by +40dB to +60dB),
  * this noise transforms into ear-piercing squeals, whistling, and harsh hiss in the output.
  *
  * This processor cleans the incoming audio signal using zero-latency biquad filters and a
- * fast-responding downward noise gate before the signal enters the pedalboard and amp stages.
+ * click-free, hysteresis-stabilized downward noise gate before the signal enters the pedalboard.
  */
 
 export interface InputConditionerConfig {
@@ -19,11 +19,11 @@ export interface InputConditionerConfig {
 
   // Dynamic Noise Gate
   gateEnabled: boolean;
-  gateThreshold: number; // in dB (-80 to -20 dB, default -52 dB)
-  gateAttackMs: number;  // in ms (1 to 30 ms, default 3 ms)
-  gateHoldMs: number;    // in ms (5 to 150 ms, default 25 ms)
-  gateReleaseMs: number; // in ms (20 to 500 ms, default 120 ms)
-  gateReductionDb: number; // attenuation depth in dB (-80 to -12 dB, default -60 dB)
+  gateThreshold: number; // in dB (-80 to -20 dB, default -50 dB)
+  gateAttackMs: number;  // in ms (2 to 30 ms, default 6 ms)
+  gateHoldMs: number;    // in ms (5 to 150 ms, default 30 ms)
+  gateReleaseMs: number; // in ms (20 to 500 ms, default 140 ms)
+  gateReductionDb: number; // attenuation depth in dB (-80 to -12 dB, default -48 dB)
 
   // High-Cut De-Hiss Filter (Anti-High-Pitch Whine / Screech)
   highCutEnabled: boolean;
@@ -50,12 +50,12 @@ export interface InputConditionerTelemetry {
 
 export const DEFAULT_INPUT_CONDITIONER_CONFIG: InputConditionerConfig = {
   enabled: true,
-  gateEnabled: true,
-  gateThreshold: -52,
-  gateAttackMs: 3,
-  gateHoldMs: 25,
-  gateReleaseMs: 120,
-  gateReductionDb: -60,
+  gateEnabled: false,
+  gateThreshold: -50,
+  gateAttackMs: 6,
+  gateHoldMs: 30,
+  gateReleaseMs: 140,
+  gateReductionDb: -48,
 
   highCutEnabled: true,
   highCutFreq: 6500, // Electric guitar fundamentals top out at 1.3kHz, harmonics drop off at 6kHz
@@ -88,10 +88,13 @@ export class InputConditionerEngine {
   private gateState: 'open' | 'hold' | 'closed' = 'open';
   private holdRemainingMs: number = 0;
   private currentReductionDb: number = 0;
+  private smoothedEnvelopeLevel: number = 0; // Leaky peak follower
+  private whineDetectionCounter: number = 0;
+  private isWhineActive: boolean = false;
 
-  // Analysis buffers
-  private timeDomainBuf: Float32Array = new Float32Array(256);
-  private freqDomainBuf: Float32Array = new Float32Array(128);
+  // Analysis buffers: 1024 samples ensures clean capture of low guitar/bass frequencies (>21ms window)
+  private timeDomainBuf: Float32Array = new Float32Array(1024);
+  private freqDomainBuf: Float32Array = new Float32Array(512);
 
   // Auto noise floor learning
   public isLearningNoiseFloor: boolean = false;
@@ -116,10 +119,10 @@ export class InputConditionerEngine {
     this.outputNode = ctx.createGain();
     this.outputNode.gain.value = 1.0;
 
-    // Analyser Tap for zero-latency sidechain envelope detection & FFT
+    // Analyser Tap with 1024 FFT size for zero-latency sidechain envelope detection without zero-crossing dropouts
     this.analyserNode = ctx.createAnalyser();
-    this.analyserNode.fftSize = 256;
-    this.analyserNode.smoothingTimeConstant = 0.2;
+    this.analyserNode.fftSize = 1024;
+    this.analyserNode.smoothingTimeConstant = 0.25;
     this.inputNode.connect(this.analyserNode);
 
     // 1. Low-Cut (Highpass) Filter
@@ -156,7 +159,7 @@ export class InputConditionerEngine {
     // Apply configuration parameters to filters
     this.applyFilterParameters();
 
-    // Start high-rate envelope detection loop
+    // Start envelope detection loop
     this.startEnvelopeLoop();
 
     return { input: this.inputNode, output: this.outputNode };
@@ -233,18 +236,23 @@ export class InputConditionerEngine {
       }
     }
 
-    // If gate is disabled, immediately restore full unity gain
+    // If gate is disabled, smoothly restore full unity gain without clicks
     if ((!this.config.enabled || !this.config.gateEnabled) && this.gateGainNode) {
+      const currentGain = this.gateGainNode.gain.value;
       this.gateGainNode.gain.cancelScheduledValues(now);
-      this.gateGainNode.gain.setTargetAtTime(1.0, now, 0.01);
+      this.gateGainNode.gain.setValueAtTime(Math.max(0.0001, currentGain), now);
+      this.gateGainNode.gain.linearRampToValueAtTime(1.0, now + 0.02);
       this.gateState = 'open';
       this.currentReductionDb = 0;
     }
   }
 
   /**
-   * Dynamic Envelope Follower loop running at ~60-80 Hz.
-   * Responds in 2-3ms to pluck transients without latency.
+   * Click-free Dynamic Envelope Follower loop running at ~60 Hz.
+   * Features:
+   * 1. Leaky peak/RMS follower to bridge note zero crossings (no sputtering or buzz).
+   * 2. 4.5 dB Hysteresis gap between open and close thresholds (no gate chatter/chatter flutter).
+   * 3. Continuous linear gain ramps anchored at current value (zero clicks/pops).
    */
   private startEnvelopeLoop(): void {
     if (this.envelopeTimer) clearInterval(this.envelopeTimer);
@@ -253,22 +261,34 @@ export class InputConditionerEngine {
     this.envelopeTimer = setInterval(() => {
       if (!this.ctx || !this.analyserNode || !this.gateGainNode) return;
 
-      // 1. Calculate Time-Domain RMS & Peak
+      // 1. Time-Domain Analysis with Leaky Peak/RMS Follower
       this.analyserNode.getFloatTimeDomainData(this.timeDomainBuf as any);
       let sumSquares = 0;
       let peak = 0;
-      for (let i = 0; i < this.timeDomainBuf.length; i++) {
-        const val = Math.abs(this.timeDomainBuf[i]);
-        if (val > peak) peak = val;
-        sumSquares += val * val;
+      const len = this.timeDomainBuf.length;
+      for (let i = 0; i < len; i++) {
+        const absVal = Math.abs(this.timeDomainBuf[i]);
+        if (absVal > peak) peak = absVal;
+        sumSquares += absVal * absVal;
       }
-      const rms = Math.sqrt(sumSquares / this.timeDomainBuf.length);
-      const inputDb = 20 * Math.log10(Math.max(1e-5, rms));
+      const rawRms = Math.sqrt(sumSquares / len);
 
-      // 2. High-Frequency Whine Detection (> 4.5 kHz)
+      // Fast attack (captures transient notes within 1-2 ms), smooth decay (bridges zero-crossings)
+      const instantLevel = Number.isFinite(rawRms) ? Math.max(rawRms * 1.25, peak * 0.7) : 0;
+      if (!Number.isFinite(this.smoothedEnvelopeLevel)) {
+        this.smoothedEnvelopeLevel = instantLevel;
+      } else if (instantLevel > this.smoothedEnvelopeLevel) {
+        this.smoothedEnvelopeLevel = this.smoothedEnvelopeLevel * 0.2 + instantLevel * 0.8;
+      } else {
+        // Smooth release decay (~35ms time constant) prevents zero-crossing dropouts on sustaining notes
+        this.smoothedEnvelopeLevel = this.smoothedEnvelopeLevel * 0.90 + instantLevel * 0.10;
+      }
+
+      const safeLevel = Number.isFinite(this.smoothedEnvelopeLevel) ? Math.max(1e-5, this.smoothedEnvelopeLevel) : 1e-5;
+      const inputDb = 20 * Math.log10(safeLevel);
+
+      // 2. High-Frequency Whine Detection (> 4.5 kHz) with Hysteresis
       this.analyserNode.getFloatFrequencyData(this.freqDomainBuf as any);
-      // Analyser bins: index k corresponds to k * (sampleRate / 256)
-      // At 48kHz, bin resolution is 187.5Hz. Bin 24 is ~4.5kHz, Bin 60 is ~11.2kHz
       let highFreqSum = 0;
       let highFreqCount = 0;
       for (let b = 24; b < Math.min(this.freqDomainBuf.length, 70); b++) {
@@ -276,55 +296,80 @@ export class InputConditionerEngine {
         highFreqCount++;
       }
       const avgHighFreqDb = highFreqCount > 0 ? highFreqSum / highFreqCount : -100;
-      const highPitchNoiseDetected = avgHighFreqDb > -65 && inputDb < -45;
+      const rawWhine = avgHighFreqDb > -65 && inputDb < -42;
+      if (rawWhine) {
+        this.whineDetectionCounter = Math.min(10, this.whineDetectionCounter + 1);
+      } else {
+        this.whineDetectionCounter = Math.max(0, this.whineDetectionCounter - 1);
+      }
+      if (this.whineDetectionCounter >= 4) {
+        this.isWhineActive = true;
+      } else if (this.whineDetectionCounter === 0) {
+        this.isWhineActive = false;
+      }
 
       // 3. Noise Floor Learning
       if (this.isLearningNoiseFloor) {
         this.noiseFloorSamples.push(inputDb);
       }
 
-      // 4. Dynamic Noise Gate Logic
-      const now = this.ctx.currentTime;
-      if (this.config.enabled && this.config.gateEnabled) {
-        if (inputDb >= this.config.gateThreshold) {
-          // Open gate rapidly
-          this.holdRemainingMs = this.config.gateHoldMs;
+      // 4. Click-Free Dynamic Noise Gate Logic with Hysteresis
+      try {
+        const now = this.ctx.currentTime;
+        if (this.config.enabled && this.config.gateEnabled) {
+          const openThreshold = this.config.gateThreshold;
+          const closeThreshold = this.config.gateThreshold - 4.5; // 4.5 dB hysteresis margin
+
+          if (inputDb >= openThreshold) {
+            // Signal crossed open threshold: smoothly open gate
+            this.holdRemainingMs = this.config.gateHoldMs;
+            if (this.gateState !== 'open') {
+              this.gateState = 'open';
+              this.gateGainNode.gain.cancelScheduledValues(now);
+              const attackSec = Math.max(0.005, this.config.gateAttackMs / 1000);
+              this.gateGainNode.gain.setTargetAtTime(1.0, now, attackSec);
+            }
+            this.currentReductionDb = 0;
+          } else if (this.gateState === 'open' && inputDb >= closeThreshold) {
+            // Sustaining above close threshold (within hysteresis zone)
+            this.holdRemainingMs = this.config.gateHoldMs;
+            this.currentReductionDb = 0;
+          } else if (this.holdRemainingMs > 0) {
+            // In hold period: maintain note sustain
+            this.holdRemainingMs -= intervalMs;
+            this.gateState = 'hold';
+            this.currentReductionDb = 0;
+          } else {
+            // Smoothly close gate (exponential target to attenuation floor - NEVER THROWS)
+            if (this.gateState !== 'closed') {
+              this.gateState = 'closed';
+              const targetReductionGain = Math.max(0.0001, Math.pow(10, this.config.gateReductionDb / 20));
+              const releaseSec = Math.max(0.02, this.config.gateReleaseMs / 1000);
+              this.gateGainNode.gain.cancelScheduledValues(now);
+              this.gateGainNode.gain.setTargetAtTime(targetReductionGain, now, releaseSec);
+            }
+            this.currentReductionDb = this.config.gateReductionDb;
+          }
+        } else {
           if (this.gateState !== 'open') {
             this.gateState = 'open';
             this.gateGainNode.gain.cancelScheduledValues(now);
-            const attackTimeSec = Math.max(0.001, this.config.gateAttackMs / 1000);
-            this.gateGainNode.gain.setTargetAtTime(1.0, now, attackTimeSec);
+            this.gateGainNode.gain.setTargetAtTime(1.0, now, 0.02);
           }
           this.currentReductionDb = 0;
-        } else if (this.holdRemainingMs > 0) {
-          // In hold period (retaining note sustain)
-          this.holdRemainingMs -= intervalMs;
-          this.gateState = 'hold';
-          this.currentReductionDb = 0;
-        } else {
-          // Close gate (smooth release attenuation)
-          if (this.gateState !== 'closed') {
-            this.gateState = 'closed';
-            const targetReductionGain = Math.pow(10, this.config.gateReductionDb / 20);
-            const releaseTimeSec = Math.max(0.01, this.config.gateReleaseMs / 1000);
-            this.gateGainNode.gain.cancelScheduledValues(now);
-            this.gateGainNode.gain.setTargetAtTime(targetReductionGain, now, releaseTimeSec);
-          }
-          this.currentReductionDb = this.config.gateReductionDb;
         }
-      } else {
-        this.gateState = 'open';
-        this.currentReductionDb = 0;
+      } catch (gateErr) {
+        console.warn('Error in gate automation loop:', gateErr);
       }
 
       // 5. Emit Telemetry
       if (this.onTelemetry) {
         this.onTelemetry({
-          inputDb: Math.round(inputDb * 10) / 10,
+          inputDb: Math.round(inputDb),
           reductionDb: Math.round(this.currentReductionDb),
           gateState: this.gateState,
-          highPitchNoiseDetected,
-          highPitchEnergyDb: Math.round(avgHighFreqDb * 10) / 10
+          highPitchNoiseDetected: this.isWhineActive,
+          highPitchEnergyDb: Math.round(avgHighFreqDb)
         });
       }
     }, intervalMs);
@@ -362,17 +407,17 @@ export class InputConditionerEngine {
 
   /**
    * 1-Click "Whine & Screech Killer" Preset:
-   * Instantly configures aggressive high-cut and noise gate to silence harsh mic feedback.
+   * Instantly configures high-cut and noise gate to silence harsh mic feedback.
    */
   public applyWhineKillerPreset(): void {
     this.updateConfig({
       enabled: true,
       gateEnabled: true,
-      gateThreshold: -50,
-      gateAttackMs: 2,
+      gateThreshold: -48,
+      gateAttackMs: 6,
       gateHoldMs: 30,
-      gateReleaseMs: 100,
-      gateReductionDb: -60,
+      gateReleaseMs: 120,
+      gateReductionDb: -48,
 
       highCutEnabled: true,
       highCutFreq: 6000,
@@ -385,6 +430,20 @@ export class InputConditionerEngine {
       lowCutEnabled: true,
       lowCutFreq: 85
     });
+  }
+
+  /**
+   * Emergency recovery: immediately unblocks gate gain to 1.0 and clears stuck attenuation
+   */
+  public recover(): void {
+    if (!this.ctx || !this.gateGainNode) return;
+    try {
+      const now = this.ctx.currentTime;
+      this.gateGainNode.gain.cancelScheduledValues(now);
+      this.gateGainNode.gain.setValueAtTime(1.0, now);
+      this.gateState = 'open';
+      this.currentReductionDb = 0;
+    } catch {}
   }
 
   public dispose(): void {

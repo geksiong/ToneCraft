@@ -14,12 +14,14 @@ import {
   Activity,
   Zap,
   AlertTriangle,
-  ShieldAlert
+  ShieldAlert,
+  RotateCcw
 } from 'lucide-react';
 
 interface HeaderProps {
   isRunning: boolean;
   onToggleEngine: () => void;
+  onRestartEngine?: () => void;
   inputSource: string;
   onSelectInputSource: (src: string) => void;
   inputGain: number;
@@ -58,6 +60,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   isRunning,
   onToggleEngine,
+  onRestartEngine,
   inputSource,
   onSelectInputSource,
   inputGain,
@@ -137,6 +140,16 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <span className="font-mono w-[72px] text-center inline-block">{isRunning ? 'DSP ONLINE' : 'START DSP'}</span>
           </button>
+
+          {isRunning && onRestartEngine && (
+            <button
+              onClick={onRestartEngine}
+              className="p-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-amber-400 hover:border-amber-500/40 transition-all shrink-0"
+              title="Reboot Audio Engine (reinitializes hardware pipeline without page reload if audio was interrupted)"
+            >
+              <RotateCcw size={14} />
+            </button>
+          )}
 
           <div className="flex items-center gap-2">
             <h1 className="text-base font-black tracking-wider uppercase bg-gradient-to-r from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent">

@@ -247,6 +247,11 @@ class HdCoreProcessor extends AudioWorkletProcessor {
     // Process sample block
     for (let i = 0; i < numSamples; i++) {
       let s = inChannel[i];
+      if (!Number.isFinite(s)) {
+        s = 0.0;
+        this.cathodeVoltage = 0.0;
+        this.gridCapCharge = 0.0;
+      }
 
       // 1. Vacuum Tube Preamp Stage vs Clean Solid-State Headroom
       if (this.mode === 'clean-solid-state') {
@@ -269,7 +274,7 @@ class HdCoreProcessor extends AudioWorkletProcessor {
         s = this.processSvf(s);
       }
 
-      outChannel[i] = s;
+      outChannel[i] = Number.isFinite(s) ? s : 0.0;
     }
 
     // Copy to second channel if stereo output
