@@ -98,6 +98,7 @@ export class ToneCraftEngine {
   private chainInputNode: GainNode | null = null;
   private chainOutputNode: GainNode | null = null;
   private pedalNodes: Map<string, PedalNodeWrapper> = new Map();
+  private connectedPedalIds: string[] = [];
   public currentPedals: AnyPedal[] = [];
   public currentNamConfig: NamModelConfig | null = null;
   public currentCabConfig: IrCabinetConfig | null = null;
@@ -220,6 +221,13 @@ export class ToneCraftEngine {
     // 4. Initialize Sub-Engines
     const namStage = this.namEngine.init(this.ctx);
     this.namEngine.setCabEngineMode(this.latencySettings.zeroLatencyCab ? 'analog-zero-latency' : 'ir-convolver');
+
+    // Await async neural WASM engine and HD AudioWorklet ready before connecting downstream
+    try {
+      await this.namEngine.waitForEnginesReady();
+    } catch (err) {
+      console.warn('[ToneCraftEngine] Async engine readiness fallback:', err);
+    }
 
     const looperOutput = this.looperEngine.init(this.ctx, (state: LooperState) => {
       if (this.onLooperUpdate) this.onLooperUpdate(state);
@@ -620,7 +628,15 @@ export class ToneCraftEngine {
 
   public setInputGain(value: number): void {
     if (this.inputGainNode && this.ctx) {
-      const gain = value <= 0 ? 0 : Math.pow(value / 50, 1.3);
+      if (value <= 0) {
+        this.inputGainNode.gain.setTargetAtTime(0, this.ctx.currentTime, 0.015);
+        return;
+      }
+      // Value 50 = exact 0.0 dB (Unity gain 1.0)
+      // 0..50 maps to -26 dB .. 0 dB cut
+      // 50..100 maps to 0 dB .. +14 dB boost
+      const db = ((value - 50) / 50) * (value >= 50 ? 14 : 26);
+      const gain = Math.pow(10, db / 20);
       this.inputGainNode.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.015);
     }
   }
@@ -706,30 +722,71 @@ export class ToneCraftEngine {
   // DYNAMIC PEDALBOARD ROUTING
   // ==========================================================================
 
+  private disposePedalWrapper(nodeWrap: PedalNodeWrapper): void {
+    try { nodeWrap.output.disconnect(); } catch {}
+    try { nodeWrap.input.disconnect(); } catch {}
+    try { nodeWrap.bypassGain.disconnect(); } catch {}
+    try { nodeWrap.wetGain.disconnect(); } catch {}
+    if (nodeWrap.dspNodes) {
+      if (nodeWrap.dspNodes.lfo) {
+        try { nodeWrap.dspNodes.lfo.stop(); } catch {}
+        try { nodeWrap.dspNodes.lfo.disconnect(); } catch {}
+      }
+      if (nodeWrap.dspNodes.state?.timer) {
+        clearInterval(nodeWrap.dspNodes.state.timer);
+      }
+      if (nodeWrap.dspNodes.shifter?.dispose) {
+        try { nodeWrap.dspNodes.shifter.dispose(); } catch {}
+      }
+      if (nodeWrap.dspNodes.analyser) {
+        try { nodeWrap.dspNodes.analyser.disconnect(); } catch {}
+      }
+    }
+  }
+
   public updatePedalboardChain(pedals: AnyPedal[]): void {
     if (!this.ctx || !this.chainInputNode || !this.chainOutputNode) return;
 
+    // Fast-path: only if the pedal chain order is already connected in the exact same serial order with valid matching wrappers
+    const isChainAlreadyWired =
+      this.connectedPedalIds.length === pedals.length &&
+      pedals.every((p, idx) => {
+        if (p.id !== this.connectedPedalIds[idx]) return false;
+        const wrap = this.pedalNodes.get(p.id);
+        return wrap && (!wrap.pedalType || wrap.pedalType === p.type);
+      });
+
+    if (isChainAlreadyWired) {
+      pedals.forEach((pedal) => {
+        const wrapper = this.pedalNodes.get(pedal.id);
+        if (wrapper) {
+          updatePedalParameters(this.ctx!, pedal, wrapper);
+        }
+      });
+      this.currentPedals = pedals;
+      this.dispatchLatencyUpdate();
+      return;
+    }
+
+    // Slow-path: Topology or preset changed. Disconnect and re-wire audio graph
     try { this.chainInputNode.disconnect(); } catch {}
 
     this.pedalNodes.forEach(nodeWrap => {
       try { nodeWrap.output.disconnect(); } catch {}
     });
 
-    const currentIds = new Set(pedals.map(p => p.id));
+    const newPedalMap = new Map(pedals.map(p => [p.id, p]));
     this.pedalNodes.forEach((nodeWrap, id) => {
-      if (!currentIds.has(id)) {
-        try { nodeWrap.output.disconnect(); } catch {}
-        try { nodeWrap.input.disconnect(); } catch {}
-        if (nodeWrap.dspNodes?.state?.timer) clearInterval(nodeWrap.dspNodes.state.timer);
-        if (nodeWrap.dspNodes?.shifter?.dispose) {
-          try { nodeWrap.dspNodes.shifter.dispose(); } catch {}
-        }
+      const newPedal = newPedalMap.get(id);
+      if (!newPedal || (nodeWrap.pedalType && nodeWrap.pedalType !== newPedal.type)) {
+        this.disposePedalWrapper(nodeWrap);
         this.pedalNodes.delete(id);
       }
     });
 
     if (pedals.length === 0) {
       this.chainInputNode.connect(this.chainOutputNode);
+      this.connectedPedalIds = [];
       this.currentPedals = pedals;
       this.dispatchLatencyUpdate();
       return;
@@ -739,8 +796,10 @@ export class ToneCraftEngine {
 
     pedals.forEach((pedal) => {
       let wrapper = this.pedalNodes.get(pedal.id);
-      if (!wrapper) {
+      if (!wrapper || (wrapper.pedalType && wrapper.pedalType !== pedal.type)) {
+        if (wrapper) this.disposePedalWrapper(wrapper);
         wrapper = createPedalDspNodes(this.ctx!, pedal);
+        wrapper.pedalType = pedal.type;
         this.pedalNodes.set(pedal.id, wrapper);
       }
       updatePedalParameters(this.ctx!, pedal, wrapper);
@@ -749,6 +808,7 @@ export class ToneCraftEngine {
       previousNode = wrapper.output;
     });
 
+    this.connectedPedalIds = pedals.map(p => p.id);
     this.currentPedals = pedals;
     previousNode.connect(this.chainOutputNode);
     this.dispatchLatencyUpdate();
@@ -758,9 +818,11 @@ export class ToneCraftEngine {
     if (!this.ctx) return;
     this.currentPedals = this.currentPedals.map(p => p.id === pedal.id ? pedal : p);
     const wrapper = this.pedalNodes.get(pedal.id);
-    if (wrapper) {
-      updatePedalParameters(this.ctx, pedal, wrapper);
+    if (!wrapper || (wrapper.pedalType && wrapper.pedalType !== pedal.type)) {
+      this.updatePedalboardChain(this.currentPedals);
+      return;
     }
+    updatePedalParameters(this.ctx, pedal, wrapper);
     this.dispatchLatencyUpdate();
   }
 
@@ -852,6 +914,7 @@ export class ToneCraftEngine {
   // ==========================================================================
 
   public disposeContextOnly(): void {
+    this.isRunning = false;
     this.tunerEngine.stop();
     this.looperEngine.dispose();
     this.namEngine.dispose();
@@ -869,9 +932,58 @@ export class ToneCraftEngine {
       this.ctx = null;
     }
     this.pedalNodes.forEach(nodeWrap => {
-      if (nodeWrap.dspNodes?.state?.timer) clearInterval(nodeWrap.dspNodes.state.timer);
+      this.disposePedalWrapper(nodeWrap);
     });
     this.pedalNodes.clear();
+    this.connectedPedalIds = [];
+  }
+
+  /**
+   * Completely suspends DSP audio processing, stops audio generators, and silences meters.
+   * Explicitly sets isRunning = false so that gesture listeners and onstatechange callbacks
+   * do NOT auto-resume.
+   */
+  public async suspend(): Promise<void> {
+    console.log('[ToneCraftEngine] Switching DSP engine OFF...');
+    this.isRunning = false;
+    this.stopSampleRiff();
+    if (this.micSourceNode) {
+      try { this.micSourceNode.disconnect(); } catch {}
+    }
+    if (this.ctx && this.ctx.state === 'running') {
+      try {
+        await this.ctx.suspend();
+      } catch (err) {
+        console.warn('[ToneCraftEngine] Error suspending AudioContext:', err);
+      }
+    }
+    if (this.onPeakUpdate) {
+      this.onPeakUpdate(0, 0);
+    }
+  }
+
+  /**
+   * Resumes DSP audio processing and reactivates audio sources.
+   */
+  public async resume(): Promise<void> {
+    console.log('[ToneCraftEngine] Switching DSP engine ON...');
+    if (!this.ctx || this.ctx.state === 'closed') {
+      await this.init();
+      return;
+    }
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch (err) {
+        console.warn('[ToneCraftEngine] Error resuming AudioContext:', err);
+      }
+    }
+    this.isRunning = true;
+    if (this.currentInputSource === 'mic') {
+      await this.setInputSource('mic');
+    } else {
+      this.playSampleRiff(this.currentInputSource || 'riff-clean-funk');
+    }
   }
 
   /**

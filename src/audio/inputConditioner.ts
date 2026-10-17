@@ -50,23 +50,23 @@ export interface InputConditionerTelemetry {
 
 export const DEFAULT_INPUT_CONDITIONER_CONFIG: InputConditionerConfig = {
   enabled: true,
-  gateEnabled: false,
-  gateThreshold: -50,
+  gateEnabled: true,
+  gateThreshold: -46,
   gateAttackMs: 6,
-  gateHoldMs: 30,
-  gateReleaseMs: 140,
-  gateReductionDb: -48,
+  gateHoldMs: 25,
+  gateReleaseMs: 120,
+  gateReductionDb: -52,
 
   highCutEnabled: true,
-  highCutFreq: 6500, // Electric guitar fundamentals top out at 1.3kHz, harmonics drop off at 6kHz
-  highCutSlope: '24db', // Steep 24dB/oct cut kills high-frequency screech
+  highCutFreq: 7500,
+  highCutSlope: '12db',
 
-  notchEnabled: true,
-  notchFreq: 8000, // Common 8kHz USB interface frame whine
+  notchEnabled: false,
+  notchFreq: 8000,
   notchQ: 6.0,
 
   lowCutEnabled: true,
-  lowCutFreq: 80
+  lowCutFreq: 70
 };
 
 export class InputConditionerEngine {
@@ -318,7 +318,7 @@ export class InputConditionerEngine {
         const now = this.ctx.currentTime;
         if (this.config.enabled && this.config.gateEnabled) {
           const openThreshold = this.config.gateThreshold;
-          const closeThreshold = this.config.gateThreshold - 4.5; // 4.5 dB hysteresis margin
+          const closeThreshold = this.config.gateThreshold - 2.5; // 2.5 dB tight hysteresis margin prevents room mic noise from holding gate open
 
           if (inputDb >= openThreshold) {
             // Signal crossed open threshold: smoothly open gate
@@ -429,6 +429,34 @@ export class InputConditionerEngine {
 
       lowCutEnabled: true,
       lowCutFreq: 85
+    });
+  }
+
+  /**
+   * 1-Click "NAM / High-Gain Low Noise" Preset:
+   * Calibrated specifically for Neural Amp Modeler and high-gain amps.
+   * Silences idle room noise, interface hiss, and pickup hum between notes with fast recovery.
+   */
+  public applyNamLowNoisePreset(): void {
+    this.updateConfig({
+      enabled: true,
+      gateEnabled: true,
+      gateThreshold: -44,
+      gateAttackMs: 5,
+      gateHoldMs: 25,
+      gateReleaseMs: 110,
+      gateReductionDb: -54,
+
+      highCutEnabled: true,
+      highCutFreq: 7500,
+      highCutSlope: '12db',
+
+      notchEnabled: false,
+      notchFreq: 8000,
+      notchQ: 6.0,
+
+      lowCutEnabled: true,
+      lowCutFreq: 75
     });
   }
 

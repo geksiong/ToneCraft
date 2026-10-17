@@ -142,18 +142,25 @@ export default function App() {
   // Engine Startup: builds the complete graph first, then activates audio source
   const startAudioEngine = async () => {
     try {
-      await audioEngine.init();
-      audioEngine.updatePedalboardChain(pedals);
-      audioEngine.updateNamModel(namModel);
-      audioEngine.updateIrCabinet(irCabinet);
-      audioEngine.setMasterGain(masterVolume);
-      audioEngine.setInputGain(inputGain);
+      if (!audioEngine.ctx || audioEngine.ctx.state === 'closed') {
+        await audioEngine.init();
+        audioEngine.updatePedalboardChain(pedals);
+        audioEngine.updateNamModel(namModel);
+        audioEngine.updateIrCabinet(irCabinet);
+        audioEngine.setMasterGain(masterVolume);
+        audioEngine.setInputGain(inputGain);
 
-      if (inputSource !== 'mic') {
-        audioEngine.playSampleRiff(inputSource);
-        setIsRiffPlaying(true);
+        if (inputSource !== 'mic') {
+          audioEngine.playSampleRiff(inputSource);
+          setIsRiffPlaying(true);
+        } else {
+          await audioEngine.setInputSource('mic');
+        }
       } else {
-        await audioEngine.setInputSource('mic');
+        await audioEngine.resume();
+        if (inputSource !== 'mic') {
+          setIsRiffPlaying(true);
+        }
       }
 
       setIsRunning(true);
@@ -163,22 +170,16 @@ export default function App() {
   };
 
   const toggleEngine = async () => {
-    if (!isRunning || !audioEngine.ctx || audioEngine.ctx.state === 'closed') {
+    if (!isRunning) {
       await startAudioEngine();
     } else {
-      if (audioEngine.ctx.state === 'running') {
-        try {
-          await audioEngine.ctx.suspend();
-        } catch {}
-        setIsRunning(false);
-      } else {
-        try {
-          await audioEngine.ctx.resume();
-          setIsRunning(true);
-        } catch {
-          await startAudioEngine();
-        }
+      try {
+        await audioEngine.suspend();
+      } catch (err) {
+        console.error('Failed to switch off audio engine:', err);
       }
+      setIsRunning(false);
+      setIsRiffPlaying(false);
     }
   };
 
@@ -397,16 +398,23 @@ export default function App() {
     const updatedNamModel: NamModelConfig = {
       ...preset.namModel,
       isRealNam: isPresetNam,
-      engineMode: targetEngine
+      engineMode: targetEngine,
+      bypassed: preset.namModel.bypassed ?? false
     };
 
     setNamModel(updatedNamModel);
     setAmpEngineMode(targetEngine);
-    audioEngine.setAmpEngineMode(targetEngine);
 
     setIrCabinet(preset.irCabinet);
     setBpm(preset.bpm || 120);
     setIsBypassAll(false);
+
+    // Keep audioEngine state references current
+    if (!isRunning) {
+      audioEngine.currentPedals = preset.pedals;
+    }
+    audioEngine.currentNamConfig = updatedNamModel;
+    audioEngine.currentCabConfig = preset.irCabinet;
 
     if (isRunning) {
       audioEngine.updatePedalboardChain(preset.pedals);
@@ -670,6 +678,11 @@ export default function App() {
         isLearningNoiseFloor={isLearningNoiseFloor}
         onApplyWhineKiller={handleApplyWhineKiller}
         inputSource={inputSource}
+        inputGain={inputGain}
+        onInputGainChange={(val) => {
+          setInputGain(val);
+          audioEngine.setInputGain(val);
+        }}
       />
     </div>
   );

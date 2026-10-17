@@ -117,6 +117,13 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isRiffSource = inputSource !== 'mic';
 
+  const getInputGainDbString = (val: number): string => {
+    if (val <= 0) return 'MUTE';
+    const db = ((val - 50) / 50) * (val >= 50 ? 14 : 26);
+    if (Math.abs(db) < 0.05) return '0.0 dB';
+    return `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`;
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-800 shadow-xl px-4 py-2.5">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -129,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-sm'
                 : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
             }`}
-            title={isRunning ? 'Audio Engine is Active' : 'Click to Start Audio Processing'}
+            title={isRunning ? 'Audio Engine is Active (Click to Switch DSP OFF)' : 'Click to Start DSP Audio Processing'}
           >
             <div
               className={`w-2.5 h-2.5 rounded-full transition-all shrink-0 ${
@@ -232,6 +239,35 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
           )}
+
+          {/* Input Gain Slider & dB display */}
+          <div
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-neutral-950 border border-neutral-800 shrink-0"
+            title={`Input Gain: ${inputGain}% (${getInputGainDbString(inputGain)}) - Double-click slider or click dB to reset to 0.0 dB`}
+          >
+            <span className="text-[10px] font-mono text-neutral-400 uppercase font-semibold shrink-0">
+              Gain:
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={inputGain}
+              onChange={(e) => onInputGainChange(Number(e.target.value))}
+              onDoubleClick={() => onInputGainChange(50)}
+              className="w-14 sm:w-16 h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 shrink-0"
+              title={`Input Gain: ${inputGain}% (${getInputGainDbString(inputGain)}) - Double-click to reset`}
+            />
+            <button
+              type="button"
+              onClick={() => onInputGainChange(50)}
+              className="text-[10px] font-mono tabular-nums w-12 text-right inline-block text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer"
+              title="Click to reset to 0.0 dB (Unity Gain)"
+            >
+              {getInputGainDbString(inputGain)}
+            </button>
+          </div>
 
           {/* Input Peak Meter */}
           <div className="flex items-center gap-1 pl-1 shrink-0">

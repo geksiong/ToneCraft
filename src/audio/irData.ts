@@ -128,6 +128,44 @@ export const BUILT_IN_IR_CABINETS: IrCabinetConfig[] = [
 ];
 
 /**
+ * Calibrates any Impulse Response (IR) audio buffer so that its average acoustic transfer gain
+ * across the musical guitar spectrum (150 Hz to 4000 Hz) equals nominal 0 dB (unity gain = 1.0).
+ * Completely eliminates harsh +20dB volume spikes from unnormalized WAV files like Celestion V30
+ * and balances acoustic volume across all speaker cabinets, acoustic bodies, and DI boxes.
+ */
+export function calibrateIrBuffer(buffer: AudioBuffer): void {
+  const sampleRate = buffer.sampleRate || 48000;
+  const numChannels = buffer.numberOfChannels;
+  const freqs = [150, 250, 400, 650, 1000, 1600, 2500, 3500];
+
+  for (let ch = 0; ch < numChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    const len = data.length;
+    let sumGains = 0;
+
+    for (let f = 0; f < freqs.length; f++) {
+      const omega = (2 * Math.PI * freqs[f]) / sampleRate;
+      let re = 0;
+      let im = 0;
+      for (let n = 0; n < len; n++) {
+        const angle = omega * n;
+        re += data[n] * Math.cos(angle);
+        im -= data[n] * Math.sin(angle);
+      }
+      sumGains += Math.sqrt(re * re + im * im);
+    }
+
+    const avgGain = sumGains / freqs.length;
+    if (avgGain > 0.0001 && Number.isFinite(avgGain)) {
+      const factor = 1.0 / avgGain;
+      for (let i = 0; i < len; i++) {
+        data[i] *= factor;
+      }
+    }
+  }
+}
+
+/**
  * Synthesizes an acoustically authentic Cabinet Impulse Response buffer for ConvolverNode
  * with immediate sample 0 peak and calibrated decay so volume remains punchy and loud.
  */
@@ -235,6 +273,9 @@ export function generateSyntheticCabIr(
       right[i] *= scale;
     }
   }
+
+  // Final guitar-frequency unity gain calibration
+  calibrateIrBuffer(buffer);
 
   return buffer;
 }

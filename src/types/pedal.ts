@@ -207,6 +207,7 @@ export interface NamModelConfig {
   engineMode?: 'wasm-nam' | 'hd-triode' | 'waveshaper';
   enabled?: boolean;
   bypassed?: boolean;
+  inputTrim?: number; // In dB: -24 to +6 dB (calibrated NAM input sensitivity / headroom trim)
 }
 
 export interface IrCabinetConfig {

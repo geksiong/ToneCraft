@@ -75,6 +75,7 @@ export interface PedalNodeWrapper {
   bypassGain: GainNode;
   wetGain: GainNode;
   dspNodes: any;
+  pedalType?: string;
 }
 
 /**
@@ -445,7 +446,7 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
 
   wetGain.connect(output);
 
-  const wrapper: PedalNodeWrapper = { input, output, bypassGain, wetGain, dspNodes };
+  const wrapper: PedalNodeWrapper = { input, output, bypassGain, wetGain, dspNodes, pedalType: pedal.type };
   updatePedalParameters(ctx, pedal, wrapper);
   return wrapper;
 }
@@ -629,7 +630,7 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       const p = pedal as OverdrivePedal;
       nodes.driveShaper.curve = createOverdriveCurve(p.drive) as any;
       nodes.toneFilter.frequency.setTargetAtTime(1000 + (p.tone / 100) * 6000, ctx.currentTime, 0.02);
-      nodes.levelGain.gain.setTargetAtTime(Math.max(0.2, p.level / 60), ctx.currentTime, 0.02);
+      nodes.levelGain.gain.setTargetAtTime(Math.max(0.1, (p.level / 100) * 1.0), ctx.currentTime, 0.02);
       break;
     }
 
@@ -637,7 +638,7 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       const p = pedal as DistortionPedal;
       nodes.distShaper.curve = createDistortionCurve(p.gain) as any;
       nodes.filterNode.frequency.setTargetAtTime(800 + (p.filter / 100) * 7000, ctx.currentTime, 0.02);
-      nodes.volumeGain.gain.setTargetAtTime(Math.max(0.2, p.volume / 60), ctx.currentTime, 0.02);
+      nodes.volumeGain.gain.setTargetAtTime(Math.max(0.1, (p.volume / 100) * 1.0), ctx.currentTime, 0.02);
       break;
     }
 
@@ -647,7 +648,7 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       nodes.fuzzShaper.curve = createFuzzCurve(p.fuzz) as any;
       nodes.scoopFilter.gain.setTargetAtTime(-15 + (p.scoop / 100) * 20, ctx.currentTime, 0.02);
       nodes.toneFilter.frequency.setTargetAtTime(800 + (p.tone / 100) * 6500, ctx.currentTime, 0.02);
-      nodes.volumeGain.gain.setTargetAtTime(Math.max(0.2, p.volume / 65), ctx.currentTime, 0.02);
+      nodes.volumeGain.gain.setTargetAtTime(Math.max(0.1, (p.volume / 100) * 0.8), ctx.currentTime, 0.02);
       break;
     }
 
@@ -656,7 +657,7 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       nodes.comp.threshold.setTargetAtTime(-50 + (100 - p.sustain) * 0.4, ctx.currentTime, 0.02);
       nodes.comp.attack.setTargetAtTime(0.003 + (p.attack / 100) * 0.06, ctx.currentTime, 0.02);
       nodes.comp.ratio.setTargetAtTime(3 + (p.sustain / 100) * 12, ctx.currentTime, 0.02);
-      nodes.makeupGain.gain.setTargetAtTime(1.0 + (p.level / 100) * 1.5, ctx.currentTime, 0.02);
+      nodes.makeupGain.gain.setTargetAtTime(0.6 + (p.level / 100) * 0.8, ctx.currentTime, 0.02);
       const wetFraction = p.blend / 100;
       nodes.wetPath.gain.setTargetAtTime(wetFraction, ctx.currentTime, 0.02);
       nodes.dryPath.gain.setTargetAtTime(1 - wetFraction, ctx.currentTime, 0.02);
@@ -784,8 +785,8 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
 
       shifter.setShift(semitones);
       shifter.dryGain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
-      shifter.wetGain.gain.setTargetAtTime(p.harmonyLevel / 100, ctx.currentTime, 0.02);
-      nodes.directGain.gain.setTargetAtTime(p.directLevel / 100, ctx.currentTime, 0.02);
+      shifter.wetGain.gain.setTargetAtTime((p.harmonyLevel / 100) * 0.75, ctx.currentTime, 0.02);
+      nodes.directGain.gain.setTargetAtTime((p.directLevel / 100) * 0.85, ctx.currentTime, 0.02);
       break;
     }
 

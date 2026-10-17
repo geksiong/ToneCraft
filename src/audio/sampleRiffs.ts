@@ -517,7 +517,7 @@ export function synthesizeRiffBuffer(
     if (abs > maxPeak) maxPeak = abs;
   }
   if (maxPeak > 0.001) {
-    const targetPeak = isCleanRiff ? 0.38 : riffId === 'riff-metal' ? 0.55 : 0.45;
+    const targetPeak = 0.45;
     const scale = targetPeak / maxPeak;
     for (let i = 0; i < totalSamples; i++) {
       data[i] *= scale;

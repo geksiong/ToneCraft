@@ -141,8 +141,10 @@ class HdCoreProcessor extends AudioWorkletProcessor {
     const targetVk = instantaneousCurrent * 0.22 * (this.tubeSag || 0.4);
     this.cathodeVoltage += (targetVk - this.cathodeVoltage) * 0.0012;
 
-    // 5. Output Headroom Calibration (calibrated to ~0.44 peak to match NAM loader engine)
-    const scaledY = rawY * 0.44;
+    // 5. Output Headroom Calibration:
+    // Calibrated with full linear small-signal transmission (~0.88x) so clean chords retain full body and volume,
+    // while high-gain saturation smoothly compresses to ~0.82 peak.
+    const scaledY = rawY * 0.88;
 
     // 6. Sub-audio DC-Blocking Coupling Capacitor Filter (fc ~ 12Hz at 48kHz)
     // Strips DC offset caused by bias shifts before feeding downstream tone stack and cabinet
@@ -264,9 +266,9 @@ class HdCoreProcessor extends AudioWorkletProcessor {
       if (this.mode === 'clean-solid-state') {
         // Pure solid-state Class-AB / linear clean amplifier with huge headroom
         // Passes 100% linear with zero THD; calibrated output level matching NAM and tube stages
-        s = s * 0.55;
-        if (Math.abs(s) > 0.48) {
-          s = Math.sign(s) * (0.48 + 0.04 * Math.tanh((Math.abs(s) - 0.48) * 4.0));
+        s = s * 0.88;
+        if (Math.abs(s) > 0.80) {
+          s = Math.sign(s) * (0.80 + 0.08 * Math.tanh((Math.abs(s) - 0.80) * 3.0));
         }
       } else {
         s = this.processTubeTriode(s);

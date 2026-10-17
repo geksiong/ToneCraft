@@ -99,16 +99,14 @@ export function createNamSaturationCurve(
   const n = 4096;
   const curve = new Float32Array(n);
 
-  // Output headroom calibration factor: matches NAM neural engine nominal peak (~0.44)
-  // leaving clean dynamic headroom through downstream tone stack and IR cabinet
-  const outputScale = 0.44;
-
-  // If gain is clean (<= 2.5) or saturation <= 1.2 (pure solid-state / clean amp),
-  // pass linear transfer curve scaled to match NAM engine nominal headroom
-  if (gain <= 2.5 || saturation <= 1.2) {
+  // If gain is clean (<= 2.8) or saturation <= 1.2 (pure solid-state / clean amp),
+  // pass linear transfer curve with full, punchy headroom (~0.88)
+  // so clean chords and single notes maintain matched perceived loudness with saturated lead channels.
+  if (gain <= 2.8 || saturation <= 1.2) {
+    const cleanOutputScale = 0.88;
     for (let i = 0; i < n; i++) {
       const x = (i * 2) / n - 1;
-      curve[i] = x * outputScale;
+      curve[i] = x * cleanOutputScale;
     }
     return curve;
   }
@@ -119,6 +117,7 @@ export function createNamSaturationCurve(
   const effSaturation = Math.max(1.0, saturation || 2.5);
   const drive = 0.9 + Math.pow(normGain, 1.2) * (effSaturation * 0.38);
   const b = (bias || 0.06) * 0.2;
+  const outputScale = 0.72; // Calibrated for balanced loudness against clean channels
 
   for (let i = 0; i < n; i++) {
     const x = (i * 2) / n - 1;

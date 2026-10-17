@@ -34,7 +34,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     weightsCount: 28440,
     modelUrl: '/models/ac10.nam',
     isRealNam: true,
-    engineMode: 'wasm-nam'
+    engineMode: 'wasm-nam',
+    inputTrim: -8.0
   },
   {
     id: 'deluxe',
@@ -53,7 +54,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     weightsCount: 28440,
     modelUrl: '/models/deluxe.nam',
     isRealNam: true,
-    engineMode: 'wasm-nam'
+    engineMode: 'wasm-nam',
+    inputTrim: -8.0
   },
   {
     id: 'slo-100',
@@ -279,6 +281,7 @@ export interface ParsedNamFile {
   weightsCount: number;
   sampleRate: number;
   rawJson?: any;
+  loudness?: number;
 }
 
 /**
@@ -304,13 +307,15 @@ export function parseNamJson(fileContent: string, fileName: string): ParsedNamFi
     }
 
     const cleanName = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    const loudness = typeof data.metadata?.loudness === 'number' ? data.metadata.loudness : undefined;
 
     return {
       name: cleanName || data.name || 'Custom NAM Profile',
       architecture: archType,
       weightsCount: Math.max(weightsCount, 8192),
       sampleRate: data.sample_rate || 48000,
-      rawJson: data
+      rawJson: data,
+      loudness
     };
   } catch {
     // If not strict JSON, support text representation or fallback

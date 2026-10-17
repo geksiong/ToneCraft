@@ -70,9 +70,9 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
     if (selected) {
       onUpdateCab({
         ...selected,
-        micDistance: irCabinet.micDistance,
-        lowCut: irCabinet.lowCut,
-        highCut: irCabinet.highCut
+        micDistance: selected.micDistance ?? irCabinet.micDistance,
+        lowCut: selected.lowCut ?? irCabinet.lowCut,
+        highCut: selected.highCut ?? irCabinet.highCut
       });
     }
   };
@@ -334,6 +334,82 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
               </button>
             </div>
           </div>
+
+          {/* NAM Input Sensitivity & Noise Floor Calibration Bar */}
+          {isNamProfile && (
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-2 px-3 py-2 bg-gradient-to-r from-amber-950/30 via-neutral-900/40 to-neutral-900/60 border border-amber-500/25 rounded-xl text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                  <Sliders size={12} className="text-amber-400" /> NAM Sensitivity &amp; Noise Trim:
+                </span>
+                <span className="text-[11px] font-mono text-emerald-400 font-bold tabular-nums bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                  {((namModel.inputTrim ?? -8.0) >= 0 ? '+' : '') + (namModel.inputTrim ?? -8.0).toFixed(1)} dB
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-1 text-[10px] font-mono">
+                  <button
+                    onClick={() => onUpdateNam({ ...namModel, inputTrim: -12.0 })}
+                    className={`px-2 py-0.5 rounded border transition-colors ${
+                      (namModel.inputTrim ?? -8.0) === -12.0
+                        ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-xs'
+                        : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
+                    }`}
+                    title="Ultra Low Noise (-12 dB) - Recommended for hot mics, humbuckers, and quiet background"
+                  >
+                    -12dB Ultra Quiet
+                  </button>
+                  <button
+                    onClick={() => onUpdateNam({ ...namModel, inputTrim: -8.0 })}
+                    className={`px-2 py-0.5 rounded border transition-colors ${
+                      (namModel.inputTrim ?? -8.0) === -8.0
+                        ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-xs'
+                        : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
+                    }`}
+                    title="Studio Calibrated (-8 dB) - Nominal sweet spot matching hardware guitar DI levels"
+                  >
+                    -8dB Calibrated
+                  </button>
+                  <button
+                    onClick={() => onUpdateNam({ ...namModel, inputTrim: -4.0 })}
+                    className={`px-2 py-0.5 rounded border transition-colors ${
+                      (namModel.inputTrim ?? -8.0) === -4.0
+                        ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-xs'
+                        : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
+                    }`}
+                    title="Standard (-4 dB) - Punchier input drive for low-output vintage single coils"
+                  >
+                    -4dB Standard
+                  </button>
+                  <button
+                    onClick={() => onUpdateNam({ ...namModel, inputTrim: 0.0 })}
+                    className={`px-2 py-0.5 rounded border transition-colors ${
+                      (namModel.inputTrim ?? -8.0) === 0.0
+                        ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-xs'
+                        : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
+                    }`}
+                    title="Raw (0 dB) - Unattenuated direct line level"
+                  >
+                    0dB Hot
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5 pl-1 border-l border-neutral-700/60">
+                  <input
+                    type="range"
+                    min="-24"
+                    max="6"
+                    step="0.5"
+                    value={namModel.inputTrim ?? -8.0}
+                    onChange={(e) => onUpdateNam({ ...namModel, inputTrim: Number(e.target.value) })}
+                    className="w-20 h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400 shrink-0"
+                    title={`Fine-tune NAM input trim: ${((namModel.inputTrim ?? -8.0) >= 0 ? '+' : '') + (namModel.inputTrim ?? -8.0).toFixed(1)} dB`}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Amp Tone Stack Knobs Bar */}
           <div className="py-4 px-2 grid grid-cols-6 gap-2 bg-gradient-to-b from-neutral-950/40 to-neutral-900/60 rounded-xl my-3 border border-neutral-800/80">

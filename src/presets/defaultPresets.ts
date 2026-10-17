@@ -86,7 +86,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 7.2,
       treble: 7.5,
       presence: 8.0,
-      master: 7.5
+      master: 7.0
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'marshall-412-v30')!,
@@ -114,7 +114,7 @@ export const INITIAL_PRESETS: Preset[] = [
         accentColor: '#ffffff',
         fuzz: 82,
         tone: 58,
-        volume: 70,
+        volume: 54,
         scoop: 35
       },
       {
@@ -150,7 +150,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 6.5,
       treble: 6.2,
       presence: 6.0,
-      master: 8.0
+      master: 7.2
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'fender-212-twin')!,
@@ -166,7 +166,7 @@ export const INITIAL_PRESETS: Preset[] = [
         accentColor: '#ffffff',
         sustain: 78,
         attack: 25,
-        level: 65,
+        level: 50,
         blend: 80
       },
       {
@@ -178,7 +178,7 @@ export const INITIAL_PRESETS: Preset[] = [
         accentColor: '#ef4444',
         fuzz: 70,
         tone: 45,
-        volume: 68,
+        volume: 52,
         scoop: 60
       },
       {
@@ -293,7 +293,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 3.5,
       treble: 7.8,
       presence: 8.0,
-      master: 6.8
+      master: 7.8
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'mesa-412-recto')!,
@@ -319,7 +319,7 @@ export const INITIAL_PRESETS: Preset[] = [
         accentColor: '#bbf7d0',
         drive: 10,
         tone: 75,
-        level: 90,
+        level: 72,
         bassBoost: false
       },
       {
@@ -409,7 +409,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 7.4,
       treble: 7.8,
       presence: 7.2,
-      master: 7.5
+      master: 8.4
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'darkglass-410-neo')!,
@@ -551,7 +551,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 5.5,
       treble: 6.0,
       presence: 5.8,
-      master: 8.5
+      master: 8.8
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'fender-212-twin')!,
@@ -749,7 +749,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 6.8,
       treble: 7.2,
       presence: 6.2,
-      master: 7.6
+      master: 8.2
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'vox-212-alnico')!,
@@ -926,7 +926,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 5.0,
       treble: 6.5,
       presence: 6.8,
-      master: 8.0
+      master: 8.4
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'roland-jc120-212')!,
@@ -1013,7 +1013,7 @@ export const INITIAL_PRESETS: Preset[] = [
         accentColor: '#bfdbfe',
         sustain: 35,
         attack: 30,
-        level: 55,
+        level: 65,
         blend: 40
       },
       {
@@ -1050,7 +1050,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 4.8,
       treble: 6.8,
       presence: 6.0,
-      master: 8.2
+      master: 8.5
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'fender-212-twin')!,
@@ -1109,7 +1109,7 @@ export const INITIAL_PRESETS: Preset[] = [
       mid: 4.6,
       treble: 4.2,
       presence: 4.0,
-      master: 8.2
+      master: 8.5
     },
     irCabinet: {
       ...BUILT_IN_IR_CABINETS.find(c => c.id === 'polytone-115-jazz')!,

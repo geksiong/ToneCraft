@@ -17,7 +17,7 @@ import { NamEngine as Tone3000NamEngine, NamNode, NamModelInfo } from 'neural-am
 import { HdWorkletEngine } from './hdWorkletEngine';
 import { NamModelConfig, IrCabinetConfig } from '../types/pedal';
 import { createNamSaturationCurve } from './curves';
-import { generateSyntheticCabIr } from './irData';
+import { generateSyntheticCabIr, calibrateIrBuffer } from './irData';
 import { isNamModelProfile } from './namModels';
 
 export interface NamEngineStatus {
@@ -89,12 +89,20 @@ export class NamEngine {
   private customCabBuffer: AudioBuffer | null = null;
   private currentIrUrl: string | null = null;
   private isCurrentIrReal: boolean = false;
+  private irLoadSequence: number = 0;
 
   // Telemetry & Status Callbacks
   public onStatusUpdate: ((status: NamEngineStatus) => void) | null = null;
   private lastModelInfo: NamModelInfo | null = null;
   private lastModelConfig: NamModelConfig | null = null;
   private lastCabConfig: IrCabinetConfig | null = null;
+  public enginesReadyPromise: Promise<void> | null = null;
+
+  public async waitForEnginesReady(): Promise<void> {
+    if (this.enginesReadyPromise) {
+      await this.enginesReadyPromise;
+    }
+  }
 
   /**
    * Initializes all audio nodes and attaches both the WASM NAM engine and HD AudioWorklet.
@@ -260,11 +268,16 @@ export class NamEngine {
     this.cabLowCut.connect(this.cabHighCut);
     this.cabHighCut.connect(this.outputNode);
 
-    // Load initial default acoustic IR
+    // Initialize convolver buffer immediately with authentic zero-latency cabinet IR so audio never starts silent
+    this.cabConvolver.buffer = generateSyntheticCabIr(ctx, 'celestion-v30', 30);
+    this.currentIrUrl = null;
+    this.isCurrentIrReal = false;
+
+    // Load initial default acoustic WAV IR in background with sequence protection
     this.loadIrWavFile('/irs/celestion.wav');
 
     // 6. Asynchronous Background Setup for WASM NAM and HD AudioWorklet
-    this.initAsyncEngines(ctx);
+    this.enginesReadyPromise = this.initAsyncEngines(ctx);
 
     return { input: this.inputNode, output: this.outputNode };
   }
@@ -307,29 +320,23 @@ export class NamEngine {
       }
       this.isWasmReady = true;
 
-      // Load model if specified, or default AC10
-      let modelLoaded = false;
-      if (this.lastModelConfig) {
-        this.updateNamModel(this.lastModelConfig);
-        modelLoaded = true;
+      // Preload active model or default model
+      const isCurrentNam = isNamModelProfile(this.lastModelConfig);
+      if (this.lastModelConfig && isCurrentNam && this.lastModelConfig.modelUrl) {
+        await this.loadNamModelFromUrl(this.lastModelConfig.modelUrl);
+        this.setEngineMode('wasm-nam');
       } else {
-        modelLoaded = await this.loadNamModelFromUrl('/models/ac10.nam');
-      }
-
-      // Transition to wasm-nam if currently requested and model successfully verified
-      if (this.currentEngineMode === 'wasm-nam') {
-        if (modelLoaded && this.isWasmReady) {
-          this.setEngineMode('wasm-nam');
-        } else {
-          this.setEngineMode(this.hdWorkletEngine.isReady ? 'hd-triode' : 'waveshaper');
-        }
+        await this.loadNamModelFromUrl('/models/ac10.nam');
+        const target = this.lastModelConfig
+          ? (isNamModelProfile(this.lastModelConfig) ? 'wasm-nam' : (this.lastModelConfig.engineMode || 'hd-triode'))
+          : this.currentEngineMode;
+        this.setEngineMode(target);
       }
     } catch (err) {
       console.warn('WASM NAM engine attach fallback (will use HD Worklet / Waveshaper):', err);
       this.isWasmReady = false;
-      if (this.currentEngineMode === 'wasm-nam') {
-        this.setEngineMode(this.hdWorkletEngine.isReady ? 'hd-triode' : 'waveshaper');
-      }
+      const fallbackTarget = this.hdWorkletEngine.isReady ? 'hd-triode' : 'waveshaper';
+      this.setEngineMode(fallbackTarget);
     }
 
     this.notifyStatus();
@@ -354,6 +361,20 @@ export class NamEngine {
     const now = this.ctx.currentTime;
     const fadeTime = 0.03; // 30ms smooth crossfade without clicks
 
+    // If amp is currently bypassed, keep all engine gain nodes muted and let bypass path handle audio
+    if (this.isAmpBypassed) {
+      this.wasmInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.wasmOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.workletInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.workletOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.waveshaperInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.waveshaperOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      if (this.ampBypassGain) this.ampBypassGain.gain.setTargetAtTime(2.10, now, fadeTime);
+      if (this.masterGain) this.masterGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.notifyStatus();
+      return;
+    }
+
     const canUseWasm = Boolean(this.isWasmReady && this.namWasmNode);
     const canUseWorklet = Boolean(this.hdWorkletEngine.isReady && this.hdWorkletEngine.workletNode);
 
@@ -371,7 +392,9 @@ export class NamEngine {
     }
 
     if (this.lastModelConfig) {
-      this.lastModelConfig.engineMode = target;
+      if ((target === 'wasm-nam' && canUseWasm) || (target === 'hd-triode' && canUseWorklet) || target === 'waveshaper') {
+        this.lastModelConfig.engineMode = target;
+      }
     }
 
     if (target === 'wasm-nam' && !canUseWasm) {
@@ -382,8 +405,7 @@ export class NamEngine {
     }
 
     if (target === 'wasm-nam') {
-      this.wasmInputGain.gain.setTargetAtTime(1.0, now, fadeTime);
-      this.wasmOutputGain.gain.setTargetAtTime(1.0, now, fadeTime);
+      this.applyNamSensitivityAndGains();
       this.workletInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
@@ -456,6 +478,38 @@ export class NamEngine {
   }
 
   /**
+   * Applies calibrated input trim and output makeup gain for real NAM WaveNet models.
+   * Real NAM models have high intrinsic gain and sensitivity to low-level noise floor.
+   * Applying calibrated input trim (-8.0 dB default) brings the input into the exact
+   * nominal training zone (linear sweet spot), preventing ambient mic noise and USB hiss
+   * from being amplified by neural network saturation, while output makeup restores
+   * full perceived volume.
+   */
+  public applyNamSensitivityAndGains(): void {
+    if (!this.ctx || !this.wasmInputGain || !this.wasmOutputGain) return;
+    if (this.currentEngineMode !== 'wasm-nam') return;
+
+    const now = this.ctx.currentTime;
+    const fadeTime = 0.015;
+    const isRealNam = isNamModelProfile(this.lastModelConfig);
+    const inputTrimDb = this.lastModelConfig?.inputTrim !== undefined
+      ? this.lastModelConfig.inputTrim
+      : (isRealNam ? -8.0 : 0.0);
+    const namInputGainVal = Math.pow(10, inputTrimDb / 20);
+
+    let outputMakeupDb = Math.abs(Math.min(0, inputTrimDb)) * 0.92;
+    if (isRealNam && this.lastModelInfo?.hasLoudness && typeof this.lastModelInfo.loudness === 'number') {
+      // If model has trained loudness metadata (e.g. deluxe: -8.73 dB), calibrate relative to -16 dBFS
+      const loudnessDiff = -16.0 - this.lastModelInfo.loudness;
+      outputMakeupDb += Math.max(-6, Math.min(6, loudnessDiff));
+    }
+    const namOutputGainVal = Math.pow(10, outputMakeupDb / 20);
+
+    this.wasmInputGain.gain.setTargetAtTime(namInputGainVal, now, fadeTime);
+    this.wasmOutputGain.gain.setTargetAtTime(namOutputGainVal, now, fadeTime);
+  }
+
+  /**
    * Loads a real .nam model file from URL into the WASM inference engine.
    */
   public async loadNamModelFromUrl(url: string): Promise<boolean> {
@@ -468,6 +522,7 @@ export class NamEngine {
       const jsonText = await resp.text();
       this.lastModelInfo = await this.namWasmNode.loadModel(jsonText);
       this.currentLoadedModelUrl = url;
+      this.applyNamSensitivityAndGains();
       this.notifyStatus();
       return true;
     } catch (err) {
@@ -484,6 +539,7 @@ export class NamEngine {
     try {
       this.lastModelInfo = await this.namWasmNode.loadModel(jsonString);
       this.currentLoadedModelUrl = null;
+      this.applyNamSensitivityAndGains();
       this.notifyStatus();
       return true;
     } catch (err) {
@@ -510,13 +566,24 @@ export class NamEngine {
       this.waveshaperInputGain?.gain.setTargetAtTime(0.0, now, fadeTime);
     } else {
       this.ampBypassGain.gain.setTargetAtTime(0.0, now, fadeTime);
-      const masterVal = this.lastModelConfig && this.lastModelConfig.master !== undefined
-        ? (this.lastModelConfig.master <= 0 ? 0 : Math.pow(this.lastModelConfig.master / 10, 1.3) * 1.4)
-        : 1.0;
+      const masterVal = this.calculateMasterGain(this.lastModelConfig);
       this.masterGain.gain.setTargetAtTime(masterVal, now, fadeTime);
       this.setEngineMode(this.currentEngineMode);
     }
     this.notifyStatus();
+  }
+
+  /**
+   * Computes master volume with calibrated linear-to-perceptual scaling
+   * without an artificial clamping floor, giving players full attenuation down to whisper quiet.
+   */
+  public calculateMasterGain(config?: NamModelConfig | null): number {
+    if (!config || this.isAmpBypassed) return 0.0;
+    const masterKnob = config.master !== undefined ? config.master : 7.5;
+    if (masterKnob <= 0) return 0.0;
+
+    const masterRatio = masterKnob / 7.5;
+    return Math.pow(masterRatio, 1.35);
   }
 
   public toggleAmpBypass(): boolean {
@@ -565,11 +632,11 @@ export class NamEngine {
       return;
     }
 
-    if (config.bypassed !== undefined) {
-      this.setAmpBypass(config.bypassed);
-    } else if (config.enabled !== undefined) {
-      this.setAmpBypass(!config.enabled);
-    }
+    // Explicit bypass state: defaults to false unless explicitly marked bypassed
+    const shouldBypass = config.bypassed !== undefined
+      ? Boolean(config.bypassed)
+      : (config.enabled !== undefined ? !config.enabled : false);
+    this.setAmpBypass(shouldBypass);
 
     // Strictly determine engine mode: real NAM profiles MUST use wasm-nam; non-NAM profiles CANNOT use wasm-nam
     const isRealNam = isNamModelProfile(config);
@@ -594,11 +661,22 @@ export class NamEngine {
       this.loadNamModelFromJson(jsonStr);
     }
 
-    // Input Gain Control on Preamp input (calibrated for high headroom clean response at low settings)
-    const preGain = config.gain <= 0
-      ? 0
-      : (config.gain <= 3.0 ? (config.gain / 10) * 0.9 : Math.pow(config.gain / 10, 1.2) * 1.25);
+    // Wide-Range Dynamic Preamp Drive (0 to 10):
+    // Allows players to actually dial back the gain to whisper-clean / zero when desired,
+    // eliminating the former +1.05 hard floor that caused excessive gain and noise!
+    // gain = 0 -> 0.0 (muted)
+    // gain = 2.5 -> 0.42 (-7.5 dB attenuation: crystal clean, low noise floor)
+    // gain = 5.0 -> 1.00 (0.0 dB reference sweet spot)
+    // gain = 7.5 -> 1.65 (+4.3 dB harmonic punch)
+    // gain = 10.0 -> 2.35 (+7.4 dB rich tube compression)
+    const gainKnob = Math.max(0, Math.min(10, config.gain));
+    const preGain = gainKnob <= 0 ? 0 : Math.pow(gainKnob / 5.0, 1.25);
     this.ampPreampInput.gain.setTargetAtTime(preGain, this.ctx.currentTime, 0.015);
+
+    // Apply calibrated NAM input trim and output makeup if wasm-nam active
+    if (targetEngine === 'wasm-nam') {
+      this.applyNamSensitivityAndGains();
+    }
 
     // Update HD AudioWorklet tube parameters
     const isCleanSolidState =
@@ -619,16 +697,14 @@ export class NamEngine {
       this.waveShaper.curve = createNamSaturationCurve(config.gain, config.saturationCurve, config.bias) as any;
     }
 
-    // Tone stack mapping (0 - 10 maps to -12dB .. +12dB)
-    this.toneBass.gain.setTargetAtTime((config.bass - 5) * 2.4, this.ctx.currentTime, 0.02);
-    this.toneMid.gain.setTargetAtTime((config.mid - 5) * 2.8, this.ctx.currentTime, 0.02);
-    this.toneTreble.gain.setTargetAtTime((config.treble - 5) * 2.6, this.ctx.currentTime, 0.02);
-    this.tonePresence.gain.setTargetAtTime((config.presence - 5) * 2.2, this.ctx.currentTime, 0.02);
+    // Musical Tone Stack mapping (smooth passive-style curve, avoids piercing +14dB high-frequency fizz)
+    this.toneBass.gain.setTargetAtTime((config.bass - 5) * 1.5, this.ctx.currentTime, 0.02);
+    this.toneMid.gain.setTargetAtTime((config.mid - 5) * 1.6, this.ctx.currentTime, 0.02);
+    this.toneTreble.gain.setTargetAtTime((config.treble - 5) * 1.3, this.ctx.currentTime, 0.02);
+    this.tonePresence.gain.setTargetAtTime((config.presence - 5) * 1.0, this.ctx.currentTime, 0.02);
 
-    // Master Volume (muted if amp is bypassed)
-    const masterVal = this.isAmpBypassed
-      ? 0.0
-      : (config.master <= 0 ? 0 : Math.pow(config.master / 10, 1.3) * 1.4);
+    // Master Volume with Calibrated Loudness Equalization (muted if amp is bypassed)
+    const masterVal = this.calculateMasterGain(config);
     this.masterGain.gain.setTargetAtTime(masterVal, this.ctx.currentTime, 0.015);
 
     this.notifyStatus();
@@ -639,20 +715,31 @@ export class NamEngine {
    */
   public async loadIrWavFile(url: string): Promise<boolean> {
     if (!this.ctx || !this.cabConvolver) return false;
+    const reqSeq = ++this.irLoadSequence;
     try {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching IR WAV from ${url}`);
       const arrayBuffer = await resp.arrayBuffer();
       const decoded = await this.ctx.decodeAudioData(arrayBuffer);
+
+      // Sequence guard: discard if superseded by another preset or IR switch while downloading
+      if (reqSeq !== this.irLoadSequence || this.lastCabConfig?.irUrl !== url) {
+        return false;
+      }
+
+      // Calibrate acoustic transfer gain across guitar spectrum to nominal 0dB (unity gain)
+      calibrateIrBuffer(decoded);
       this.cabConvolver.buffer = decoded;
       this.currentIrUrl = url;
       this.isCurrentIrReal = true;
       this.notifyStatus();
       return true;
     } catch (err) {
+      if (reqSeq !== this.irLoadSequence) return false;
       console.warn(`Failed to fetch/decode IR WAV ${url}, using synthetic fallback:`, err);
       this.isCurrentIrReal = false;
-      this.cabConvolver.buffer = generateSyntheticCabIr(this.ctx, 'marshall-412-v30');
+      this.currentIrUrl = null;
+      this.cabConvolver.buffer = generateSyntheticCabIr(this.ctx, this.lastCabConfig?.id || 'marshall-412-v30');
       return false;
     }
   }
@@ -674,11 +761,17 @@ export class NamEngine {
     this.cabHighCut.frequency.setTargetAtTime(config.highCut, this.ctx.currentTime, 0.02);
 
     if (config.isCustom && this.customCabBuffer) {
+      this.irLoadSequence++;
+      this.currentIrUrl = null;
       this.cabConvolver.buffer = this.customCabBuffer;
       this.isCurrentIrReal = true;
-    } else if (config.irUrl && config.irUrl !== this.currentIrUrl) {
-      this.loadIrWavFile(config.irUrl);
-    } else if (!config.irUrl) {
+    } else if (config.irUrl) {
+      if (config.irUrl !== this.currentIrUrl) {
+        this.loadIrWavFile(config.irUrl);
+      }
+    } else {
+      this.irLoadSequence++; // Invalidate and cancel any in-flight WAV loads immediately!
+      this.currentIrUrl = null;
       this.cabConvolver.buffer = generateSyntheticCabIr(this.ctx, config.id, config.micDistance);
       this.isCurrentIrReal = false;
     }
@@ -691,9 +784,12 @@ export class NamEngine {
    */
   public async loadCustomIrWav(arrayBuffer: ArrayBuffer): Promise<void> {
     if (!this.ctx || !this.cabConvolver) return;
+    this.irLoadSequence++;
     try {
       const decoded = await this.ctx.decodeAudioData(arrayBuffer);
+      calibrateIrBuffer(decoded);
       this.customCabBuffer = decoded;
+      this.currentIrUrl = null;
       this.cabConvolver.buffer = decoded;
       this.isCurrentIrReal = true;
       this.notifyStatus();

@@ -26,6 +26,8 @@ interface InputConditionerModalProps {
   isLearningNoiseFloor: boolean;
   onApplyWhineKiller: () => void;
   inputSource: string;
+  inputGain?: number;
+  onInputGainChange?: (gain: number) => void;
 }
 
 export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
@@ -37,7 +39,9 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
   onLearnNoiseFloor,
   isLearningNoiseFloor,
   onApplyWhineKiller,
-  inputSource
+  inputSource,
+  inputGain,
+  onInputGainChange
 }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'gate' | 'filter'>('all');
   const [showExplanation, setShowExplanation] = useState<boolean>(false);
@@ -53,6 +57,13 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
     100,
     Math.max(0, ((config.gateThreshold + 80) / 80) * 100)
   );
+
+  const getInputGainDbString = (val: number): string => {
+    if (val <= 0) return 'MUTE';
+    const db = ((val - 50) / 50) * (val >= 50 ? 14 : 26);
+    if (Math.abs(db) < 0.05) return '0.0 dB';
+    return `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -191,7 +202,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
               </div>
 
               <div className="flex justify-between items-center text-[10px] font-mono text-neutral-400 px-1">
-                <span>Signal level must exceed yellow marker to open the gate (with 4.5dB hysteresis)</span>
+                <span>Signal level must exceed yellow marker to open the gate (with 2.5dB hysteresis)</span>
                 <span className="text-amber-400">Marker: {config.gateThreshold} dB</span>
               </div>
             </div>
@@ -212,6 +223,51 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
               )}
             </div>
           </div>
+
+          {/* Manual Input Level Trim Card */}
+          {inputGain !== undefined && onInputGainChange && (
+            <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-200">
+                    Input Level Trim &amp; Preamp Calibration
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    0.0 dB = Unity
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onInputGainChange(50)}
+                    className="text-xs font-mono text-neutral-400 hover:text-white px-2 py-1 rounded bg-neutral-800 border border-neutral-700 transition-colors"
+                  >
+                    Reset to 0 dB
+                  </button>
+                  <span className="text-xs font-mono font-bold text-emerald-400 bg-neutral-950 px-2 py-1 rounded border border-neutral-800 tabular-nums">
+                    {getInputGainDbString(inputGain)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={inputGain}
+                  onChange={(e) => onInputGainChange(Number(e.target.value))}
+                  className="w-full h-2 bg-neutral-950 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                />
+                <div className="flex justify-between items-center text-[10px] font-mono text-neutral-500">
+                  <span>-26 dB (Cut hot interface / high-output pickups)</span>
+                  <span className="text-emerald-400 font-bold">50% (0.0 dB Unity)</span>
+                  <span>+14 dB (Boost quiet mics / vintage single-coils)</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Quick Action Presets */}
           <div className="flex flex-wrap items-center gap-2.5">
@@ -242,6 +298,30 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
             >
               <Sparkles size={13} className="text-sky-400 shrink-0" />
               <span className="w-44 text-center inline-block truncate">{isLearningNoiseFloor ? 'Measuring Room Noise...' : 'Auto-Learn Noise Floor'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                onUpdateConfig({
+                  enabled: true,
+                  gateEnabled: true,
+                  gateThreshold: -44,
+                  gateAttackMs: 5,
+                  gateHoldMs: 25,
+                  gateReleaseMs: 110,
+                  gateReductionDb: -54,
+                  highCutEnabled: true,
+                  highCutFreq: 7500,
+                  highCutSlope: '12db',
+                  notchEnabled: false,
+                  lowCutEnabled: true,
+                  lowCutFreq: 75
+                });
+              }}
+              className="w-36 justify-center text-center px-2.5 py-1 rounded-lg bg-emerald-950/50 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 hover:text-white text-xs font-mono shrink-0"
+              title="Calibrated specifically for NAM neural models and high-gain amps: silences idle room noise and pickup hum between notes"
+            >
+              NAM Low-Noise
             </button>
 
             <button
