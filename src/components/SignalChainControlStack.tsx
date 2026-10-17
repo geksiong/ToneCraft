@@ -13,6 +13,7 @@ import {
 interface SignalChainControlStackProps {
   tunerData: TunerData;
   onOpenTuner: () => void;
+  isMicInput?: boolean;
   bpm: number;
   onBpmChange: (bpm: number) => void;
   isMuted: boolean;
@@ -28,6 +29,7 @@ interface SignalChainControlStackProps {
 export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = ({
   tunerData,
   onOpenTuner,
+  isMicInput = true,
   bpm,
   onBpmChange,
   isMuted,
@@ -71,35 +73,64 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
           {/* Chromatic Guitar/Bass Tuner Widget */}
           <div className="flex items-center gap-2 bg-neutral-950/80 border border-neutral-800 rounded-xl px-2.5 py-1.5 shrink-0 shadow-inner">
             <button
-              onClick={onOpenTuner}
-              className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-xs font-mono font-bold transition-all ${
-                tunerData.note
+              onClick={isMicInput ? onOpenTuner : undefined}
+              disabled={!isMicInput}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-mono font-bold transition-all ${
+                !isMicInput
+                  ? 'bg-neutral-900/50 border-neutral-800/60 text-neutral-500 opacity-60 cursor-not-allowed'
+                  : tunerData.note
                   ? isCloseTune
                     ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
                     : 'bg-amber-500/15 border-amber-500/50 text-amber-300'
                   : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
               }`}
-              title="Open full-screen Chromatic Tuner"
+              title={
+                !isMicInput
+                  ? 'Tuner is disabled: Select a Microphone or Audio Interface input in the top bar to tune'
+                  : 'Open full-screen Chromatic Tuner'
+              }
             >
-              <Radio size={13} className={tunerData.note ? 'text-emerald-400 animate-pulse' : 'text-neutral-400'} />
+              <Radio
+                size={13}
+                className={
+                  !isMicInput
+                    ? 'text-neutral-600'
+                    : tunerData.note
+                    ? 'text-emerald-400 animate-pulse'
+                    : 'text-neutral-400'
+                }
+              />
               <span className="tracking-wider">TUNER</span>
+              {!isMicInput && (
+                <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-800/80 text-neutral-400 border border-neutral-700 font-mono">
+                  MIC ONLY
+                </span>
+              )}
             </button>
 
             {/* Note & Pitch Tuning Display */}
             <div
-              onClick={onOpenTuner}
-              className="flex items-center gap-2 cursor-pointer px-1.5 py-0.5 rounded hover:bg-neutral-900/60 transition-colors"
-              title="Detected guitar/bass string pitch"
+              onClick={isMicInput ? onOpenTuner : undefined}
+              className={`flex items-center gap-2 px-1.5 py-0.5 rounded transition-colors ${
+                isMicInput ? 'cursor-pointer hover:bg-neutral-900/60' : 'cursor-not-allowed opacity-60'
+              }`}
+              title={
+                !isMicInput
+                  ? 'Tuner is disabled while playing sample riffs. Switch input to Microphone to tune.'
+                  : 'Detected guitar/bass string pitch'
+              }
             >
               <div className="w-9 text-center">
                 <span className={`text-base font-black font-mono tracking-tight leading-none ${
-                  tunerData.note
+                  !isMicInput
+                    ? 'text-neutral-600'
+                    : tunerData.note
                     ? isCloseTune
                       ? 'text-emerald-400 text-glow-emerald'
                       : 'text-amber-300'
                     : 'text-neutral-500'
                 }`}>
-                  {tunerData.note || '--'}
+                  {!isMicInput ? '--' : tunerData.note || '--'}
                 </span>
               </div>
 
@@ -109,7 +140,7 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
                   {/* Center zero line */}
                   <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-neutral-600 z-10" />
                   {/* Needle */}
-                  {tunerData.note && (
+                  {isMicInput && tunerData.note && (
                     <div
                       className={`absolute top-0 bottom-0 w-1.5 rounded-full transition-all duration-75 ${
                         isCloseTune ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-amber-400'
@@ -124,7 +155,7 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
                 <div className="flex justify-between text-[9px] font-mono text-neutral-400 leading-none">
                   <span>b</span>
                   <span className="text-[8px] tabular-nums text-neutral-400">
-                    {tunerData.note ? `${cents > 0 ? '+' : ''}${cents.toFixed(0)}¢` : '0¢'}
+                    {!isMicInput ? 'DISABLED' : tunerData.note ? `${cents > 0 ? '+' : ''}${cents.toFixed(0)}¢` : '0¢'}
                   </span>
                   <span>#</span>
                 </div>

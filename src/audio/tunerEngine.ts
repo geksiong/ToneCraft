@@ -27,6 +27,10 @@ export class TunerEngine {
   private rafId: number | null = null;
   private onUpdate: ((data: TunerData) => void) | null = null;
   private buffer: Float32Array = new Float32Array(2048);
+  private normBuffer: Float32Array = new Float32Array(2048);
+  private yinBuffer: Float32Array = new Float32Array(1600);
+  private silenceFrameCount: number = 0;
+  private isSilent: boolean = true;
 
   /**
    * Connects the tuner engine to an AnalyserNode tap
@@ -47,10 +51,26 @@ export class TunerEngine {
     const detect = () => {
       if (this.analyserNode && this.onUpdate) {
         this.analyserNode.getFloatTimeDomainData(this.buffer as any);
-        const pitch = this.detectPitchAutocorrelation(this.buffer, this.sampleRate);
+        const pitch = this.detectPitch(this.buffer, this.sampleRate);
         if (pitch > 25 && pitch < 1200) {
+          this.silenceFrameCount = 0;
+          this.isSilent = false;
           const data = this.calculateTunerData(pitch);
           this.onUpdate(data);
+        } else {
+          this.silenceFrameCount++;
+          // If silent or below noise floor for ~25 frames (~400ms), reset tuner to listening state
+          if (this.silenceFrameCount > 25 && !this.isSilent) {
+            this.isSilent = true;
+            this.onUpdate({
+              note: '',
+              frequency: 0,
+              cents: 0,
+              targetFrequency: 0,
+              inTune: false,
+              clarity: 0
+            });
+          }
         }
       }
       this.rafId = requestAnimationFrame(detect);
@@ -60,88 +80,137 @@ export class TunerEngine {
   }
 
   /**
-   * Stops the detection loop
+   * Stops the detection loop and resets tuner state
    */
   public stop(): void {
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    this.silenceFrameCount = 0;
+    this.isSilent = true;
+    if (this.onUpdate) {
+      this.onUpdate({
+        note: '',
+        frequency: 0,
+        cents: 0,
+        targetFrequency: 0,
+        inTune: false,
+        clarity: 0
+      });
+    }
   }
 
   /**
-   * Autocorrelation pitch detection algorithm with parabolic refinement
+   * High-sensitivity YIN pitch detection algorithm with sub-sample parabolic refinement.
+   * Works reliably down to -60 dBFS input levels (low mic gain, passive single-coils, acoustic pickups).
    */
-  private detectPitchAutocorrelation(buffer: Float32Array, sampleRate: number): number {
+  private detectPitch(buffer: Float32Array, sampleRate: number): number {
     const size = buffer.length;
 
-    // Check RMS energy to reject silence and ambient background hiss
-    let rms = 0;
+    // 1. Calculate peak and RMS energy
+    let maxVal = 0;
+    let sumSq = 0;
     for (let i = 0; i < size; i++) {
-      rms += buffer[i] * buffer[i];
+      const absVal = Math.abs(buffer[i]);
+      if (absVal > maxVal) maxVal = absVal;
+      sumSq += absVal * absVal;
     }
-    rms = Math.sqrt(rms / size);
-    if (rms < 0.015) return -1;
 
-    // Find boundaries above threshold
-    let r1 = 0;
-    let r2 = size - 1;
-    const thres = 0.2;
-    for (let i = 0; i < size / 2; i++) {
-      if (Math.abs(buffer[i]) < thres) {
-        r1 = i;
+    const rms = Math.sqrt(sumSq / size);
+
+    // Ultra-sensitive noise threshold: detects down to -60 dBFS (RMS ~0.001)
+    // Prevents ambient room hiss while tracking very quiet or decaying guitar notes with low mic gain
+    if (rms < 0.0008 || maxVal < 0.0015) {
+      return -1;
+    }
+
+    // 2. Normalize buffer by peak amplitude so low-gain signals have identical correlation magnitude
+    const normFactor = 1.0 / maxVal;
+    let mean = 0;
+    for (let i = 0; i < size; i++) {
+      const v = buffer[i] * normFactor;
+      this.normBuffer[i] = v;
+      mean += v;
+    }
+    mean /= size;
+
+    // Remove DC offset
+    for (let i = 0; i < size; i++) {
+      this.normBuffer[i] -= mean;
+    }
+
+    // 3. YIN Algorithm
+    // Search frequency range: 28 Hz (low B on 5-string bass) to 1200 Hz (high guitar registers)
+    const minTau = Math.max(2, Math.floor(sampleRate / 1200)); // ~40 samples at 48kHz
+    const maxTau = Math.min(1560, Math.floor(sampleRate / 28)); // ~1560 samples for ~30.8 Hz
+    const windowSize = Math.max(300, size - maxTau); // At least 488 samples for reliable correlation
+
+    // Step A: Squared Difference Function d(tau)
+    this.yinBuffer[0] = 0;
+    for (let tau = 1; tau < maxTau; tau++) {
+      let diff = 0;
+      for (let j = 0; j < windowSize; j++) {
+        const delta = this.normBuffer[j] - this.normBuffer[j + tau];
+        diff += delta * delta;
+      }
+      this.yinBuffer[tau] = diff;
+    }
+
+    // Step B: Cumulative Mean Normalized Difference Function (CMNDF)
+    this.yinBuffer[0] = 1;
+    let runningSum = 0;
+    for (let tau = 1; tau < maxTau; tau++) {
+      runningSum += this.yinBuffer[tau];
+      this.yinBuffer[tau] = runningSum > 0 ? (this.yinBuffer[tau] * tau) / runningSum : 1;
+    }
+
+    // Step C: Absolute Thresholding & Valley Search
+    const threshold = 0.15;
+    let tauFound = -1;
+
+    for (let tau = minTau; tau < maxTau; tau++) {
+      if (this.yinBuffer[tau] < threshold) {
+        // Find local minimum in this valley
+        while (tau + 1 < maxTau && this.yinBuffer[tau + 1] < this.yinBuffer[tau]) {
+          tau++;
+        }
+        tauFound = tau;
         break;
       }
     }
-    for (let i = 1; i < size / 2; i++) {
-      if (Math.abs(buffer[size - i]) < thres) {
-        r2 = size - i;
-        break;
+
+    // If no tau dropped below strict threshold, find the global minimum in the valid range
+    if (tauFound === -1) {
+      let minVal = 1.0;
+      for (let tau = minTau; tau < maxTau; tau++) {
+        if (this.yinBuffer[tau] < minVal) {
+          minVal = this.yinBuffer[tau];
+          tauFound = tau;
+        }
+      }
+      // Only accept if valley dip is reasonably distinct (< 0.35)
+      if (minVal > 0.35) {
+        return -1;
       }
     }
 
-    const len = Math.max(0, r2 - r1);
-    const trimmed = new Float32Array(len);
-    for (let i = 0; i < len; i++) {
-      trimmed[i] = buffer[r1 + i];
+    if (tauFound <= 0 || tauFound >= maxTau - 1) {
+      return -1;
     }
 
-    // Autocorrelation sequence
-    const c = new Float32Array(trimmed.length);
-    for (let i = 0; i < trimmed.length; i++) {
-      for (let j = 0; j < trimmed.length - i; j++) {
-        c[i] = c[i] + trimmed[j] * trimmed[j + i];
-      }
+    // Step D: Parabolic 3-point interpolation for sub-sample accuracy
+    const s0 = this.yinBuffer[tauFound - 1];
+    const s1 = this.yinBuffer[tauFound];
+    const s2 = this.yinBuffer[tauFound + 1];
+
+    let betterTau = tauFound;
+    const denom = 2 * (s0 - 2 * s1 + s2);
+    if (Math.abs(denom) > 1e-6) {
+      betterTau = tauFound + (s0 - s2) / denom;
     }
 
-    // Skip the zero-lag trivial peak
-    let d = 0;
-    while (c[d] > c[d + 1]) d++;
-
-    // Find the primary period peak
-    let maxVal = -1;
-    let maxPos = -1;
-    for (let i = d; i < trimmed.length; i++) {
-      if (c[i] > maxVal) {
-        maxVal = c[i];
-        maxPos = i;
-      }
-    }
-
-    let T0 = maxPos;
-    if (T0 <= 0) return -1;
-
-    // Parabolic 3-point interpolation for sub-sample accuracy
-    const x1 = c[T0 - 1];
-    const x2 = c[T0];
-    const x3 = c[T0 + 1];
-    const a = (x1 + x3 - 2 * x2) / 2;
-    const b = (x3 - x1) / 2;
-    if (a) {
-      T0 = T0 - b / (2 * a);
-    }
-
-    return sampleRate / T0;
+    return sampleRate / betterTau;
   }
 
   /**

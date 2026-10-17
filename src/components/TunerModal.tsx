@@ -1,11 +1,13 @@
 import React from 'react';
 import { TunerData } from '../types/pedal';
-import { X, CheckCircle, Volume2 } from 'lucide-react';
+import { X, CheckCircle, Volume2, Mic, MicOff } from 'lucide-react';
 
 interface TunerModalProps {
   isOpen: boolean;
   tunerData: TunerData;
   onClose: () => void;
+  isMicInput?: boolean;
+  onSelectMic?: () => void;
 }
 
 const GUITAR_STRINGS = [
@@ -28,14 +30,16 @@ const BASS_STRINGS = [
 export const TunerModal: React.FC<TunerModalProps> = ({
   isOpen,
   tunerData,
-  onClose
+  onClose,
+  isMicInput = true,
+  onSelectMic
 }) => {
   if (!isOpen) return null;
 
   const { note, frequency, cents, inTune } = tunerData;
 
   // Needle angle from -45deg to +45deg based on cents (-50 to +50)
-  const needleAngle = (cents / 50) * 45;
+  const needleAngle = isMicInput ? (cents / 50) * 45 : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
@@ -43,9 +47,20 @@ export const TunerModal: React.FC<TunerModalProps> = ({
         {/* Top Header */}
         <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-500 led-glow-emerald border border-emerald-300" />
-            <h3 className="text-base font-bold tracking-wider uppercase text-neutral-100">
-              High-Precision Chromatic Tuner
+            <div
+              className={`w-3 h-3 rounded-full border ${
+                isMicInput
+                  ? 'bg-emerald-500 led-glow-emerald border-emerald-300'
+                  : 'bg-amber-500/80 border-amber-400'
+              }`}
+            />
+            <h3 className="text-base font-bold tracking-wider uppercase text-neutral-100 flex items-center gap-2">
+              <span>High-Precision Chromatic Tuner</span>
+              {!isMicInput && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  DISABLED (MIC ONLY)
+                </span>
+              )}
             </h3>
           </div>
           <button
@@ -56,28 +71,62 @@ export const TunerModal: React.FC<TunerModalProps> = ({
           </button>
         </div>
 
+        {/* Warning banner when not on mic input */}
+        {!isMicInput && (
+          <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <MicOff size={18} className="text-amber-400 shrink-0" />
+              <div className="text-xs">
+                <span className="font-bold text-amber-300">Tuner is disabled for sample riffs</span>
+                <p className="text-neutral-400 text-[11px] mt-0.5">
+                  Select a live Microphone or USB Audio Interface to tune your physical guitar or bass.
+                </p>
+              </div>
+            </div>
+            {onSelectMic && (
+              <button
+                onClick={onSelectMic}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-mono text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Mic size={12} />
+                <span>Switch to Mic</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Vintage Meter Dial */}
         <div className="my-6 p-6 rounded-2xl bg-neutral-950 border border-neutral-800 shadow-inner flex flex-col items-center">
           {/* Note & In-tune indicator with constant widths */}
           <div className="flex flex-col items-center mb-4">
             <span
               className={`text-6xl font-black font-mono tracking-tight transition-colors w-36 text-center inline-block ${
-                inTune ? 'text-emerald-400' : 'text-neutral-100'
+                !isMicInput
+                  ? 'text-neutral-600'
+                  : inTune
+                  ? 'text-emerald-400'
+                  : 'text-neutral-100'
               }`}
             >
-              {note || '--'}
+              {!isMicInput ? '--' : note || '--'}
             </span>
             <div className="flex items-center justify-center gap-2 mt-1">
-              <span className="text-xs font-mono tabular-nums text-neutral-400 w-28 text-right inline-block">
-                {frequency > 0 ? `${frequency} Hz` : 'Listening...'}
+              <span className="text-xs font-mono tabular-nums text-neutral-400 w-32 text-right inline-block">
+                {!isMicInput ? 'Mic input required' : frequency > 0 ? `${frequency} Hz` : 'Listening...'}
               </span>
               <span>·</span>
               <span
                 className={`text-xs font-mono font-bold tabular-nums w-24 text-left inline-block ${
-                  inTune ? 'text-emerald-400' : Math.abs(cents) > 10 ? 'text-red-400' : 'text-amber-400'
+                  !isMicInput
+                    ? 'text-neutral-500'
+                    : inTune
+                    ? 'text-emerald-400'
+                    : Math.abs(cents) > 10
+                    ? 'text-red-400'
+                    : 'text-amber-400'
                 }`}
               >
-                {cents > 0 ? `+${cents}` : cents} cents
+                {!isMicInput ? '0 cents' : cents > 0 ? `+${cents}` : cents} cents
               </span>
             </div>
           </div>
@@ -101,7 +150,9 @@ export const TunerModal: React.FC<TunerModalProps> = ({
 
             {/* Rotating Analog Needle */}
             <div
-              className="absolute bottom-0 w-1 h-28 origin-bottom bg-gradient-to-t from-red-600 via-amber-400 to-amber-200 transition-transform duration-100 ease-out shadow-md"
+              className={`absolute bottom-0 w-1 h-28 origin-bottom bg-gradient-to-t from-red-600 via-amber-400 to-amber-200 transition-transform duration-100 ease-out shadow-md ${
+                !isMicInput ? 'opacity-30' : 'opacity-100'
+              }`}
               style={{
                 transform: `rotate(${needleAngle}deg)`
               }}
@@ -113,7 +164,11 @@ export const TunerModal: React.FC<TunerModalProps> = ({
 
           {/* In-Tune Status Badge with constant width */}
           <div className="mt-4 w-60 h-8 flex items-center justify-center">
-            {inTune ? (
+            {!isMicInput ? (
+              <span className="w-52 text-center text-xs font-mono text-amber-400/80 inline-block font-semibold">
+                MIC SOURCE REQUIRED
+              </span>
+            ) : inTune ? (
               <span className="w-48 justify-center inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-xs font-bold tracking-wider font-mono">
                 <CheckCircle size={14} className="shrink-0" />
                 <span>PERFECT TUNE</span>

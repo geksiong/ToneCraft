@@ -87,6 +87,7 @@ export class ToneCraftEngine {
 
   public analyserNode: AnalyserNode | null = null;
   private tunerAnalyserNode: AnalyserNode | null = null;
+  private tunerGainNode: GainNode | null = null;
 
   // Output Routing Stage (Direct Hardware vs MediaStream Sink Bridge)
   private directDestinationGain: GainNode | null = null;
@@ -210,10 +211,12 @@ export class ToneCraftEngine {
     this.inputGainNode = this.ctx.createGain();
     this.inputGainNode.gain.value = 1.0;
 
-    // 2. Tuner Tap: Split from uncolored input
+    // 2. Tuner Tap: Dedicated tap isolated from inputGainNode and riff playback
+    this.tunerGainNode = this.ctx.createGain();
+    this.tunerGainNode.gain.value = 1.0;
     this.tunerAnalyserNode = this.ctx.createAnalyser();
     this.tunerAnalyserNode.fftSize = 2048;
-    this.inputGainNode.connect(this.tunerAnalyserNode);
+    this.tunerGainNode.connect(this.tunerAnalyserNode);
 
     // 3. Studio Input Conditioner (Dynamic Noise Gate, De-Hiss Filter, Anti-Whine Notch, Low-Cut)
     const conditionerStage = this.inputConditioner.init(this.ctx);
@@ -346,6 +349,10 @@ export class ToneCraftEngine {
         if (this.onTunerUpdate) this.onTunerUpdate(data);
       }
     );
+    // Tuner is disabled unless input source is a mic source
+    if (!this.isMicSource()) {
+      this.tunerEngine.stop();
+    }
 
     this.namEngine.onStatusUpdate = (status) => {
       if (this.onNamStatusUpdate) this.onNamStatusUpdate(status);
@@ -669,6 +676,10 @@ export class ToneCraftEngine {
     }
   }
 
+  public isMicSource(): boolean {
+    return this.currentInputSource === 'mic' || this.currentInputSource.startsWith('mic:');
+  }
+
   // ==========================================================================
   // INPUT SOURCE MANAGEMENT (Mic / USB Audio Interface vs. Physical Riffs)
   // ==========================================================================
@@ -688,7 +699,7 @@ export class ToneCraftEngine {
       this.micMediaStream = null;
     }
 
-    const isMicSource = source === 'mic' || source.startsWith('mic:');
+    const isMicSource = this.isMicSource();
     if (isMicSource) {
       if (source.startsWith('mic:')) {
         const devId = source.slice(4);
@@ -742,13 +753,35 @@ export class ToneCraftEngine {
           this.currentInputDeviceLabel = track.label || '';
         }
         this.micSourceNode = this.ctx.createMediaStreamSource(stream);
+        // Connect to pedalboard & amp signal chain (subject to inputGain slider)
         this.micSourceNode.connect(this.inputGainNode);
+        // Connect to dedicated tuner stage (pre-gain-slider, so low mic gain slider never kills tuner)
+        if (this.tunerGainNode) {
+          this.micSourceNode.connect(this.tunerGainNode);
+        }
+        // Activate tuner loop when on mic input
+        if (this.isRunning) {
+          this.tunerEngine.start();
+        }
         this.dispatchLatencyUpdate();
       } catch (err) {
         console.error('Failed to access microphone/audio interface with low-latency settings:', err);
+        this.tunerEngine.stop();
       }
     } else {
       this.currentInputDeviceLabel = '';
+      // Explicitly disable the tuner when not using mic sources
+      this.tunerEngine.stop();
+      if (this.onTunerUpdate) {
+        this.onTunerUpdate({
+          note: '',
+          frequency: 0,
+          cents: 0,
+          targetFrequency: 0,
+          inTune: false,
+          clarity: 0
+        });
+      }
       if (autoPlayRiff) {
         this.playSampleRiff(source);
       }
@@ -1096,6 +1129,10 @@ export class ToneCraftEngine {
     this.looperEngine.dispose();
     this.namEngine.dispose();
     this.inputConditioner.dispose();
+    if (this.tunerGainNode) {
+      try { this.tunerGainNode.disconnect(); } catch {}
+      this.tunerGainNode = null;
+    }
     if (this.outputAudioElement) {
       try {
         this.outputAudioElement.pause();
@@ -1133,6 +1170,7 @@ export class ToneCraftEngine {
   public async suspend(): Promise<void> {
     console.log('[ToneCraftEngine] Switching DSP engine OFF...');
     this.isRunning = false;
+    this.tunerEngine.stop();
     this.stopSampleRiff();
     if (this.micSourceNode) {
       try { this.micSourceNode.disconnect(); } catch {}
@@ -1176,9 +1214,11 @@ export class ToneCraftEngine {
         console.warn('[ToneCraftEngine] Error reapplying output device on resume:', err);
       }
     }
-    if (this.currentInputSource === 'mic') {
-      await this.setInputSource('mic');
+    if (this.isMicSource()) {
+      await this.setInputSource(this.currentInputSource);
+      this.tunerEngine.start();
     } else {
+      this.tunerEngine.stop();
       this.playSampleRiff(this.currentInputSource || 'riff-clean-funk');
     }
   }
@@ -1209,9 +1249,11 @@ export class ToneCraftEngine {
     }
     this.setMasterGain(savedVolume);
 
-    if (savedSource === 'mic') {
-      await this.setInputSource('mic');
+    if (savedSource.startsWith('mic')) {
+      await this.setInputSource(savedSource);
+      this.tunerEngine.start();
     } else {
+      this.tunerEngine.stop();
       this.playSampleRiff(savedSource || 'riff-clean-funk');
     }
     this.isRunning = true;

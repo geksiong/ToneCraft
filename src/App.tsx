@@ -601,6 +601,7 @@ export default function App() {
         <SignalChainControlStack
           tunerData={tunerData}
           onOpenTuner={() => setIsTunerOpen(true)}
+          isMicInput={inputSource.startsWith('mic')}
           bpm={bpm}
           onBpmChange={setBpm}
           isMuted={isMuted}
@@ -688,6 +689,8 @@ export default function App() {
       <TunerModal
         isOpen={isTunerOpen}
         tunerData={tunerData}
+        isMicInput={inputSource.startsWith('mic')}
+        onSelectMic={() => handleSelectCombinedInput('mic:default')}
         onClose={() => setIsTunerOpen(false)}
       />
 
