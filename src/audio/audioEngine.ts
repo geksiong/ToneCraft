@@ -88,6 +88,12 @@ export class ToneCraftEngine {
   public analyserNode: AnalyserNode | null = null;
   private tunerAnalyserNode: AnalyserNode | null = null;
 
+  // Output Routing Stage (Direct Hardware vs MediaStream Sink Bridge)
+  private directDestinationGain: GainNode | null = null;
+  private streamDestinationGain: GainNode | null = null;
+  private mediaStreamDest: MediaStreamAudioDestinationNode | null = null;
+  private outputAudioElement: HTMLAudioElement | null = null;
+
   // Input Stage State
   public currentInputSource: 'mic' | string = 'riff-clean-funk';
   private micMediaStream: MediaStream | null = null;
@@ -297,9 +303,38 @@ export class ToneCraftEngine {
     // Looper layer playback mixes into master bus
     looperOutput.connect(this.masterGainNode);
 
-    // Master Bus -> Limiter Bus -> Analyser -> Physical Audio Output
+    // Master Bus -> Limiter Bus -> Analyser -> Output Routing Stage
     this.masterLimiterBus.connect(this.analyserNode);
-    this.analyserNode.connect(this.ctx.destination);
+
+    // Dual-route output stage:
+    // 1. Direct hardware destination (default output / DAC)
+    this.directDestinationGain = this.ctx.createGain();
+    this.directDestinationGain.gain.value = 1.0;
+    this.analyserNode.connect(this.directDestinationGain);
+    this.directDestinationGain.connect(this.ctx.destination);
+
+    // 2. MediaStreamDestination for explicit sinkId routing
+    this.mediaStreamDest = this.ctx.createMediaStreamDestination();
+    this.streamDestinationGain = this.ctx.createGain();
+    this.streamDestinationGain.gain.value = 0.0;
+    this.analyserNode.connect(this.streamDestinationGain);
+    this.streamDestinationGain.connect(this.mediaStreamDest);
+
+    if (typeof Audio !== 'undefined') {
+      if (!this.outputAudioElement) {
+        this.outputAudioElement = new Audio();
+        this.outputAudioElement.autoplay = true;
+      }
+      this.outputAudioElement.srcObject = this.mediaStreamDest.stream;
+    }
+
+    if (this.latencySettings.selectedOutputDeviceId) {
+      try {
+        await this.setOutputDevice(this.latencySettings.selectedOutputDeviceId);
+      } catch (err) {
+        console.warn('[ToneCraftEngine] Failed to apply selected output device on init:', err);
+      }
+    }
 
     this.isRunning = true;
 
@@ -353,7 +388,7 @@ export class ToneCraftEngine {
         .filter(d => d.kind === 'audioinput')
         .map(d => ({
           deviceId: d.deviceId,
-          label: d.label || `Audio Interface / Input (${d.deviceId.slice(0, 5)})`,
+          label: d.label || (d.deviceId === 'default' ? 'Default System Microphone' : `Audio Interface / Input (${d.deviceId.slice(0, 6)})`),
           isBluetooth: isBluetoothDeviceName(d.label)
         }));
     } catch {
@@ -369,7 +404,7 @@ export class ToneCraftEngine {
         .filter(d => d.kind === 'audiooutput')
         .map(d => ({
           deviceId: d.deviceId,
-          label: d.label || `Audio Output (${d.deviceId.slice(0, 5)})`,
+          label: d.label || (d.deviceId === 'default' ? 'Default Audio Output / DAC' : `Audio Output (${d.deviceId.slice(0, 6)})`),
           isBluetooth: isBluetoothDeviceName(d.label)
         }));
     } catch {
@@ -379,20 +414,153 @@ export class ToneCraftEngine {
 
   public async setOutputDevice(deviceId: string): Promise<boolean> {
     this.latencySettings.selectedOutputDeviceId = deviceId;
+    const isDefault = !deviceId || deviceId === 'default';
+
+    if (isDefault) {
+      // Route back to default output / headphones
+      if (this.directDestinationGain) {
+        this.directDestinationGain.gain.value = 1.0;
+      }
+      if (this.streamDestinationGain) {
+        this.streamDestinationGain.gain.value = 0.0;
+      }
+      if (this.outputAudioElement) {
+        try {
+          this.outputAudioElement.pause();
+          if (typeof (this.outputAudioElement as any).setSinkId === 'function') {
+            await (this.outputAudioElement as any).setSinkId('');
+          }
+        } catch {}
+      }
+      if (this.ctx && typeof (this.ctx as any).setSinkId === 'function') {
+        try {
+          await (this.ctx as any).setSinkId('');
+        } catch {}
+      }
+      this.currentOutputDeviceLabel = 'Default Audio Output / DAC';
+      this.dispatchLatencyUpdate();
+      return true;
+    }
+
+    // Specific Output Device Requested
+    let routed = false;
+
+    // Strategy 1: Direct AudioContext.setSinkId (modern Chromium)
     if (this.ctx && typeof (this.ctx as any).setSinkId === 'function') {
       try {
         await (this.ctx as any).setSinkId(deviceId);
-        const outputs = await this.getAudioOutputDevices();
-        const found = outputs.find(o => o.deviceId === deviceId);
-        if (found) this.currentOutputDeviceLabel = found.label;
-        this.dispatchLatencyUpdate();
-        return true;
-      } catch (err) {
-        console.warn('Failed to setSinkId on AudioContext:', err);
+        if (this.directDestinationGain) this.directDestinationGain.gain.value = 1.0;
+        if (this.streamDestinationGain) this.streamDestinationGain.gain.value = 0.0;
+        if (this.outputAudioElement) {
+          try { this.outputAudioElement.pause(); } catch {}
+        }
+        routed = true;
+      } catch (ctxErr: any) {
+        console.warn('[ToneCraftEngine] AudioContext.setSinkId failed, falling back to MediaStream sink bridge:', ctxErr?.message || ctxErr);
       }
     }
+
+    // Strategy 2: HTMLAudioElement sink bridge (widely supported across Chromium releases)
+    if (!routed && this.ctx && this.mediaStreamDest) {
+      try {
+        if (!this.outputAudioElement && typeof Audio !== 'undefined') {
+          this.outputAudioElement = new Audio();
+          this.outputAudioElement.autoplay = true;
+          this.outputAudioElement.srcObject = this.mediaStreamDest.stream;
+        }
+
+        if (this.outputAudioElement && typeof (this.outputAudioElement as any).setSinkId === 'function') {
+          await (this.outputAudioElement as any).setSinkId(deviceId);
+          await this.outputAudioElement.play();
+
+          // MUTE direct destination so user does NOT keep hearing output through headphones!
+          if (this.directDestinationGain) {
+            this.directDestinationGain.gain.value = 0.0;
+          }
+          if (this.streamDestinationGain) {
+            this.streamDestinationGain.gain.value = 1.0;
+          }
+          routed = true;
+        }
+      } catch (elErr: any) {
+        console.warn('[ToneCraftEngine] HTMLAudioElement.setSinkId failed:', elErr?.message || elErr);
+      }
+    }
+
+    // Strategy 3: Permission Request if both were rejected (e.g. NotAllowedError in Chrome)
+    if (!routed) {
+      if (typeof (navigator.mediaDevices as any)?.selectAudioOutput === 'function') {
+        try {
+          const dev = await (navigator.mediaDevices as any).selectAudioOutput({ deviceId });
+          const targetId = dev?.deviceId || deviceId;
+
+          if (this.ctx && typeof (this.ctx as any).setSinkId === 'function') {
+            try {
+              await (this.ctx as any).setSinkId(targetId);
+              if (this.directDestinationGain) this.directDestinationGain.gain.value = 1.0;
+              if (this.streamDestinationGain) this.streamDestinationGain.gain.value = 0.0;
+              routed = true;
+            } catch {}
+          }
+
+          if (!routed && this.outputAudioElement && typeof (this.outputAudioElement as any).setSinkId === 'function') {
+            try {
+              await (this.outputAudioElement as any).setSinkId(targetId);
+              await this.outputAudioElement.play();
+              if (this.directDestinationGain) this.directDestinationGain.gain.value = 0.0;
+              if (this.streamDestinationGain) this.streamDestinationGain.gain.value = 1.0;
+              routed = true;
+            } catch {}
+          }
+        } catch (permErr) {
+          console.warn('[ToneCraftEngine] selectAudioOutput grant dismissed or failed:', permErr);
+        }
+      }
+    }
+
+    // Strategy 4: Fallback device permission unlock via temporary getUserMedia
+    if (!routed) {
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach((t) => t.stop());
+
+        if (this.ctx && typeof (this.ctx as any).setSinkId === 'function') {
+          try {
+            await (this.ctx as any).setSinkId(deviceId);
+            if (this.directDestinationGain) this.directDestinationGain.gain.value = 1.0;
+            if (this.streamDestinationGain) this.streamDestinationGain.gain.value = 0.0;
+            routed = true;
+          } catch {}
+        }
+
+        if (!routed && this.outputAudioElement && typeof (this.outputAudioElement as any).setSinkId === 'function') {
+          try {
+            await (this.outputAudioElement as any).setSinkId(deviceId);
+            await this.outputAudioElement.play();
+            if (this.directDestinationGain) this.directDestinationGain.gain.value = 0.0;
+            if (this.streamDestinationGain) this.streamDestinationGain.gain.value = 1.0;
+            routed = true;
+          } catch {}
+        }
+      } catch (micErr) {
+        console.warn('[ToneCraftEngine] Fallback device unlock failed:', micErr);
+      }
+    }
+
+    try {
+      const outputs = await this.getAudioOutputDevices();
+      const found = outputs.find((o) => o.deviceId === deviceId);
+      if (found) {
+        this.currentOutputDeviceLabel = found.label;
+      } else {
+        this.currentOutputDeviceLabel = `Audio Output (${deviceId.slice(0, 6)})`;
+      }
+    } catch {
+      this.currentOutputDeviceLabel = `Audio Output (${deviceId.slice(0, 6)})`;
+    }
+
     this.dispatchLatencyUpdate();
-    return false;
+    return routed;
   }
 
   public async updateLatencySettings(newSettings: Partial<AudioLatencySettings>): Promise<void> {
@@ -520,7 +688,12 @@ export class ToneCraftEngine {
       this.micMediaStream = null;
     }
 
-    if (source === 'mic') {
+    const isMicSource = source === 'mic' || source.startsWith('mic:');
+    if (isMicSource) {
+      if (source.startsWith('mic:')) {
+        const devId = source.slice(4);
+        this.latencySettings.selectedInputDeviceId = devId === 'default' ? '' : devId;
+      }
       try {
         const audioConstraints: any = {
           echoCancellation: false,
@@ -585,6 +758,7 @@ export class ToneCraftEngine {
 
   public playSampleRiff(riffId: string): void {
     if (!this.ctx || !this.inputGainNode) return;
+    if (riffId.startsWith('mic')) return;
 
     if (this.sampleSourceNode) {
       try {
@@ -922,6 +1096,16 @@ export class ToneCraftEngine {
     this.looperEngine.dispose();
     this.namEngine.dispose();
     this.inputConditioner.dispose();
+    if (this.outputAudioElement) {
+      try {
+        this.outputAudioElement.pause();
+        this.outputAudioElement.srcObject = null;
+      } catch {}
+      this.outputAudioElement = null;
+    }
+    this.directDestinationGain = null;
+    this.streamDestinationGain = null;
+    this.mediaStreamDest = null;
     if (this.sampleSourceNode) {
       try { this.sampleSourceNode.stop(); } catch {}
       this.sampleSourceNode = null;
@@ -953,6 +1137,9 @@ export class ToneCraftEngine {
     if (this.micSourceNode) {
       try { this.micSourceNode.disconnect(); } catch {}
     }
+    if (this.outputAudioElement) {
+      try { this.outputAudioElement.pause(); } catch {}
+    }
     if (this.ctx && this.ctx.state === 'running') {
       try {
         await this.ctx.suspend();
@@ -982,6 +1169,13 @@ export class ToneCraftEngine {
       }
     }
     this.isRunning = true;
+    if (this.latencySettings.selectedOutputDeviceId) {
+      try {
+        await this.setOutputDevice(this.latencySettings.selectedOutputDeviceId);
+      } catch (err) {
+        console.warn('[ToneCraftEngine] Error reapplying output device on resume:', err);
+      }
+    }
     if (this.currentInputSource === 'mic') {
       await this.setInputSource('mic');
     } else {

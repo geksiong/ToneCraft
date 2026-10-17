@@ -80,12 +80,12 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                 <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">
                   Mic Input Conditioner &amp; Noise Gate
                 </h2>
-                <span className={`w-20 text-center inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
-                  config.enabled
+                <span className={`w-24 text-center inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+                  config.gateEnabled
                     ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
                     : 'bg-neutral-800 border border-neutral-700 text-neutral-400'
                 }`}>
-                  {config.enabled ? 'ACTIVE' : 'BYPASSED'}
+                  {config.gateEnabled ? 'GATE: ON' : 'GATE: OFF'}
                 </span>
               </div>
               <p className="text-xs text-neutral-400">
@@ -95,17 +95,17 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Master Enable Toggle with constant width */}
+            {/* Gate ON/OFF Toggle synchronized with Main Nav */}
             <button
-              onClick={() => onUpdateConfig({ enabled: !config.enabled })}
+              onClick={() => onUpdateConfig({ gateEnabled: !config.gateEnabled, enabled: true })}
               className={`w-32 justify-center px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border flex items-center gap-1.5 shrink-0 ${
-                config.enabled
+                config.gateEnabled
                   ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/30'
                   : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white'
               }`}
             >
-              {config.enabled ? <Volume2 size={13} className="shrink-0" /> : <VolumeX size={13} className="shrink-0" />}
-              <span className="w-20 text-center inline-block">{config.enabled ? 'ENABLED' : 'BYPASS ALL'}</span>
+              <div className={`w-2 h-2 rounded-full shrink-0 ${config.gateEnabled ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-neutral-600'}`} />
+              <span className="w-20 text-center inline-block">{config.gateEnabled ? 'Gate: ON' : 'Gate: OFF'}</span>
             </button>
 
             <button
@@ -130,7 +130,7 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                   Live Input Envelope &amp; Gate State
                 </span>
                 <span className="text-[11px] font-mono text-neutral-400 shrink-0 hidden sm:inline">
-                  ({inputSource === 'mic' ? 'Live Microphone' : 'Sample Riff'})
+                  ({inputSource.startsWith('mic') ? 'Live Microphone' : 'Sample Riff'})
                 </span>
               </div>
 
@@ -138,7 +138,9 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
               <div className="flex items-center gap-2 shrink-0">
                 <div
                   className={`w-48 justify-center flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-colors shrink-0 ${
-                    telemetry.gateState === 'open'
+                    !config.gateEnabled
+                      ? 'bg-neutral-900 border-neutral-800 text-neutral-400'
+                      : telemetry.gateState === 'open'
                       ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
                       : telemetry.gateState === 'hold'
                       ? 'bg-sky-500/20 border-sky-500/50 text-sky-400'
@@ -147,7 +149,9 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                 >
                   <div
                     className={`w-2 h-2 rounded-full shrink-0 ${
-                      telemetry.gateState === 'open'
+                      !config.gateEnabled
+                        ? 'bg-neutral-600'
+                        : telemetry.gateState === 'open'
                         ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
                         : telemetry.gateState === 'hold'
                         ? 'bg-sky-400 shadow-[0_0_8px_#38bdf8]'
@@ -155,7 +159,9 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                     }`}
                   />
                   <span className="w-40 text-center inline-block truncate">
-                    {telemetry.gateState === 'open'
+                    {!config.gateEnabled
+                      ? 'GATE: OFF (BYPASS)'
+                      : telemetry.gateState === 'open'
                       ? 'GATE OPEN'
                       : telemetry.gateState === 'hold'
                       ? 'HOLD (SUSTAIN)'
@@ -591,13 +597,13 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
                 </div>
 
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-xs font-mono text-neutral-400">
-                    {config.gateEnabled ? 'ACTIVE' : 'BYPASSED'}
+                  <span className="text-xs font-mono font-bold text-neutral-300">
+                    {config.gateEnabled ? 'Gate: ON' : 'Gate: OFF'}
                   </span>
                   <input
                     type="checkbox"
                     checked={config.gateEnabled}
-                    onChange={(e) => onUpdateConfig({ gateEnabled: e.target.checked })}
+                    onChange={(e) => onUpdateConfig({ gateEnabled: e.target.checked, enabled: true })}
                     className="w-4 h-4 accent-teal-500 rounded cursor-pointer"
                   />
                 </label>

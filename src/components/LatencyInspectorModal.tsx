@@ -398,11 +398,20 @@ export const LatencyInspectorModal: React.FC<LatencyInspectorModalProps> = ({
                   className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-amber-500 truncate"
                 >
                   <option value="">Default System Audio Input</option>
-                  {availableInputDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.isBluetooth ? '⚠️ [BT] ' : '⚡ '}{d.label}
-                    </option>
-                  ))}
+                  {availableInputDevices
+                    .filter(
+                      (d) =>
+                        d.deviceId !== 'default' &&
+                        d.deviceId !== 'communications' &&
+                        d.deviceId !== '' &&
+                        !d.label?.toLowerCase().startsWith('default') &&
+                        !d.label?.toLowerCase().startsWith('communications')
+                    )
+                    .map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.isBluetooth ? '⚠️ [BT] ' : '⚡ '}{d.label}
+                      </option>
+                    ))}
                 </select>
                 <div className="text-[10px] font-mono text-neutral-400 flex items-center justify-between">
                   <span>ADC Base:</span>
@@ -420,7 +429,7 @@ export const LatencyInspectorModal: React.FC<LatencyInspectorModalProps> = ({
                     <span>Audio Output (DAC)</span>
                   </span>
                   <span className="text-[10px] text-neutral-400 font-normal">
-                    Direct setSinkId
+                    Direct Hardware Routing
                   </span>
                 </label>
                 <select
@@ -429,11 +438,20 @@ export const LatencyInspectorModal: React.FC<LatencyInspectorModalProps> = ({
                   className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-sky-500 truncate"
                 >
                   <option value="">Default System Output</option>
-                  {availableOutputDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
-                      {d.isBluetooth ? '⚠️ [BT] ' : '⚡ '}{d.label}
-                    </option>
-                  ))}
+                  {availableOutputDevices
+                    .filter(
+                      (d) =>
+                        d.deviceId !== 'default' &&
+                        d.deviceId !== 'communications' &&
+                        d.deviceId !== '' &&
+                        !d.label?.toLowerCase().startsWith('default') &&
+                        !d.label?.toLowerCase().startsWith('communications')
+                    )
+                    .map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.isBluetooth ? '⚠️ [BT] ' : '⚡ '}{d.label}
+                      </option>
+                    ))}
                 </select>
                 <div className="text-[10px] font-mono text-neutral-400 flex items-center justify-between">
                   <span>DAC Queue:</span>

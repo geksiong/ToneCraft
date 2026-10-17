@@ -21,6 +21,7 @@ import {
   decodePresetFromShareUrl
 } from './presets/defaultPresets';
 import { Header } from './components/Header';
+import { SignalChainControlStack } from './components/SignalChainControlStack';
 import { Pedalboard } from './components/Pedalboard';
 import { AmpCabSection } from './components/AmpCabSection';
 import { LooperPedal } from './components/LooperPedal';
@@ -127,9 +128,10 @@ export default function App() {
 
   // Input Conditioner State (Noise Gate & Anti-Whine Filter)
   const [isInputConditionerOpen, setIsInputConditionerOpen] = useState<boolean>(false);
-  const [conditionerConfig, setConditionerConfig] = useState<InputConditionerConfig>(() =>
-    audioEngine.getInputConditionerConfig()
-  );
+  const [conditionerConfig, setConditionerConfig] = useState<InputConditionerConfig>(() => ({
+    ...audioEngine.getInputConditionerConfig(),
+    gateEnabled: false
+  }));
   const [conditionerTelemetry, setConditionerTelemetry] = useState<InputConditionerTelemetry>({
     inputDb: -80,
     reductionDb: 0,
@@ -139,9 +141,11 @@ export default function App() {
   });
   const [isLearningNoiseFloor, setIsLearningNoiseFloor] = useState<boolean>(false);
 
-  // Engine Startup: builds the complete graph first with minimise latency profile active, without starting riffs
-  const startAudioEngine = async () => {
+  // Engine Startup: builds the complete graph first with minimise latency profile active, and starts selected source
+  const startAudioEngine = async (sourceToUse?: string) => {
     try {
+      const activeSource = sourceToUse || inputSource;
+
       // Ensure minimise latency profile is active when turning DSP ON
       await audioEngine.updateLatencySettings({
         profile: 'ultra-low',
@@ -160,18 +164,26 @@ export default function App() {
         audioEngine.setMasterGain(masterVolume);
         audioEngine.setInputGain(inputGain);
 
-        if (inputSource === 'mic') {
-          await audioEngine.setInputSource('mic');
-        } else {
-          // Do NOT start playing riffs automatically when turned on
+        if (activeSource.startsWith('mic')) {
           audioEngine.stopSampleRiff();
           setIsRiffPlaying(false);
+          await audioEngine.setInputSource(activeSource);
+          await refreshAudioDevices();
+        } else {
+          audioEngine.playSampleRiff(activeSource);
+          setIsRiffPlaying(true);
         }
       } else {
         await audioEngine.resume();
-        // Do NOT start playing riffs automatically when turned on
-        audioEngine.stopSampleRiff();
-        setIsRiffPlaying(false);
+        if (activeSource.startsWith('mic')) {
+          audioEngine.stopSampleRiff();
+          setIsRiffPlaying(false);
+          await audioEngine.setInputSource(activeSource);
+          await refreshAudioDevices();
+        } else {
+          audioEngine.playSampleRiff(activeSource);
+          setIsRiffPlaying(true);
+        }
       }
 
       setIsRunning(true);
@@ -367,19 +379,47 @@ export default function App() {
     return await audioEngine.runLatencyPing();
   };
 
-  // Sync Input Source Selection
-  const handleSelectInputSource = async (src: string) => {
-    setInputSource(src);
-    if (!isRunning) {
-      audioEngine.currentInputSource = src;
-      return;
-    }
-    await audioEngine.setInputSource(src, false);
-    if (src !== 'mic' && isRiffPlaying) {
-      audioEngine.playSampleRiff(src);
-    } else if (src === 'mic') {
+  // Combined Input Source Selection (Microphones and Riffs)
+  const handleSelectCombinedInput = async (val: string) => {
+    setInputSource(val);
+    if (val.startsWith('mic')) {
+      const devId = val.startsWith('mic:') ? val.slice(4) : '';
+      const cleanDevId = devId === 'default' ? '' : devId;
+      await handleUpdateLatencySettings({ selectedInputDeviceId: cleanDevId });
+      audioEngine.stopSampleRiff();
       setIsRiffPlaying(false);
+      if (!isRunning) {
+        await startAudioEngine(val);
+      } else {
+        await audioEngine.setInputSource(val, false);
+      }
+      await refreshAudioDevices();
+    } else {
+      // Riff selected
+      if (!isRunning) {
+        await startAudioEngine(val);
+      } else {
+        await audioEngine.setInputSource(val, false);
+        audioEngine.playSampleRiff(val);
+        setIsRiffPlaying(true);
+      }
     }
+  };
+
+  const handleSelectOutputDevice = async (deviceId: string) => {
+    await handleUpdateLatencySettings({ selectedOutputDeviceId: deviceId });
+    if (isRunning) {
+      await audioEngine.setOutputDevice(deviceId);
+    }
+    await refreshAudioDevices();
+  };
+
+  const handleToggleGate = () => {
+    const next = !conditionerConfig.gateEnabled;
+    handleUpdateConditionerConfig({
+      gateEnabled: next,
+      enabled: true
+    });
   };
 
   // Sync Pedals with Audio Graph
@@ -481,41 +521,35 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
-      {/* Top App Header */}
+      {/* Top App Header with 2 rows of controls and hardware DSP power switch with LED */}
       <Header
         isRunning={isRunning}
         onToggleEngine={toggleEngine}
         onRestartEngine={handleRestartEngine}
         inputSource={inputSource}
-        onSelectInputSource={handleSelectInputSource}
+        onSelectCombinedInput={handleSelectCombinedInput}
+        availableInputDevices={availableInputDevices}
+        selectedInputDeviceId={latencySettings.selectedInputDeviceId}
         inputGain={inputGain}
         onInputGainChange={(v) => {
           setInputGain(v);
           audioEngine.setInputGain(v);
         }}
-        masterVolume={masterVolume}
-        onMasterVolumeChange={(v) => {
-          setMasterVolume(v);
-          audioEngine.setMasterGain(v);
-        }}
+        inputPeak={inputPeak}
+        gateEnabled={conditionerConfig.gateEnabled}
+        onToggleGate={handleToggleGate}
+        gateState={conditionerTelemetry.gateState}
+        onOpenInputConditioner={() => setIsInputConditionerOpen(true)}
+        isRiffPlaying={isRiffPlaying}
+        onToggleRiffPlaying={handleToggleRiffPlaying}
         currentPreset={currentPreset}
         presets={presets}
         onSelectPreset={handleSelectPreset}
         onOpenPresetLibrary={() => setIsPresetLibraryOpen(true)}
-        onOpenTuner={() => setIsTunerOpen(true)}
-        tunerData={tunerData}
-        isBypassAll={isBypassAll}
-        onToggleBypassAll={handleToggleBypassAll}
-        bpm={bpm}
-        onBpmChange={setBpm}
-        inputPeak={inputPeak}
-        outputPeak={outputPeak}
-        isRiffPlaying={isRiffPlaying}
-        onToggleRiffPlaying={handleToggleRiffPlaying}
+        availableOutputDevices={availableOutputDevices}
+        selectedOutputDeviceId={latencySettings.selectedOutputDeviceId}
+        onSelectOutputDevice={handleSelectOutputDevice}
         latencyMs={latencyReport.totalCalculatedMs}
-        coreEngineMode={coreEngineMode}
-        onOpenLatencyInspector={() => setIsLatencyInspectorOpen(true)}
-        onMinimiseLatency={handleMinimiseLatency}
         isTurboActive={
           latencySettings.profile === 'ultra-low' &&
           latencySettings.sampleRateMode === 'native' &&
@@ -524,14 +558,8 @@ export default function App() {
           latencySettings.bypassOsVoiceProcessing
         }
         isBluetoothDetected={latencyReport.isBluetoothActive}
-        onOpenInputConditioner={() => setIsInputConditionerOpen(true)}
-        conditionerEnabled={conditionerConfig.enabled && (conditionerConfig.gateEnabled || conditionerConfig.highCutEnabled)}
-        gateEnabled={conditionerConfig.enabled && conditionerConfig.gateEnabled}
-        gateState={conditionerTelemetry.gateState}
-        conditionerHighCut={conditionerConfig.enabled && conditionerConfig.highCutEnabled}
-        highPitchNoiseDetected={conditionerTelemetry.highPitchNoiseDetected}
-        isMuted={isMuted}
-        onToggleMute={handleToggleMute}
+        onOpenEngineSettings={() => setIsLatencyInspectorOpen(true)}
+        onMinimiseLatency={handleMinimiseLatency}
       />
 
       {/* Main Studio Viewport */}
@@ -555,7 +583,7 @@ export default function App() {
             </div>
 
             <button
-              onClick={startAudioEngine}
+              onClick={() => startAudioEngine()}
               className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/25 active:scale-95 flex items-center gap-2"
             >
               <Power size={14} className="fill-black" />
@@ -568,6 +596,25 @@ export default function App() {
         <div className="mb-4">
           <SpectrumVisualizer isRunning={isRunning} />
         </div>
+
+        {/* Control Stack directly above the signal chain: Tuner, Tap Tempo, Mute & Master Vol */}
+        <SignalChainControlStack
+          tunerData={tunerData}
+          onOpenTuner={() => setIsTunerOpen(true)}
+          bpm={bpm}
+          onBpmChange={setBpm}
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+          masterVolume={masterVolume}
+          onMasterVolumeChange={(v) => {
+            setMasterVolume(v);
+            audioEngine.setMasterGain(v);
+          }}
+          outputPeak={outputPeak}
+          isBypassAll={isBypassAll}
+          onToggleBypassAll={handleToggleBypassAll}
+          pedalsCount={pedals.length}
+        />
 
         {/* Pedalboard Stage */}
         <Pedalboard
