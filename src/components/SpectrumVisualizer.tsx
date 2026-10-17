@@ -200,8 +200,8 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({ isRunnin
       <canvas
         ref={canvasRef}
         width={480}
-        height={90}
-        className="w-full h-20 block"
+        height={70}
+        className="w-full h-14 block"
       />
     </div>
   );

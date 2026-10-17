@@ -21,7 +21,7 @@ import {
   decodePresetFromShareUrl
 } from './presets/defaultPresets';
 import { Header } from './components/Header';
-import { SignalChainControlStack } from './components/SignalChainControlStack';
+import { SignalChainControlStack, CollapsedSectionsState } from './components/SignalChainControlStack';
 import { Pedalboard } from './components/Pedalboard';
 import { AmpCabSection } from './components/AmpCabSection';
 import { LooperPedal } from './components/LooperPedal';
@@ -140,6 +140,47 @@ export default function App() {
     highPitchEnergyDb: -100
   });
   const [isLearningNoiseFloor, setIsLearningNoiseFloor] = useState<boolean>(false);
+
+  // Collapsed Rig Views State (persisted to localStorage)
+  const [collapsedSections, setCollapsedSections] = useState<CollapsedSectionsState>(() => {
+    try {
+      const saved = localStorage.getItem('tonecraft_collapsed_views');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          pedalboard: Boolean(parsed.pedalboard),
+          ampCab: Boolean(parsed.ampCab !== undefined ? parsed.ampCab : (parsed.amp || parsed.cab)),
+          looper: Boolean(parsed.looper)
+        };
+      }
+    } catch {}
+    return {
+      pedalboard: false,
+      ampCab: false,
+      looper: false
+    };
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tonecraft_collapsed_views', JSON.stringify(collapsedSections));
+    } catch {}
+  }, [collapsedSections]);
+
+  const handleToggleSectionCollapse = (section: keyof CollapsedSectionsState) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  const handleToggleAllCollapse = (collapseAll: boolean) => {
+    setCollapsedSections({
+      pedalboard: collapseAll,
+      ampCab: collapseAll,
+      looper: collapseAll
+    });
+  };
 
   // Engine Startup: builds the complete graph first with minimise latency profile active, and starts selected source
   const startAudioEngine = async (sourceToUse?: string) => {
@@ -563,37 +604,37 @@ export default function App() {
       />
 
       {/* Main Studio Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 flex flex-col">
         {/* Startup banner when DSP is OFF */}
         {!isRunning && (
-          <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-neutral-900 to-amber-500/15 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-4 shadow-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 text-emerald-400 flex items-center justify-center font-bold">
-                <Power size={20} />
+          <div className="mb-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-500/15 via-neutral-900 to-amber-500/15 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800 text-emerald-400 flex items-center justify-center font-bold">
+                <Power size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <h3 className="text-xs font-bold text-white flex items-center gap-2">
                   <span>DSP is currently OFF</span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-neutral-800 text-neutral-400 border border-neutral-700">STANDBY</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-neutral-800 text-neutral-400 border border-neutral-700">STANDBY</span>
                 </h3>
-                <p className="text-xs text-neutral-300">
-                  Switch the DSP power button ON to begin real-time modeling with minimized latency, neural amp models, and studio DSP worklets.
+                <p className="text-[11px] text-neutral-300">
+                  Switch the DSP power button ON to begin real-time modeling with minimized latency and neural amp models.
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => startAudioEngine()}
-              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/25 active:scale-95 flex items-center gap-2"
+              className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-md shadow-emerald-500/25 active:scale-95 flex items-center gap-1.5"
             >
-              <Power size={14} className="fill-black" />
+              <Power size={13} className="fill-black" />
               <span>Turn DSP ON</span>
             </button>
           </div>
         )}
 
         {/* Real-time Oscilloscope & Spectrum Analyzer Deck */}
-        <div className="mb-4">
+        <div className="mb-2">
           <SpectrumVisualizer isRunning={isRunning} />
         </div>
 
@@ -615,6 +656,9 @@ export default function App() {
           isBypassAll={isBypassAll}
           onToggleBypassAll={handleToggleBypassAll}
           pedalsCount={pedals.length}
+          collapsedSections={collapsedSections}
+          onToggleSectionCollapse={handleToggleSectionCollapse}
+          onToggleAllCollapse={handleToggleAllCollapse}
         />
 
         {/* Pedalboard Stage */}
@@ -625,6 +669,8 @@ export default function App() {
           onReorderPedals={handleReorderPedals}
           onOpenAddPedal={() => setIsAddPedalOpen(true)}
           onOpenVstEditor={(pedal) => setVstEditorPedal(pedal)}
+          isCollapsed={collapsedSections.pedalboard}
+          onToggleCollapse={() => handleToggleSectionCollapse('pedalboard')}
         />
 
         {/* Amp & Cabinet Stage (NAM Modeler & IR Convolver) */}
@@ -638,6 +684,8 @@ export default function App() {
           onSetAmpEngineMode={handleSetAmpEngineMode}
           onOpenLatencyInspector={() => setIsLatencyInspectorOpen(true)}
           currentLatencyMs={latencyReport.totalCalculatedMs}
+          isCollapsed={collapsedSections.ampCab}
+          onToggleCollapse={() => handleToggleSectionCollapse('ampCab')}
         />
 
         {/* Tape Looper Unit */}
@@ -650,11 +698,13 @@ export default function App() {
           onToggleReverse={() => audioEngine.toggleLooperReverse()}
           onToggleSpeed={() => audioEngine.toggleLooperSpeed()}
           onVolumeChange={(vol) => audioEngine.setLooperVolume(vol)}
+          isCollapsed={collapsedSections.looper}
+          onToggleCollapse={() => handleToggleSectionCollapse('looper')}
         />
       </main>
 
       {/* Footer info bar with live engine and latency status */}
-      <footer className="border-t border-neutral-900 bg-neutral-950 px-6 py-3 text-xs text-neutral-400">
+      <footer className="border-t border-neutral-900 bg-neutral-950 px-4 py-1.5 text-[11px] text-neutral-400">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-neutral-300">ToneCraft DSP Engine</span>

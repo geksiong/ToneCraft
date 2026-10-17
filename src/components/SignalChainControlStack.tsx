@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TunerData } from '../types/pedal';
 import {
   Radio,
@@ -7,8 +7,16 @@ import {
   Volume2,
   Minus,
   Plus,
-  Sliders
+  Sliders,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
+
+export interface CollapsedSectionsState {
+  pedalboard: boolean;
+  ampCab: boolean;
+  looper: boolean;
+}
 
 interface SignalChainControlStackProps {
   tunerData: TunerData;
@@ -24,6 +32,9 @@ interface SignalChainControlStackProps {
   isBypassAll: boolean;
   onToggleBypassAll: () => void;
   pedalsCount?: number;
+  collapsedSections?: CollapsedSectionsState;
+  onToggleSectionCollapse?: (section: keyof CollapsedSectionsState) => void;
+  onToggleAllCollapse?: (collapseAll: boolean) => void;
 }
 
 export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = ({
@@ -39,9 +50,13 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
   outputPeak,
   isBypassAll,
   onToggleBypassAll,
-  pedalsCount = 0
+  pedalsCount = 0,
+  collapsedSections,
+  onToggleSectionCollapse,
+  onToggleAllCollapse
 }) => {
   const [tapTimes, setTapTimes] = useState<number[]>([]);
+
   // Tap Tempo calculation
   const handleTapTempo = () => {
     const now = performance.now();
@@ -65,9 +80,16 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
   const cents = tunerData?.cents ?? 0;
   const isCloseTune = Math.abs(cents) <= 5 && Boolean(tunerData?.note);
 
+  const areAllCollapsed = Boolean(
+    collapsedSections &&
+    collapsedSections.pedalboard &&
+    collapsedSections.ampCab &&
+    collapsedSections.looper
+  );
+
   return (
-    <div className="w-full bg-neutral-900/90 border border-neutral-800 rounded-2xl p-2.5 sm:p-3 mb-5 shadow-xl backdrop-blur-md">
-      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+    <div className="w-full bg-neutral-900/90 border border-neutral-800 rounded-2xl p-2 sm:p-2.5 mb-2 shadow-xl backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
         {/* Left Section: Tuner & Tap Tempo */}
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 flex-1 min-w-[280px]">
           {/* Chromatic Guitar/Bass Tuner Widget */}
@@ -100,71 +122,54 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
                     : 'text-neutral-400'
                 }
               />
-              <span className="tracking-wider">TUNER</span>
-              {!isMicInput && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-800/80 text-neutral-400 border border-neutral-700 font-mono">
-                  MIC ONLY
-                </span>
-              )}
+              <span className="w-12 text-center inline-block">TUNER</span>
             </button>
 
-            {/* Note & Pitch Tuning Display */}
-            <div
-              onClick={isMicInput ? onOpenTuner : undefined}
-              className={`flex items-center gap-2 px-1.5 py-0.5 rounded transition-colors ${
-                isMicInput ? 'cursor-pointer hover:bg-neutral-900/60' : 'cursor-not-allowed opacity-60'
-              }`}
-              title={
-                !isMicInput
-                  ? 'Tuner is disabled while playing sample riffs. Switch input to Microphone to tune.'
-                  : 'Detected guitar/bass string pitch'
-              }
-            >
-              <div className="w-9 text-center">
-                <span className={`text-base font-black font-mono tracking-tight leading-none ${
+            {/* Note & Cents Meter display */}
+            <div className="flex items-center gap-2 px-1">
+              <span
+                className={`font-mono text-base font-extrabold w-8 text-center tabular-nums ${
                   !isMicInput
                     ? 'text-neutral-600'
                     : tunerData.note
                     ? isCloseTune
-                      ? 'text-emerald-400 text-glow-emerald'
-                      : 'text-amber-300'
+                      ? 'text-emerald-400'
+                      : 'text-amber-400'
                     : 'text-neutral-500'
-                }`}>
-                  {!isMicInput ? '--' : tunerData.note || '--'}
-                </span>
+                }`}
+              >
+                {isMicInput ? tunerData.note || '—' : 'OFF'}
+              </span>
+
+              {/* Dynamic Cent Deviation Visualizer */}
+              <div
+                className="w-16 h-2 rounded bg-neutral-900 relative overflow-hidden border border-neutral-800"
+                title={`Pitch Deviation: ${cents > 0 ? `+${cents}` : cents} cents`}
+              >
+                {/* Center In-tune target marker */}
+                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-neutral-600 z-10" />
+
+                {isMicInput && tunerData.note && (
+                  <div
+                    className={`absolute top-0 bottom-0 w-2 rounded-full transition-all duration-75 -translate-x-1/2 ${
+                      isCloseTune ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-amber-400'
+                    }`}
+                    style={{
+                      left: `${Math.max(10, Math.min(90, 50 + (cents / 50) * 40))}%`
+                    }}
+                  />
+                )}
               </div>
 
-              {/* Pitch Deviation Meter */}
-              <div className="flex flex-col gap-0.5 w-16">
-                <div className="h-1.5 bg-neutral-900 rounded-full overflow-hidden relative border border-neutral-800">
-                  {/* Center zero line */}
-                  <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-neutral-600 z-10" />
-                  {/* Needle */}
-                  {isMicInput && tunerData.note && (
-                    <div
-                      className={`absolute top-0 bottom-0 w-1.5 rounded-full transition-all duration-75 ${
-                        isCloseTune ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-amber-400'
-                      }`}
-                      style={{
-                        left: `${Math.max(5, Math.min(95, 50 + (cents / 50) * 45))}%`,
-                        transform: 'translateX(-50%)'
-                      }}
-                    />
-                  )}
-                </div>
-                <div className="flex justify-between text-[9px] font-mono text-neutral-400 leading-none">
-                  <span>b</span>
-                  <span className="text-[8px] tabular-nums text-neutral-400">
-                    {!isMicInput ? 'DISABLED' : tunerData.note ? `${cents > 0 ? '+' : ''}${cents.toFixed(0)}¢` : '0¢'}
-                  </span>
-                  <span>#</span>
-                </div>
-              </div>
+              {/* Cents numerical readout */}
+              <span className="text-[10px] font-mono tabular-nums w-8 text-neutral-400">
+                {isMicInput && tunerData.note ? (cents > 0 ? `+${cents}` : `${cents}¢`) : ''}
+              </span>
             </div>
           </div>
 
-          {/* Tap Tempo & BPM Section */}
-          <div className="flex items-center gap-1.5 bg-neutral-950/80 border border-neutral-800 rounded-xl px-2 py-1.5 shrink-0 shadow-inner">
+          {/* Master BPM Metronome & Tap Tempo */}
+          <div className="flex items-center gap-2 bg-neutral-950/80 border border-neutral-800 rounded-xl px-2.5 py-1.5 shrink-0 shadow-inner">
             <button
               onClick={handleTapTempo}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700 active:scale-95 active:bg-neutral-800"
@@ -198,6 +203,65 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
             </div>
           </div>
         </div>
+
+        {/* Center Section: Rig View Layout Controls (Compact / Expanded Rig) */}
+        {collapsedSections && onToggleSectionCollapse && (
+          <div className="flex items-center gap-1.5 bg-neutral-950/80 border border-neutral-800 rounded-xl px-2.5 py-1.5 shadow-inner shrink-0">
+            {onToggleAllCollapse && (
+              <button
+                onClick={() => onToggleAllCollapse(!areAllCollapsed)}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-mono font-bold transition-all ${
+                  areAllCollapsed
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs'
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
+                }`}
+                title={areAllCollapsed ? 'Expand all sections in rig' : 'Collapse all sections into compact view'}
+              >
+                {areAllCollapsed ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+                <span>{areAllCollapsed ? 'Expand All' : 'Compact All'}</span>
+              </button>
+            )}
+
+            <div className="h-4 w-px bg-neutral-800 mx-1 hidden sm:block" />
+
+            {/* Individual unit view toggles */}
+            <div className="hidden sm:flex items-center gap-1 text-[10px] font-mono">
+              <button
+                onClick={() => onToggleSectionCollapse('pedalboard')}
+                className={`px-1.5 py-0.5 rounded border transition-colors ${
+                  collapsedSections.pedalboard
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+                title={`Pedalboard: ${collapsedSections.pedalboard ? 'Collapsed (Click to Expand)' : 'Expanded (Click to Collapse)'}`}
+              >
+                Pedals {collapsedSections.pedalboard ? '▼' : '▲'}
+              </button>
+              <button
+                onClick={() => onToggleSectionCollapse('ampCab')}
+                className={`px-1.5 py-0.5 rounded border transition-colors ${
+                  collapsedSections.ampCab
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+                title={`Amp & Cabinet: ${collapsedSections.ampCab ? 'Collapsed (Click to Expand)' : 'Expanded (Click to Collapse)'}`}
+              >
+                Amp &amp; Cab {collapsedSections.ampCab ? '▼' : '▲'}
+              </button>
+              <button
+                onClick={() => onToggleSectionCollapse('looper')}
+                className={`px-1.5 py-0.5 rounded border transition-colors ${
+                  collapsedSections.looper
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+                title={`Looper: ${collapsedSections.looper ? 'Collapsed (Click to Expand)' : 'Expanded (Click to Collapse)'}`}
+              >
+                Looper {collapsedSections.looper ? '▼' : '▲'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Right Section: Bypass All, Master Mute & Volume */}
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0">
