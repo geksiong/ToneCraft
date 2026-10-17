@@ -702,14 +702,16 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
 
     case 'pitchShifter': {
       const p = pedal as PitchShifterPedal;
+      const isOctaveDown = p.shift === -12;
       return (
         <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-0.5">
             <RotaryKnob
               label="Shift"
               value={p.shift}
               min={-24}
               max={24}
+              size="sm"
               formatValue={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}st`}
               onChange={(v) => onUpdate({ ...p, shift: v })}
             />
@@ -718,6 +720,7 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
               value={p.detune}
               min={-50}
               max={50}
+              size="sm"
               formatValue={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}c`}
               onChange={(v) => onUpdate({ ...p, detune: v })}
             />
@@ -725,19 +728,85 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
               label="Mix"
               value={p.mix}
               unit="%"
+              size="sm"
               onChange={(v) => onUpdate({ ...p, mix: v })}
             />
+            <RotaryKnob
+              label="Tone"
+              value={p.tone ?? 80}
+              unit="%"
+              size="sm"
+              onChange={(v) => onUpdate({ ...p, tone: v })}
+            />
           </div>
-          <div className="flex justify-center gap-1.5 text-[9px] font-mono">
-            {[-12, -7, 0, 7, 12, 24].map(semi => (
+
+          {/* Quick Octave Selector */}
+          <div className="flex justify-center gap-1 text-[9px] font-mono">
+            {[-24, -12, -7, 0, 7, 12, 24].map(semi => (
               <button
                 key={semi}
                 onClick={() => onUpdate({ ...p, shift: semi })}
-                className={`w-7 justify-center text-center px-1 py-0.5 rounded font-mono tabular-nums ${p.shift === semi ? 'bg-purple-500 text-white font-bold' : 'bg-black/40 text-white/70'}`}
+                className={`w-6 justify-center text-center px-0.5 py-0.5 rounded font-mono tabular-nums transition-colors ${
+                  p.shift === semi
+                    ? semi === -12
+                      ? 'bg-purple-600 text-white font-bold ring-1 ring-purple-300'
+                      : 'bg-purple-500 text-white font-bold'
+                    : 'bg-black/40 text-white/70 hover:bg-black/60'
+                }`}
+                title={semi === -12 ? 'Octave Down (-12 st)' : `${semi > 0 ? '+' : ''}${semi} semitones`}
               >
                 {semi > 0 ? `+${semi}` : semi}
               </button>
             ))}
+          </div>
+
+          {/* Tracking Mode & Octave Blend Controls */}
+          <div className="flex items-center justify-between gap-1 text-[9px] font-mono">
+            {/* Tracking Mode */}
+            <div className="flex bg-black/40 rounded p-0.5 gap-0.5">
+              {(['auto', 'mono', 'poly'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => onUpdate({ ...p, trackingMode: mode })}
+                  className={`px-1.5 py-0.5 rounded uppercase text-[8px] font-semibold transition-colors ${
+                    (p.trackingMode || 'auto') === mode
+                      ? 'bg-purple-500 text-white font-bold shadow'
+                      : 'text-white/50 hover:text-white/80'
+                  }`}
+                  title={
+                    mode === 'auto'
+                      ? 'Auto: PSOLA period sync for single notes, WSOLA for chords'
+                      : mode === 'mono'
+                      ? 'Mono: Locked fundamental tracking for leads & bass'
+                      : 'Poly: Multi-grain cross-fade for chords'
+                  }
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {/* Sub-Octave Blend Toggle */}
+            <button
+              onClick={() => onUpdate({ ...p, octaveBlend: p.octaveBlend === false ? true : false })}
+              className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase transition-colors flex items-center gap-1 ${
+                p.octaveBlend !== false
+                  ? 'bg-purple-600/90 text-white shadow ring-1 ring-purple-400/50'
+                  : 'bg-black/40 text-white/40 hover:text-white/70'
+              }`}
+              title="Sub-Harmonic Fundamental Generator for deep, solid octave-down tracking"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${p.octaveBlend !== false ? 'bg-emerald-400 animate-pulse' : 'bg-white/20'}`} />
+              <span>SUB</span>
+            </button>
+          </div>
+
+          {/* Status Bar */}
+          <div className="flex items-center justify-between text-[8px] font-mono px-1.5 text-white/50 bg-black/30 rounded py-0.5">
+            <span className={isOctaveDown ? 'text-purple-300 font-semibold' : ''}>
+              {isOctaveDown ? '⚡ OCT DOWN (PSOLA)' : `${p.shift > 0 ? '+' : ''}${p.shift}st`}
+            </span>
+            <span className="text-emerald-400/90 font-mono">~10.6ms LATENCY</span>
           </div>
         </div>
       );

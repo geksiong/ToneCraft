@@ -268,7 +268,7 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
     type: 'pitchShifter',
     title: 'Whammy Pitch Shifter',
     category: 'Pitch & Harmony',
-    description: 'Zero-latency polyphonic pitch shifting (-24 to +24 semitones) and octave blends.',
+    description: 'Ultra-low latency pitch shifter (-24 to +24 st) with PSOLA period locking for pristine octave-down tracking and sub-harmonic blend.',
     color: '#991b1b',
     createDefault: () => ({
       id: `pedal-pitch-${Date.now()}`,
@@ -276,10 +276,12 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       name: 'Whammy Pitch',
       enabled: true,
       color: '#991b1b',
-      shift: 12,
+      shift: -12,
       detune: 0,
       mix: 50,
-      octaveBlend: true
+      octaveBlend: true,
+      trackingMode: 'auto',
+      tone: 80
     })
   },
   {

@@ -438,7 +438,9 @@ export const INITIAL_PRESETS: Preset[] = [
         shift: -12,
         detune: 0,
         mix: 50,
-        octaveBlend: true
+        octaveBlend: true,
+        trackingMode: 'auto',
+        tone: 80
       },
       {
         id: 'pedal-delay-bass',

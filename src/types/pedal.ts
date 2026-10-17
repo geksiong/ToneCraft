@@ -140,6 +140,8 @@ export interface PitchShifterPedal extends BasePedalConfig {
   detune: number; // -50 to +50 cents
   mix: number; // 0 - 100
   octaveBlend: boolean;
+  trackingMode?: 'auto' | 'poly' | 'mono';
+  tone?: number; // 0 - 100
 }
 
 export interface HarmonizerPedal extends BasePedalConfig {

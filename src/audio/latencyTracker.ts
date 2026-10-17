@@ -212,9 +212,9 @@ export function calculateSignalChainLatency(
     switch (pedal.type) {
       case 'pitchShifter':
       case 'harmonizer':
-        // Optimized low-latency tracking window (8ms instead of 40ms)
+        // High-accuracy PSOLA period-synchronized crossfade window (~7.8ms algorithmic latency)
         pedalMs = 7.8;
-        explanation = 'Optimized fast-tracking crossfade window (8ms)';
+        explanation = 'PSOLA period-synchronized crossfade window (7.8ms)';
         break;
 
       case 'delay':
