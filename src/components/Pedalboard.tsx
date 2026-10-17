@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AnyPedal, VstPluginPedal } from '../types/pedal';
+import { MidiMapping } from '../types/midi';
 import { PedalCard } from './PedalCard';
 import {
   Plus,
@@ -10,7 +11,8 @@ import {
   ChevronRight,
   Trash2,
   Code,
-  Layers
+  Layers,
+  Radio
 } from 'lucide-react';
 
 interface PedalboardProps {
@@ -22,6 +24,8 @@ interface PedalboardProps {
   onOpenVstEditor: (pedal: VstPluginPedal) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  midiMappings?: MidiMapping[];
+  onOpenMidiSettings?: () => void;
 }
 
 export const Pedalboard: React.FC<PedalboardProps> = ({
@@ -32,7 +36,9 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
   onOpenAddPedal,
   onOpenVstEditor,
   isCollapsed: controlledCollapsed,
-  onToggleCollapse: controlledToggleCollapse
+  onToggleCollapse: controlledToggleCollapse,
+  midiMappings,
+  onOpenMidiSettings
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(false);
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
@@ -342,6 +348,8 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
                   onMoveLeft={handleMoveLeft}
                   onMoveRight={handleMoveRight}
                   onOpenVstEditor={onOpenVstEditor}
+                  midiMappings={midiMappings}
+                  onOpenMidiSettings={onOpenMidiSettings}
                 />
               </div>
             ))}

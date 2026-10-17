@@ -10,6 +10,8 @@ interface RotaryKnobProps {
   size?: 'sm' | 'md' | 'lg';
   defaultValue?: number;
   color?: string;
+  midiBadge?: string;
+  onMidiLearn?: () => void;
   onChange: (val: number) => void;
   formatValue?: (val: number) => string;
 }
@@ -24,6 +26,8 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
   size = 'md',
   defaultValue,
   color = '#e2e8f0',
+  midiBadge,
+  onMidiLearn,
   onChange,
   formatValue
 }) => {
@@ -121,6 +125,16 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
             boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.3)'
           }}
         />
+
+        {/* Optional MIDI CC indicator badge */}
+        {midiBadge && (
+          <div
+            className="absolute -top-1.5 -right-1 px-1 py-0.2 rounded text-[7px] font-mono font-bold bg-amber-500/90 text-black shadow-sm pointer-events-none z-10"
+            title={`Controlled by MIDI ${midiBadge}`}
+          >
+            {midiBadge}
+          </div>
+        )}
       </div>
 
       {/* Label and live readout with constant width */}

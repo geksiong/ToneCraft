@@ -12,7 +12,8 @@ import {
   Sliders,
   Cpu,
   Speaker,
-  RotateCcw
+  RotateCcw,
+  Radio
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -46,6 +47,9 @@ interface HeaderProps {
   isBluetoothDetected?: boolean;
   onOpenEngineSettings: () => void;
   onMinimiseLatency?: () => Promise<void>;
+  onOpenMidiSettings?: () => void;
+  midiDeviceCount?: number;
+  isMidiActivity?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -75,7 +79,10 @@ export const Header: React.FC<HeaderProps> = ({
   latencyMs,
   isTurboActive,
   isBluetoothDetected,
-  onOpenEngineSettings
+  onOpenEngineSettings,
+  onOpenMidiSettings,
+  midiDeviceCount = 0,
+  isMidiActivity = false
 }) => {
   const isMic = inputSource.startsWith('mic');
   const isRiffSource = !isMic;
@@ -434,6 +441,40 @@ export const Header: React.FC<HeaderProps> = ({
                 <Cpu size={12} className="text-emerald-400 shrink-0" />
                 <span>Engine Settings</span>
               </button>
+
+              {/* 5. MIDI Hardware Controller Button */}
+              {onOpenMidiSettings && (
+                <button
+                  onClick={onOpenMidiSettings}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all shrink-0 ${
+                    isMidiActivity
+                      ? 'bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_8px_rgba(245,158,11,0.5)] ring-1 ring-amber-400/50'
+                      : midiDeviceCount > 0
+                      ? 'bg-neutral-900 border-amber-500/40 text-amber-300 hover:bg-neutral-800'
+                      : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-300 hover:text-white'
+                  }`}
+                  title={
+                    midiDeviceCount > 0
+                      ? `MIDI Controller connected (${midiDeviceCount} active). Click to configure mappings & MIDI learn.`
+                      : 'Configure MIDI Controllers & mappings (foot switches, expression pedals, knobs).'
+                  }
+                >
+                  <Radio
+                    size={12}
+                    className={`shrink-0 ${
+                      isMidiActivity
+                        ? 'text-amber-300 animate-ping'
+                        : midiDeviceCount > 0
+                        ? 'text-amber-400'
+                        : 'text-neutral-400'
+                    }`}
+                  />
+                  <span>MIDI</span>
+                  {midiDeviceCount > 0 ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  ) : null}
+                </button>
+              )}
 
               {/* Quick Reboot Audio Engine (if running) */}
               {isRunning && onRestartEngine && (

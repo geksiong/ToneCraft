@@ -18,6 +18,7 @@ import {
   HarmonizerPedal,
   VstPluginPedal
 } from '../types/pedal';
+import { MidiMapping } from '../types/midi';
 import { RotaryKnob } from './RotaryKnob';
 import {
   GripVertical,
@@ -25,7 +26,8 @@ import {
   ChevronRight,
   Trash2,
   Power,
-  Code
+  Code,
+  Radio
 } from 'lucide-react';
 
 interface PedalCardProps {
@@ -37,6 +39,8 @@ interface PedalCardProps {
   onMoveLeft: (index: number) => void;
   onMoveRight: (index: number) => void;
   onOpenVstEditor?: (pedal: VstPluginPedal) => void;
+  midiMappings?: MidiMapping[];
+  onOpenMidiSettings?: () => void;
 }
 
 export const PedalCard: React.FC<PedalCardProps> = ({
@@ -47,7 +51,9 @@ export const PedalCard: React.FC<PedalCardProps> = ({
   onRemove,
   onMoveLeft,
   onMoveRight,
-  onOpenVstEditor
+  onOpenVstEditor,
+  midiMappings,
+  onOpenMidiSettings
 }) => {
   const toggleBypass = () => {
     // Play synthetic footswitch mechanical click
@@ -84,6 +90,21 @@ export const PedalCard: React.FC<PedalCardProps> = ({
     }
     return 'bg-amber-400 led-glow-amber border-amber-200';
   };
+
+  const toggleMapping = midiMappings?.find(
+    (m) =>
+      m.enabled &&
+      m.target.type === 'pedal_toggle' &&
+      (m.target.slotIndex === index || (m.target as any).pedalId === pedal.id)
+  );
+
+  const midiBypassBadge = toggleMapping
+    ? toggleMapping.commandType === 'cc'
+      ? `CC #${toggleMapping.controlNumber}`
+      : toggleMapping.commandType === 'note'
+      ? `NOTE #${toggleMapping.controlNumber}`
+      : `PC #${toggleMapping.controlNumber}`
+    : undefined;
 
   return (
     <div
@@ -160,7 +181,7 @@ export const PedalCard: React.FC<PedalCardProps> = ({
 
       {/* Knobs & Controls Matrix */}
       <div className="px-3 py-2 flex-1 flex flex-col justify-center">
-        {renderPedalControls(pedal, onUpdate)}
+        {renderPedalControls(pedal, onUpdate, index, midiMappings)}
       </div>
 
       {/* Bottom Stompswitch & Chassis Foot */}
@@ -193,10 +214,24 @@ export const PedalCard: React.FC<PedalCardProps> = ({
           </div>
         </button>
 
-        {/* Vintage Stompbox Bottom Badge */}
-        <span className="mt-1 text-[8px] tracking-widest font-mono text-white/40 uppercase">
-          TRUE BYPASS
-        </span>
+        {/* Vintage Stompbox Bottom Badge with MIDI tag */}
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-[8px] tracking-widest font-mono text-white/40 uppercase">
+            TRUE BYPASS
+          </span>
+          {midiBypassBadge && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onOpenMidiSettings) onOpenMidiSettings();
+              }}
+              className="px-1.5 py-0.2 rounded text-[7.5px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/40 transition-colors"
+              title={`Controlled by MIDI ${midiBypassBadge}. Click to view/edit MIDI settings.`}
+            >
+              MIDI {midiBypassBadge}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -205,7 +240,25 @@ export const PedalCard: React.FC<PedalCardProps> = ({
 /**
  * Helper to render controls based on pedal subtype
  */
-function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
+function renderPedalControls(
+  pedal: AnyPedal,
+  onUpdate: (p: AnyPedal) => void,
+  slotIndex?: number,
+  midiMappings?: MidiMapping[]
+) {
+  const getKnobBadge = (paramKey: string) => {
+    if (slotIndex === undefined || !midiMappings) return undefined;
+    const m = midiMappings.find(
+      (item) =>
+        item.enabled &&
+        item.target.type === 'pedal_param' &&
+        item.target.slotIndex === slotIndex &&
+        item.target.paramKey === paramKey
+    );
+    if (!m) return undefined;
+    return m.commandType === 'cc' ? `CC ${m.controlNumber}` : `${m.commandType.toUpperCase()} ${m.controlNumber}`;
+  };
+
   switch (pedal.type) {
     case 'overdrive': {
       const p = pedal as OverdrivePedal;
@@ -216,18 +269,21 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
               label="Drive"
               value={p.drive}
               unit="%"
+              midiBadge={getKnobBadge('drive')}
               onChange={(v) => onUpdate({ ...p, drive: v })}
             />
             <RotaryKnob
               label="Tone"
               value={p.tone}
               unit="%"
+              midiBadge={getKnobBadge('tone')}
               onChange={(v) => onUpdate({ ...p, tone: v })}
             />
             <RotaryKnob
               label="Level"
               value={p.level}
               unit="%"
+              midiBadge={getKnobBadge('level')}
               onChange={(v) => onUpdate({ ...p, level: v })}
             />
           </div>
@@ -254,18 +310,21 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
             label="Gain"
             value={p.gain}
             unit="%"
+            midiBadge={getKnobBadge('gain')}
             onChange={(v) => onUpdate({ ...p, gain: v })}
           />
           <RotaryKnob
             label="Filter"
             value={p.filter}
             unit="%"
+            midiBadge={getKnobBadge('filter')}
             onChange={(v) => onUpdate({ ...p, filter: v })}
           />
           <RotaryKnob
             label="Vol"
             value={p.volume}
             unit="%"
+            midiBadge={getKnobBadge('volume')}
             onChange={(v) => onUpdate({ ...p, volume: v })}
           />
         </div>
@@ -280,24 +339,28 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
             label="Fuzz"
             value={p.fuzz}
             unit="%"
+            midiBadge={getKnobBadge('fuzz')}
             onChange={(v) => onUpdate({ ...p, fuzz: v })}
           />
           <RotaryKnob
             label="Tone"
             value={p.tone}
             unit="%"
+            midiBadge={getKnobBadge('tone')}
             onChange={(v) => onUpdate({ ...p, tone: v })}
           />
           <RotaryKnob
             label="Vol"
             value={p.volume}
             unit="%"
+            midiBadge={getKnobBadge('volume')}
             onChange={(v) => onUpdate({ ...p, volume: v })}
           />
           <RotaryKnob
             label="Scoop"
             value={p.scoop}
             unit="%"
+            midiBadge={getKnobBadge('scoop')}
             onChange={(v) => onUpdate({ ...p, scoop: v })}
           />
         </div>
@@ -486,6 +549,7 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
               min={10}
               max={1000}
               unit="ms"
+              midiBadge={getKnobBadge('time')}
               formatValue={(v) => `${Math.round(v)}ms`}
               onChange={(v) => onUpdate({ ...p, time: v })}
             />
@@ -493,18 +557,21 @@ function renderPedalControls(pedal: AnyPedal, onUpdate: (p: AnyPedal) => void) {
               label="Repeats"
               value={p.feedback}
               unit="%"
+              midiBadge={getKnobBadge('feedback')}
               onChange={(v) => onUpdate({ ...p, feedback: v })}
             />
             <RotaryKnob
               label="Mix"
               value={p.mix}
               unit="%"
+              midiBadge={getKnobBadge('mix')}
               onChange={(v) => onUpdate({ ...p, mix: v })}
             />
             <RotaryKnob
               label="Flutter"
               value={p.flutter}
               unit="%"
+              midiBadge={getKnobBadge('flutter')}
               onChange={(v) => onUpdate({ ...p, flutter: v })}
             />
           </div>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AnyPedal,
   NamModelConfig,
@@ -32,6 +32,9 @@ import { AddPedalModal } from './components/AddPedalModal';
 import { VstEditorModal } from './components/VstEditorModal';
 import { LatencyInspectorModal } from './components/LatencyInspectorModal';
 import { InputConditionerModal } from './components/InputConditionerModal';
+import { MidiSettingsModal } from './components/MidiSettingsModal';
+import { midiManager } from './audio/midiManager';
+import { MidiActionTarget, MidiMapping } from './types/midi';
 import { calculateSignalChainLatency, SignalChainLatencyReport } from './audio/latencyTracker';
 import { NamEngineStatus } from './audio/namEngine';
 import {
@@ -39,7 +42,7 @@ import {
   InputConditionerTelemetry
 } from './audio/inputConditioner';
 import { isNamModelProfile } from './audio/namModels';
-import { Music2, Power } from 'lucide-react';
+import { Music2, Power, Radio } from 'lucide-react';
 
 export default function App() {
   // Preset & Rig State
@@ -125,6 +128,23 @@ export default function App() {
   const [isPresetLibraryOpen, setIsPresetLibraryOpen] = useState<boolean>(false);
   const [isAddPedalOpen, setIsAddPedalOpen] = useState<boolean>(false);
   const [vstEditorPedal, setVstEditorPedal] = useState<VstPluginPedal | null>(null);
+  const [isMidiModalOpen, setIsMidiModalOpen] = useState<boolean>(false);
+
+  // MIDI Controller & Hardware State
+  const [midiDeviceCount, setMidiDeviceCount] = useState<number>(() => midiManager.devices.length);
+  const [isMidiActivity, setIsMidiActivity] = useState<boolean>(false);
+  const [midiMappings, setMidiMappings] = useState<MidiMapping[]>(() => midiManager.mappings);
+  const [midiStatusNotice, setMidiStatusNotice] = useState<string | null>(null);
+
+  const midiActivityTimeoutRef = useRef<any>(null);
+  const tapTimesRef = useRef<number[]>([]);
+  const midiNoticeTimeoutRef = useRef<any>(null);
+
+  const showMidiNotice = useCallback((msg: string) => {
+    setMidiStatusNotice(msg);
+    if (midiNoticeTimeoutRef.current) clearTimeout(midiNoticeTimeoutRef.current);
+    midiNoticeTimeoutRef.current = setTimeout(() => setMidiStatusNotice(null), 2500);
+  }, []);
 
   // Input Conditioner State (Noise Gate & Anti-Whine Filter)
   const [isInputConditionerOpen, setIsInputConditionerOpen] = useState<boolean>(false);
@@ -555,6 +575,231 @@ export default function App() {
     setPedals(updated);
   };
 
+  // MIDI Hardware Action Dispatcher
+  const handleMidiAction = useCallback((target: MidiActionTarget, value: number, rawMsg: any) => {
+    switch (target.type) {
+      case 'pedal_toggle': {
+        const slotIdx = target.slotIndex;
+        setPedals(prev => {
+          if (slotIdx >= prev.length) return prev;
+          const pedal = prev[slotIdx];
+          const updatedPedal = { ...pedal, enabled: !pedal.enabled };
+          if (audioEngine.isRunning) {
+            audioEngine.updatePedalParameters(updatedPedal);
+          }
+          showMidiNotice(`Pedal #${slotIdx + 1} (${pedal.name}): ${updatedPedal.enabled ? 'ENGAGED' : 'BYPASSED'}`);
+          return prev.map((p, i) => (i === slotIdx ? updatedPedal : p));
+        });
+        break;
+      }
+
+      case 'pedal_param': {
+        const slotIdx = target.slotIndex;
+        const paramKey = target.paramKey;
+        setPedals(prev => {
+          if (slotIdx >= prev.length) return prev;
+          const pedal = prev[slotIdx];
+          const updatedPedal = { ...pedal, [paramKey]: value };
+          if (audioEngine.isRunning) {
+            audioEngine.updatePedalParameters(updatedPedal);
+          }
+          return prev.map((p, i) => (i === slotIdx ? updatedPedal : p));
+        });
+        break;
+      }
+
+      case 'preset_index': {
+        const pIdx = target.presetIndex;
+        setPresets(currentList => {
+          if (pIdx >= 0 && pIdx < currentList.length) {
+            handleSelectPreset(currentList[pIdx]);
+            showMidiNotice(`Preset: ${currentList[pIdx].name}`);
+          }
+          return currentList;
+        });
+        break;
+      }
+
+      case 'preset_next': {
+        setPresets(currentList => {
+          const currentIdx = currentList.findIndex(p => p.id === currentPreset.id);
+          const nextIdx = (currentIdx + 1) % currentList.length;
+          handleSelectPreset(currentList[nextIdx]);
+          showMidiNotice(`Next Preset: ${currentList[nextIdx].name}`);
+          return currentList;
+        });
+        break;
+      }
+
+      case 'preset_prev': {
+        setPresets(currentList => {
+          const currentIdx = currentList.findIndex(p => p.id === currentPreset.id);
+          const prevIdx = (currentIdx - 1 + currentList.length) % currentList.length;
+          handleSelectPreset(currentList[prevIdx]);
+          showMidiNotice(`Prev Preset: ${currentList[prevIdx].name}`);
+          return currentList;
+        });
+        break;
+      }
+
+      case 'preset_id': {
+        setPresets(currentList => {
+          const found = currentList.find(p => p.id === target.presetId);
+          if (found) {
+            handleSelectPreset(found);
+            showMidiNotice(`Preset: ${found.name}`);
+          }
+          return currentList;
+        });
+        break;
+      }
+
+      case 'master_volume': {
+        const rounded = Math.max(0, Math.min(100, Math.round(value)));
+        setMasterVolume(rounded);
+        audioEngine.setMasterGain(rounded);
+        break;
+      }
+
+      case 'input_gain': {
+        const rounded = Math.max(0, Math.min(100, Math.round(value)));
+        setInputGain(rounded);
+        audioEngine.setInputGain(rounded);
+        break;
+      }
+
+      case 'master_mute': {
+        handleToggleMute();
+        showMidiNotice(isMuted ? 'Output Restored' : 'Muted');
+        break;
+      }
+
+      case 'bypass_all': {
+        handleToggleBypassAll();
+        showMidiNotice(isBypassAll ? 'Restored Pedals' : 'Bypassed All Pedals');
+        break;
+      }
+
+      case 'tuner_toggle': {
+        setIsTunerOpen(prev => !prev);
+        break;
+      }
+
+      case 'tap_tempo': {
+        const now = Date.now();
+        const taps = [...tapTimesRef.current.filter((t: number) => now - t < 2500), now];
+        tapTimesRef.current = taps;
+        if (taps.length >= 2) {
+          const diffs: number[] = [];
+          for (let i = 1; i < taps.length; i++) {
+            diffs.push(taps[i] - taps[i - 1]);
+          }
+          const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+          const calculatedBpm = Math.max(40, Math.min(260, Math.round(60000 / avgDiff)));
+          setBpm(calculatedBpm);
+          showMidiNotice(`Tap Tempo: ${calculatedBpm} BPM`);
+        }
+        break;
+      }
+
+      case 'dsp_power': {
+        toggleEngine();
+        break;
+      }
+
+      case 'amp_param': {
+        if (target.paramKey === 'bypassed') {
+          setNamModel(prev => {
+            const nextState = !prev.bypassed;
+            showMidiNotice(`Amp: ${nextState ? 'BYPASS' : 'ACTIVE'}`);
+            return { ...prev, bypassed: nextState };
+          });
+        } else {
+          const ampVal = Math.round((value / 10) * 10) / 10;
+          setNamModel(prev => ({ ...prev, [target.paramKey]: ampVal }));
+        }
+        break;
+      }
+
+      case 'cab_param': {
+        if (target.paramKey === 'bypassed') {
+          setIrCabinet(prev => {
+            const nextState = !prev.bypassed;
+            showMidiNotice(`Cab: ${nextState ? 'BYPASS' : 'ACTIVE'}`);
+            return { ...prev, bypassed: nextState };
+          });
+        } else {
+          setIrCabinet(prev => ({ ...prev, [target.paramKey]: value }));
+        }
+        break;
+      }
+
+      case 'looper_cmd': {
+        switch (target.command) {
+          case 'record':
+            audioEngine.toggleLooperRecord();
+            showMidiNotice('Looper: Record / Overdub');
+            break;
+          case 'play':
+            audioEngine.toggleLooperPlayStop();
+            showMidiNotice('Looper: Play / Stop');
+            break;
+          case 'undo':
+            audioEngine.undoLooper();
+            showMidiNotice('Looper: Undo');
+            break;
+          case 'clear':
+            audioEngine.clearLooper();
+            showMidiNotice('Looper: Cleared');
+            break;
+          case 'reverse':
+            audioEngine.toggleLooperReverse();
+            showMidiNotice('Looper: Reverse');
+            break;
+          case 'speed':
+            audioEngine.toggleLooperSpeed();
+            showMidiNotice('Looper: Speed Toggle');
+            break;
+          case 'volume':
+            audioEngine.setLooperVolume(Math.round(value));
+            break;
+        }
+        break;
+      }
+    }
+  }, [currentPreset.id, handleToggleMute, isBypassAll, isMuted, showMidiNotice, toggleEngine]);
+
+  // Connect MIDI Manager lifecycle
+  useEffect(() => {
+    midiManager.onAction = handleMidiAction;
+    midiManager.onActivity = () => {
+      setIsMidiActivity(true);
+      if (midiActivityTimeoutRef.current) clearTimeout(midiActivityTimeoutRef.current);
+      midiActivityTimeoutRef.current = setTimeout(() => setIsMidiActivity(false), 200);
+    };
+    midiManager.onDevicesChange = (devs) => {
+      setMidiDeviceCount(devs.length);
+    };
+
+    // Attempt non-blocking initialization of Web MIDI
+    midiManager.init().then(() => {
+      setMidiDeviceCount(midiManager.devices.length);
+      setMidiMappings([...midiManager.mappings]);
+    });
+
+    return () => {
+      midiManager.onAction = null;
+      midiManager.onActivity = null;
+      midiManager.onDevicesChange = null;
+      if (midiActivityTimeoutRef.current) clearTimeout(midiActivityTimeoutRef.current);
+    };
+  }, [handleMidiAction]);
+
+  // Keep midiMappings in sync when modal is opened/closed
+  useEffect(() => {
+    setMidiMappings([...midiManager.mappings]);
+  }, [isMidiModalOpen]);
+
   // Load Custom WAV IR
   const handleLoadCustomIrWav = async (buffer: ArrayBuffer, fileName: string) => {
     await audioEngine.loadCustomIrWav(buffer);
@@ -601,6 +846,9 @@ export default function App() {
         isBluetoothDetected={latencyReport.isBluetoothActive}
         onOpenEngineSettings={() => setIsLatencyInspectorOpen(true)}
         onMinimiseLatency={handleMinimiseLatency}
+        onOpenMidiSettings={() => setIsMidiModalOpen(true)}
+        midiDeviceCount={midiDeviceCount}
+        isMidiActivity={isMidiActivity}
       />
 
       {/* Main Studio Viewport */}
@@ -671,6 +919,8 @@ export default function App() {
           onOpenVstEditor={(pedal) => setVstEditorPedal(pedal)}
           isCollapsed={collapsedSections.pedalboard}
           onToggleCollapse={() => handleToggleSectionCollapse('pedalboard')}
+          midiMappings={midiMappings}
+          onOpenMidiSettings={() => setIsMidiModalOpen(true)}
         />
 
         {/* Amp & Cabinet Stage (NAM Modeler & IR Convolver) */}
@@ -722,6 +972,26 @@ export default function App() {
             </span>
           </div>
           <div className="flex items-center gap-3 font-mono">
+            <button
+              onClick={() => setIsMidiModalOpen(true)}
+              className="hover:text-amber-400 transition-colors flex items-center gap-1.5 text-neutral-300"
+              title="Click to open MIDI Controller settings & mapping console"
+            >
+              <Radio
+                size={11}
+                className={
+                  isMidiActivity
+                    ? 'text-amber-300 animate-ping'
+                    : midiDeviceCount > 0
+                    ? 'text-emerald-400'
+                    : 'text-neutral-500'
+                }
+              />
+              <span>
+                MIDI: <strong>{midiDeviceCount > 0 ? `${midiDeviceCount} Dev` : 'Enabled'}</strong> ({midiMappings.filter(m => m.enabled).length} Maps)
+              </span>
+            </button>
+            <span>·</span>
             <button
               onClick={() => setIsLatencyInspectorOpen(true)}
               className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
@@ -807,6 +1077,29 @@ export default function App() {
           audioEngine.setInputGain(val);
         }}
       />
+
+      {/* MIDI Controller Settings & Mapping Modal */}
+      <MidiSettingsModal
+        isOpen={isMidiModalOpen}
+        onClose={() => setIsMidiModalOpen(false)}
+        pedals={pedals}
+        presets={presets}
+        currentPreset={currentPreset}
+        masterVolume={masterVolume}
+        inputGain={inputGain}
+        isMuted={isMuted}
+        onSelectPreset={handleSelectPreset}
+        onUpdatePedal={handleUpdatePedal}
+        onToggleMute={handleToggleMute}
+      />
+
+      {/* Floating Real-Time MIDI Action Feedback Pill */}
+      {midiStatusNotice && (
+        <div className="fixed bottom-12 right-6 z-50 px-4 py-2 rounded-full bg-neutral-900/95 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-2xl flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-2">
+          <Radio size={14} className="text-amber-400 animate-pulse shrink-0" />
+          <span>{midiStatusNotice}</span>
+        </div>
+      )}
     </div>
   );
 }
