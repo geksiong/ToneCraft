@@ -57,13 +57,13 @@ export class ToneCraftEngine {
   // Web Audio Context
   public ctx: AudioContext | null = null;
   public isRunning: boolean = false;
-  public isRiffPlaying: boolean = true;
+  public isRiffPlaying: boolean = false;
 
   // Latency & Optimization Settings
   public latencySettings: AudioLatencySettings = {
     profile: 'ultra-low',
     sampleRateMode: 'native',
-    zeroLatencyCab: false,
+    zeroLatencyCab: true,
     zeroLookaheadLimiter: true,
     bypassOsVoiceProcessing: true,
     selectedInputDeviceId: '',
@@ -426,6 +426,7 @@ export class ToneCraftEngine {
 
   public async restartAudioContext(): Promise<void> {
     const wasRunning = this.isRunning;
+    const wasRiffPlaying = this.isRiffPlaying;
     const prevPedals = [...this.currentPedals];
     const prevNam = this.currentNamConfig;
     const prevCab = this.currentCabConfig;
@@ -437,7 +438,7 @@ export class ToneCraftEngine {
     if (prevPedals.length > 0) this.updatePedalboardChain(prevPedals);
     if (prevNam) this.updateNamModel(prevNam);
     if (prevCab) this.updateIrCabinet(prevCab);
-    await this.setInputSource(prevSource);
+    await this.setInputSource(prevSource, wasRiffPlaying);
 
     if (wasRunning && this.ctx?.state === 'suspended') {
       await this.ctx.resume();
@@ -504,7 +505,7 @@ export class ToneCraftEngine {
   // INPUT SOURCE MANAGEMENT (Mic / USB Audio Interface vs. Physical Riffs)
   // ==========================================================================
 
-  public async setInputSource(source: 'mic' | string): Promise<void> {
+  public async setInputSource(source: 'mic' | string, autoPlayRiff: boolean = false): Promise<void> {
     if (!this.ctx || !this.inputGainNode) return;
     this.currentInputSource = source;
 
@@ -575,7 +576,9 @@ export class ToneCraftEngine {
       }
     } else {
       this.currentInputDeviceLabel = '';
-      this.playSampleRiff(source);
+      if (autoPlayRiff) {
+        this.playSampleRiff(source);
+      }
       this.dispatchLatencyUpdate();
     }
   }

@@ -38,7 +38,7 @@ import {
   InputConditionerTelemetry
 } from './audio/inputConditioner';
 import { isNamModelProfile } from './audio/namModels';
-import { Music2 } from 'lucide-react';
+import { Music2, Power } from 'lucide-react';
 
 export default function App() {
   // Preset & Rig State
@@ -65,10 +65,10 @@ export default function App() {
   const [irCabinet, setIrCabinet] = useState<IrCabinetConfig>(currentPreset.irCabinet);
   const [bpm, setBpm] = useState<number>(currentPreset.bpm || 120);
 
-  // Engine & Audio State
+  // Engine & Audio State (OFF by default, riffs NOT playing)
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [inputSource, setInputSource] = useState<string>('riff-clean-funk');
-  const [isRiffPlaying, setIsRiffPlaying] = useState<boolean>(true);
+  const [isRiffPlaying, setIsRiffPlaying] = useState<boolean>(false);
   const [inputGain, setInputGain] = useState<number>(50);
   const [masterVolume, setMasterVolume] = useState<number>(85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -139,9 +139,19 @@ export default function App() {
   });
   const [isLearningNoiseFloor, setIsLearningNoiseFloor] = useState<boolean>(false);
 
-  // Engine Startup: builds the complete graph first, then activates audio source
+  // Engine Startup: builds the complete graph first with minimise latency profile active, without starting riffs
   const startAudioEngine = async () => {
     try {
+      // Ensure minimise latency profile is active when turning DSP ON
+      await audioEngine.updateLatencySettings({
+        profile: 'ultra-low',
+        sampleRateMode: 'native',
+        zeroLatencyCab: true,
+        zeroLookaheadLimiter: true,
+        bypassOsVoiceProcessing: true
+      });
+      setLatencySettings({ ...audioEngine.latencySettings });
+
       if (!audioEngine.ctx || audioEngine.ctx.state === 'closed') {
         await audioEngine.init();
         audioEngine.updatePedalboardChain(pedals);
@@ -150,17 +160,18 @@ export default function App() {
         audioEngine.setMasterGain(masterVolume);
         audioEngine.setInputGain(inputGain);
 
-        if (inputSource !== 'mic') {
-          audioEngine.playSampleRiff(inputSource);
-          setIsRiffPlaying(true);
-        } else {
+        if (inputSource === 'mic') {
           await audioEngine.setInputSource('mic');
+        } else {
+          // Do NOT start playing riffs automatically when turned on
+          audioEngine.stopSampleRiff();
+          setIsRiffPlaying(false);
         }
       } else {
         await audioEngine.resume();
-        if (inputSource !== 'mic') {
-          setIsRiffPlaying(true);
-        }
+        // Do NOT start playing riffs automatically when turned on
+        audioEngine.stopSampleRiff();
+        setIsRiffPlaying(false);
       }
 
       setIsRunning(true);
@@ -185,10 +196,14 @@ export default function App() {
 
   const handleRestartEngine = async () => {
     try {
+      const wasPlaying = isRiffPlaying;
       await audioEngine.restart();
       setIsRunning(true);
-      if (inputSource !== 'mic') {
+      if (inputSource !== 'mic' && wasPlaying) {
+        audioEngine.playSampleRiff(inputSource);
         setIsRiffPlaying(true);
+      } else {
+        setIsRiffPlaying(false);
       }
     } catch (err) {
       console.error('Failed to restart audio engine:', err);
@@ -199,6 +214,8 @@ export default function App() {
   const handleToggleRiffPlaying = async () => {
     if (!isRunning) {
       await startAudioEngine();
+      audioEngine.playSampleRiff(inputSource === 'mic' ? 'riff-clean-funk' : inputSource);
+      setIsRiffPlaying(true);
       return;
     }
     const playing = audioEngine.toggleSampleRiff();
@@ -354,11 +371,14 @@ export default function App() {
   const handleSelectInputSource = async (src: string) => {
     setInputSource(src);
     if (!isRunning) {
-      await startAudioEngine();
+      audioEngine.currentInputSource = src;
+      return;
     }
-    await audioEngine.setInputSource(src);
-    if (src !== 'mic') {
-      setIsRiffPlaying(true);
+    await audioEngine.setInputSource(src, false);
+    if (src !== 'mic' && isRiffPlaying) {
+      audioEngine.playSampleRiff(src);
+    } else if (src === 'mic') {
+      setIsRiffPlaying(false);
     }
   };
 
@@ -506,6 +526,7 @@ export default function App() {
         isBluetoothDetected={latencyReport.isBluetoothActive}
         onOpenInputConditioner={() => setIsInputConditionerOpen(true)}
         conditionerEnabled={conditionerConfig.enabled && (conditionerConfig.gateEnabled || conditionerConfig.highCutEnabled)}
+        gateEnabled={conditionerConfig.enabled && conditionerConfig.gateEnabled}
         gateState={conditionerTelemetry.gateState}
         conditionerHighCut={conditionerConfig.enabled && conditionerConfig.highCutEnabled}
         highPitchNoiseDetected={conditionerTelemetry.highPitchNoiseDetected}
@@ -515,28 +536,30 @@ export default function App() {
 
       {/* Main Studio Viewport */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
-        {/* Startup banner for first click */}
+        {/* Startup banner when DSP is OFF */}
         {!isRunning && (
-          <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-neutral-900 to-sky-500/20 border border-amber-500/30 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+          <div className="mb-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-neutral-900 to-amber-500/15 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-4 shadow-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500 text-black flex items-center justify-center font-bold">
-                <Music2 size={20} />
+              <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 text-emerald-400 flex items-center justify-center font-bold">
+                <Power size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
-                  Audio Engine Ready - Click to Hear Tone
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>DSP is currently OFF</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-neutral-800 text-neutral-400 border border-neutral-700">STANDBY</span>
                 </h3>
                 <p className="text-xs text-neutral-300">
-                  Click &ldquo;Start Engine &amp; Play Riff&rdquo; to begin real-time modeling with real TONE3000 WASM NAM neural inference and HD AudioWorklets.
+                  Switch the DSP power button ON to begin real-time modeling with minimized latency, neural amp models, and studio DSP worklets.
                 </p>
               </div>
             </div>
 
             <button
               onClick={startAudioEngine}
-              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-amber-500/25 active:scale-95 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/25 active:scale-95 flex items-center gap-2"
             >
-              <span>Start Engine &amp; Play Riff</span>
+              <Power size={14} className="fill-black" />
+              <span>Turn DSP ON</span>
             </button>
           </div>
         )}

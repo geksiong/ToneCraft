@@ -50,7 +50,7 @@ export interface InputConditionerTelemetry {
 
 export const DEFAULT_INPUT_CONDITIONER_CONFIG: InputConditionerConfig = {
   enabled: true,
-  gateEnabled: true,
+  gateEnabled: false,
   gateThreshold: -46,
   gateAttackMs: 6,
   gateHoldMs: 25,

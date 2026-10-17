@@ -15,7 +15,8 @@ import {
   Zap,
   AlertTriangle,
   ShieldAlert,
-  RotateCcw
+  RotateCcw,
+  Power
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -50,6 +51,7 @@ interface HeaderProps {
   isBluetoothDetected?: boolean;
   onOpenInputConditioner?: () => void;
   conditionerEnabled?: boolean;
+  gateEnabled?: boolean;
   gateState?: 'open' | 'hold' | 'closed';
   conditionerHighCut?: boolean;
   highPitchNoiseDetected?: boolean;
@@ -89,6 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
   isBluetoothDetected,
   onOpenInputConditioner,
   conditionerEnabled,
+  gateEnabled = false,
   gateState,
   conditionerHighCut,
   highPitchNoiseDetected,
@@ -127,25 +130,33 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-800 shadow-xl px-4 py-2.5">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-        {/* Brand & Main Power Switch */}
+        {/* Brand & Main Power Switch (ON/OFF) */}
         <div className="flex items-center gap-3">
           <button
             onClick={onToggleEngine}
-            className={`w-[124px] justify-center flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border shrink-0 ${
+            className={`w-[114px] sm:w-[120px] justify-center flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all border shrink-0 ${
               isRunning
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-sm'
-                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm hover:bg-emerald-500/25'
+                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
             }`}
-            title={isRunning ? 'Audio Engine is Active (Click to Switch DSP OFF)' : 'Click to Start DSP Audio Processing'}
+            title={isRunning ? 'DSP is ON (Click to turn OFF)' : 'DSP is OFF (Click to turn ON)'}
           >
+            <Power
+              size={13}
+              className={`shrink-0 transition-colors ${
+                isRunning ? 'text-emerald-400' : 'text-neutral-500'
+              }`}
+            />
             <div
-              className={`w-2.5 h-2.5 rounded-full transition-all shrink-0 ${
+              className={`w-2 h-2 rounded-full transition-all shrink-0 ${
                 isRunning
-                  ? 'bg-amber-400 led-glow-amber animate-pulse'
+                  ? 'bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse'
                   : 'bg-neutral-700'
               }`}
             />
-            <span className="font-mono w-[72px] text-center inline-block">{isRunning ? 'DSP ONLINE' : 'START DSP'}</span>
+            <span className="font-mono w-[64px] text-center inline-block">
+              {isRunning ? 'DSP: ON' : 'DSP: OFF'}
+            </span>
           </button>
 
           {isRunning && onRestartEngine && (
@@ -290,15 +301,19 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenInputConditioner}
               className={`min-w-[96px] sm:min-w-[155px] justify-center flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-mono font-bold transition-all shrink-0 ${
-                conditionerEnabled
+                gateEnabled
                   ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
-                  : 'bg-neutral-800 border-neutral-700 text-neutral-400 hover:text-white'
+                  : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
               }`}
-              title="Studio Mic Conditioner: Dynamic Noise Gate, De-Hiss High-Cut Filter, and Anti-Whine Notch"
+              title={
+                gateEnabled
+                  ? 'Studio Mic Conditioner: Dynamic Noise Gate ACTIVE'
+                  : 'Studio Mic Conditioner: Dynamic Noise Gate is OFF (Click to configure)'
+              }
             >
               <div
                 className={`w-2 h-2 rounded-full transition-all shrink-0 ${
-                  !conditionerEnabled
+                  !gateEnabled
                     ? 'bg-neutral-600'
                     : gateState === 'open'
                     ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]'
@@ -307,8 +322,12 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'bg-amber-400 shadow-[0_0_6px_#fbbf24]'
                 }`}
               />
-              <span className="hidden sm:inline-block w-24 text-center">GATE &amp; FILTER</span>
-              <span className="sm:hidden inline-block w-12 text-center">GATE</span>
+              <span className="hidden sm:inline-block w-24 text-center">
+                {gateEnabled ? 'GATE & FILTER' : 'GATE: OFF'}
+              </span>
+              <span className="sm:hidden inline-block w-12 text-center">
+                {gateEnabled ? 'GATE' : 'GATE OFF'}
+              </span>
               {conditionerHighCut && (
                 <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 hidden md:inline">
                   DE-HISS
@@ -370,14 +389,31 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Quick Latency Minimizer Turbo Button with constant width */}
-          {onMinimiseLatency && !isTurboActive && (
+          {onMinimiseLatency && (
             <button
               onClick={onMinimiseLatency}
-              className="w-28 justify-center flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-mono font-bold transition-all shadow-xs group shrink-0"
-              title="Click to instantly activate Turbo Low-Latency profile (bypasses OS speech queues, sets 0 buffer hint, eliminates resamplers)"
+              className={`w-28 justify-center flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all shadow-xs group shrink-0 ${
+                isTurboActive
+                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20'
+                  : 'border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300'
+              }`}
+              title={
+                isTurboActive
+                  ? 'Turbo Low-Latency Active (0 buffer quantum, native DAC clock, zero-latency cab, OS audio queue bypass)'
+                  : 'Click to instantly activate Turbo Low-Latency profile'
+              }
             >
-              <Zap size={13} className="text-amber-400 fill-amber-400 group-hover:scale-110 transition-transform shrink-0" />
-              <span className="w-18 text-center inline-block">MINIMISE</span>
+              <Zap
+                size={13}
+                className={`shrink-0 ${
+                  isTurboActive
+                    ? 'text-emerald-400 fill-emerald-400'
+                    : 'text-amber-400 fill-amber-400 group-hover:scale-110 transition-transform'
+                }`}
+              />
+              <span className="w-18 text-center inline-block">
+                {isTurboActive ? 'MINIMISED' : 'MINIMISE'}
+              </span>
             </button>
           )}
 

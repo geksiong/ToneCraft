@@ -218,7 +218,9 @@ export const InputConditionerModal: React.FC<InputConditionerModalProps> = ({
               ) : (
                 <div className="w-full flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neutral-950/40 border border-neutral-800/60 text-neutral-400 text-xs">
                   <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                  <span className="text-neutral-300 text-[11px]">Input frequencies clean · Anti-whine notch and click-free noise gate active.</span>
+                  <span className="text-neutral-300 text-[11px]">
+                    {config.gateEnabled ? 'Input frequencies clean · Dynamic noise gate active.' : 'Dynamic noise gate is OFF (bypassed) · Transparent signal pass.'}
+                  </span>
                 </div>
               )}
             </div>
