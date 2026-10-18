@@ -103,6 +103,8 @@ export class InputConditionerEngine {
 
   // Telemetry callback
   public onTelemetry: ((stats: InputConditionerTelemetry) => void) | null = null;
+  private lastTelemetryTime: number = 0;
+  private lastReportedGateState: 'open' | 'hold' | 'closed' = 'open';
 
   constructor() {}
 
@@ -362,8 +364,12 @@ export class InputConditionerEngine {
         console.warn('Error in gate automation loop:', gateErr);
       }
 
-      // 5. Emit Telemetry
-      if (this.onTelemetry) {
+      // 5. Emit Telemetry (throttled to ~80ms or immediately on gateState transitions to avoid React 60fps churn)
+      const nowMs = performance.now();
+      const stateTransition = this.gateState !== this.lastReportedGateState;
+      if (this.onTelemetry && (stateTransition || nowMs - this.lastTelemetryTime >= 80)) {
+        this.lastTelemetryTime = nowMs;
+        this.lastReportedGateState = this.gateState;
         this.onTelemetry({
           inputDb: Math.round(inputDb),
           reductionDb: Math.round(this.currentReductionDb),

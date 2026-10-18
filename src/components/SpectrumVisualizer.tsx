@@ -22,18 +22,39 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({ isRunnin
     let freqData = new Uint8Array(256);
     let timeData = new Uint8Array(256);
     let idlePhase = 0;
+    let lastIdleFrameTime = 0;
 
-    const draw = () => {
+    // Use ResizeObserver instead of getBoundingClientRect() inside requestAnimationFrame
+    // to prevent forced synchronous layout / reflow thrashing on every frame.
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const rect = entry.contentRect;
+        const targetWidth = Math.max(300, Math.floor((rect.width || 480) * dpr));
+        const targetHeight = Math.max(60, Math.floor((rect.height || 90) * dpr));
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+        }
+      }
+    });
+    resizeObserver.observe(canvas);
+
+    const draw = (now: number) => {
       animId = requestAnimationFrame(draw);
 
-      // Adapt canvas internal pixel resolution to client bounds for sharp rendering
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const targetWidth = Math.max(300, Math.floor((rect.width || 480) * dpr));
-      const targetHeight = Math.max(60, Math.floor((rect.height || 90) * dpr));
-      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
+      const analyser = audioEngine.analyserNode;
+      const currentMode = modeRef.current;
+      const isAudioActive = Boolean(
+        analyser && audioEngine.ctx && audioEngine.ctx.state === 'running'
+      );
+
+      // In idle standby mode, throttle frame rate to ~20 fps (every 50ms) to save CPU
+      if (!isAudioActive) {
+        if (now - lastIdleFrameTime < 50) {
+          return;
+        }
+        lastIdleFrameTime = now;
       }
 
       const width = canvas.width;
@@ -60,13 +81,6 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({ isRunnin
         ctx.lineTo(width, y);
         ctx.stroke();
       }
-
-      // Dynamically query analyserNode on every frame so visualization starts immediately
-      const analyser = audioEngine.analyserNode;
-      const currentMode = modeRef.current;
-      const isAudioActive = Boolean(
-        analyser && audioEngine.ctx && audioEngine.ctx.state === 'running'
-      );
 
       if (isAudioActive && analyser) {
         const bufferLength = analyser.frequencyBinCount;
@@ -126,7 +140,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({ isRunnin
         }
       } else {
         // Standby idle phosphor baseline
-        idlePhase += 0.03;
+        idlePhase += 0.05;
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
         ctx.shadowColor = 'rgba(56, 189, 248, 0.5)';
@@ -144,10 +158,11 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({ isRunnin
       }
     };
 
-    draw();
+    animId = requestAnimationFrame(draw);
 
     return () => {
       cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
     };
   }, []);
 

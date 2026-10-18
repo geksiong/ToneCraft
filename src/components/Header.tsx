@@ -13,7 +13,8 @@ import {
   Cpu,
   Speaker,
   RotateCcw,
-  Radio
+  Radio,
+  Settings
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -38,16 +39,17 @@ interface HeaderProps {
   currentPreset: Preset;
   presets: Preset[];
   onSelectPreset: (preset: Preset) => void;
-  onOpenPresetLibrary: () => void;
+  onOpenPresetLibrary?: () => void;
   availableOutputDevices: { deviceId: string; label: string; isBluetooth: boolean }[];
   selectedOutputDeviceId: string;
   onSelectOutputDevice: (deviceId: string) => void;
   latencyMs?: number;
   isTurboActive?: boolean;
   isBluetoothDetected?: boolean;
-  onOpenEngineSettings: () => void;
+  onOpenEngineSettings?: () => void;
   onMinimiseLatency?: () => Promise<void>;
   onOpenMidiSettings?: () => void;
+  onOpenSettings?: (tab?: 'input' | 'engine' | 'midi' | 'presets') => void;
   midiDeviceCount?: number;
   isMidiActivity?: boolean;
 }
@@ -81,6 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
   isBluetoothDetected,
   onOpenEngineSettings,
   onOpenMidiSettings,
+  onOpenSettings,
   midiDeviceCount = 0,
   isMidiActivity = false
 }) => {
@@ -310,22 +313,12 @@ export const Header: React.FC<HeaderProps> = ({
                 />
                 <span>{gateEnabled ? 'Gate: ON' : 'Gate: OFF'}</span>
               </button>
-
-              {/* 4. Input Settings Button */}
-              <button
-                onClick={onOpenInputConditioner}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-colors shrink-0 font-medium"
-                title="Configure Studio Input Conditioner: Gate Threshold, De-Hiss Filter, Whine Killer & Noise Floor Learning"
-              >
-                <Sliders size={12} className="text-amber-400 shrink-0" />
-                <span>Input Settings</span>
-              </button>
             </div>
 
             {/* ============================================================== */}
             {/* ROW 2: DSP CONTROLS                                           */}
-            {/* Rig (Preset & Cloud Hub), Output Source, Latency Display,     */}
-            {/* Engine Settings                                               */}
+            {/* Rig (Preset Selector), Output Source, Latency Display,        */}
+            {/* Unified Settings, MIDI Hardware                               */}
             {/* ============================================================== */}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               {/* Group Label */}
@@ -334,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>DSP:</span>
               </div>
 
-              {/* 1. Rig (Preset Selector & Cloud Hub) */}
+              {/* 1. Rig (Preset Selector) */}
               <div className="flex items-center gap-1.5 bg-neutral-900/90 border border-neutral-800 rounded-lg px-2 py-1 shrink-0">
                 <span className="text-[10px] font-mono text-neutral-400 uppercase shrink-0">Rig:</span>
                 <select
@@ -343,7 +336,7 @@ export const Header: React.FC<HeaderProps> = ({
                     const found = presets.find((p) => p.id === e.target.value);
                     if (found) onSelectPreset(found);
                   }}
-                  className="bg-transparent text-xs font-semibold text-neutral-200 focus:outline-none w-32 sm:w-44 truncate cursor-pointer"
+                  className="bg-transparent text-xs font-semibold text-neutral-200 focus:outline-none w-36 sm:w-48 truncate cursor-pointer"
                   title="Select Guitar Rig Preset"
                 >
                   {presets.map((p) => (
@@ -352,15 +345,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </option>
                   ))}
                 </select>
-
-                <button
-                  onClick={onOpenPresetLibrary}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold transition-colors ml-1 shrink-0"
-                  title="Browse & Share Cloud Preset Library"
-                >
-                  <Globe size={11} className="shrink-0" />
-                  <span>Cloud Hub</span>
-                </button>
               </div>
 
               {/* 2. Output Source (Strictly ONE single default option + detected hardware devices) */}
@@ -388,13 +372,13 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* 3. Latency Display (Clickable for Minimise / Inspector) */}
               <button
-                onClick={onOpenEngineSettings}
+                onClick={() => (onOpenSettings ? onOpenSettings('engine') : onOpenEngineSettings?.())}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-xs transition-all shrink-0 ${
                   isTurboActive
                     ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300'
                     : 'border-neutral-800 bg-neutral-900/90 hover:bg-neutral-800 text-neutral-300'
                 }`}
-                title="Audio Latency Display. Click to inspect hardware latency."
+                title="Audio Latency Display. Click to inspect hardware latency in Settings."
               >
                 <Activity
                   size={12}
@@ -423,58 +407,30 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Bluetooth Alert (if high latency wireless active) */}
               {isBluetoothDetected && (
                 <button
-                  onClick={onOpenEngineSettings}
+                  onClick={() => (onOpenSettings ? onOpenSettings('engine') : onOpenEngineSettings?.())}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg border border-rose-500/50 bg-rose-500/15 text-rose-300 text-xs font-mono font-bold animate-pulse shrink-0"
-                  title="Bluetooth wireless audio detected (+150ms delay). Click to switch to wired output."
+                  title="Bluetooth wireless audio detected (+150ms delay). Click to switch to wired output in Settings."
                 >
                   <AlertTriangle size={12} className="text-rose-400 shrink-0" />
                   <span>BT (+150ms)</span>
                 </button>
               )}
 
-              {/* 4. Engine Settings Button */}
+              {/* 4. Unified Settings Button (Input, DSP Engine, MIDI, Cloud Presets) */}
               <button
-                onClick={onOpenEngineSettings}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition-colors shrink-0 font-medium"
-                title="Configure DSP Engine Settings: HD AudioWorklet Core, WASM NAM Modeler, Buffer Quantum & Resampling"
+                onClick={() => (onOpenSettings ? onOpenSettings() : undefined)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-amber-500/40 text-neutral-200 hover:text-white transition-colors shrink-0 font-medium"
+                title="ToneCraft Studio Settings: Input Conditioner & Noise Gate, DSP Engine & Latency, MIDI Hardware, and Cloud Preset Hub"
               >
-                <Cpu size={12} className="text-emerald-400 shrink-0" />
-                <span>Engine Settings</span>
-              </button>
-
-              {/* 5. MIDI Hardware Controller Button */}
-              {onOpenMidiSettings && (
-                <button
-                  onClick={onOpenMidiSettings}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all shrink-0 ${
-                    isMidiActivity
-                      ? 'bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_8px_rgba(245,158,11,0.5)] ring-1 ring-amber-400/50'
-                      : midiDeviceCount > 0
-                      ? 'bg-neutral-900 border-amber-500/40 text-amber-300 hover:bg-neutral-800'
-                      : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-300 hover:text-white'
-                  }`}
-                  title={
-                    midiDeviceCount > 0
-                      ? `MIDI Controller connected (${midiDeviceCount} active). Click to configure mappings & MIDI learn.`
-                      : 'Configure MIDI Controllers & mappings (foot switches, expression pedals, knobs).'
-                  }
-                >
-                  <Radio
-                    size={12}
-                    className={`shrink-0 ${
-                      isMidiActivity
-                        ? 'text-amber-300 animate-ping'
-                        : midiDeviceCount > 0
-                        ? 'text-amber-400'
-                        : 'text-neutral-400'
-                    }`}
+                <Settings size={12} className="text-amber-400 shrink-0" />
+                <span>Settings</span>
+                {midiDeviceCount > 0 && (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${isMidiActivity ? 'bg-amber-300 animate-ping' : 'bg-emerald-400'}`}
+                    title={`MIDI Controller active (${midiDeviceCount} connected)`}
                   />
-                  <span>MIDI</span>
-                  {midiDeviceCount > 0 ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  ) : null}
-                </button>
-              )}
+                )}
+              </button>
 
               {/* Quick Reboot Audio Engine (if running) */}
               {isRunning && onRestartEngine && (

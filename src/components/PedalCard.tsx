@@ -246,18 +246,20 @@ function renderPedalControls(
   slotIndex?: number,
   midiMappings?: MidiMapping[]
 ) {
-  const getKnobBadge = (paramKey: string) => {
-    if (slotIndex === undefined || !midiMappings) return undefined;
-    const m = midiMappings.find(
-      (item) =>
-        item.enabled &&
-        item.target.type === 'pedal_param' &&
-        item.target.slotIndex === slotIndex &&
-        item.target.paramKey === paramKey
-    );
-    if (!m) return undefined;
-    return m.commandType === 'cc' ? `CC ${m.controlNumber}` : `${m.commandType.toUpperCase()} ${m.controlNumber}`;
-  };
+  // O(1) param lookup map to eliminate linear array searches across 40 mappings for every knob
+  const paramMap = new Map<string, string>();
+  if (slotIndex !== undefined && midiMappings) {
+    for (let i = 0; i < midiMappings.length; i++) {
+      const item = midiMappings[i];
+      if (item.enabled && item.target.type === 'pedal_param' && item.target.slotIndex === slotIndex) {
+        paramMap.set(
+          item.target.paramKey,
+          item.commandType === 'cc' ? `CC ${item.controlNumber}` : `${item.commandType.toUpperCase()} ${item.controlNumber}`
+        );
+      }
+    }
+  }
+  const getKnobBadge = (paramKey: string) => paramMap.get(paramKey);
 
   switch (pedal.type) {
     case 'overdrive': {

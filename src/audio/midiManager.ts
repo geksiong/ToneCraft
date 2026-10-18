@@ -53,14 +53,35 @@ export class MidiManager {
   // MIDI Learn state
   public learningMappingId: string | null = null;
 
-  // Callbacks
+  // Multi-subscriber callbacks (prevents clobbering between App and Settings modal)
+  private activityListeners: Set<MidiActivityCallback> = new Set();
+  private devicesChangeListeners: Set<MidiDevicesChangeCallback> = new Set();
+
   public onAction: MidiActionCallback | null = null;
-  public onActivity: MidiActivityCallback | null = null;
-  public onDevicesChange: MidiDevicesChangeCallback | null = null;
   public onLearnCaptured: MidiLearnCallback | null = null;
+
+  // Backwards-compatible single callback setters
+  public set onActivity(cb: MidiActivityCallback | null) {
+    this._legacyOnActivity = cb;
+  }
+  public get onActivity(): MidiActivityCallback | null {
+    return this._legacyOnActivity;
+  }
+  private _legacyOnActivity: MidiActivityCallback | null = null;
+
+  public set onDevicesChange(cb: MidiDevicesChangeCallback | null) {
+    this._legacyOnDevicesChange = cb;
+  }
+  public get onDevicesChange(): MidiDevicesChangeCallback | null {
+    return this._legacyOnDevicesChange;
+  }
+  private _legacyOnDevicesChange: MidiDevicesChangeCallback | null = null;
 
   private midiAccess: any = null;
   private boundInputs: Set<string> = new Set();
+  private initPromise: Promise<boolean> | null = null;
+  private stateChangeTimeout: any = null;
+  private lastActivityEmitTime: number = 0;
 
   private constructor() {
     this.mappings = getStoredMidiMappings();
@@ -74,35 +95,68 @@ export class MidiManager {
     return MidiManager.instance;
   }
 
+  public subscribeActivity(cb: MidiActivityCallback): () => void {
+    this.activityListeners.add(cb);
+    return () => {
+      this.activityListeners.delete(cb);
+    };
+  }
+
+  public subscribeDevices(cb: MidiDevicesChangeCallback): () => void {
+    this.devicesChangeListeners.add(cb);
+    return () => {
+      this.devicesChangeListeners.delete(cb);
+    };
+  }
+
   /**
-   * Request Web MIDI access from the browser and attach event listeners
+   * Request Web MIDI access from the browser and attach event listeners safely
    */
   public async init(): Promise<boolean> {
+    if (this.isConnected && this.midiAccess) {
+      return true;
+    }
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    this.initPromise = this.performInit();
+    return this.initPromise;
+  }
+
+  private async performInit(): Promise<boolean> {
     if (!this.isSupported) {
       this.permissionState = 'unsupported';
-      console.warn('Web MIDI API is not supported in this browser environment.');
       return false;
     }
 
     try {
-      // Prompt user or query permissions
-      const access = await (navigator as any).requestMIDIAccess({ sysex: false, software: true });
+      // Standard W3C Web MIDI API request with 2000ms safety timeout race.
+      // Prevents Chromium from hanging or freezing renderer process in iframes if permission dialog blocks
+      const requestPromise = (navigator as any).requestMIDIAccess({ sysex: false });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Web MIDI request timed out')), 2000)
+      );
+      const access = await Promise.race([requestPromise, timeoutPromise]);
       this.midiAccess = access;
       this.permissionState = 'granted';
       this.isConnected = true;
 
       this.refreshDevices();
 
-      // Listen for hot-plugging / unplugging MIDI controllers
-      access.onstatechange = (e: any) => {
-        this.refreshDevices();
+      // Debounce hot-plugging / state changes to avoid event floods when ports open
+      access.onstatechange = () => {
+        if (this.stateChangeTimeout) clearTimeout(this.stateChangeTimeout);
+        this.stateChangeTimeout = setTimeout(() => {
+          this.refreshDevices();
+        }, 200);
       };
 
       return true;
     } catch (err: any) {
-      console.warn('Web MIDI access request failed or was denied:', err);
       this.permissionState = 'denied';
       this.isConnected = false;
+      this.initPromise = null;
       return false;
     }
   }
@@ -112,8 +166,10 @@ export class MidiManager {
    */
   public refreshDevices(): MidiDevice[] {
     if (!this.midiAccess) {
-      this.devices = [];
-      if (this.onDevicesChange) this.onDevicesChange(this.devices);
+      if (this.devices.length > 0) {
+        this.devices = [];
+        this.notifyDevicesChange(this.devices);
+      }
       return [];
     }
 
@@ -136,11 +192,29 @@ export class MidiManager {
       }
     }
 
-    this.devices = deviceList;
-    if (this.onDevicesChange) {
-      this.onDevicesChange(this.devices);
+    // Only notify if device list actually changed to prevent render loops
+    const hasChanged =
+      deviceList.length !== this.devices.length ||
+      deviceList.some((d, idx) => {
+        const prev = this.devices[idx];
+        return !prev || prev.id !== d.id || prev.state !== d.state || prev.connection !== d.connection;
+      });
+
+    if (hasChanged) {
+      this.devices = deviceList;
+      this.notifyDevicesChange(this.devices);
     }
-    return deviceList;
+
+    return this.devices;
+  }
+
+  private notifyDevicesChange(devices: MidiDevice[]): void {
+    if (this._legacyOnDevicesChange) {
+      this._legacyOnDevicesChange(devices);
+    }
+    this.devicesChangeListeners.forEach(cb => {
+      try { cb(devices); } catch {}
+    });
   }
 
   /**
@@ -151,6 +225,14 @@ export class MidiManager {
     if (!data || data.length < 1) return;
 
     const status = data[0];
+
+    // CRITICAL: Filter out System Real-Time messages (0xF8 - 0xFF) and System Common (0xF0 - 0xF7).
+    // Hardware MIDI controllers and DAWs send 0xF8 (Timing Clock) 24 times/quarter note (~48-100/sec)
+    // and 0xFE (Active Sensing) every 300ms. Treating these as events pegs CPU at 100%.
+    if (status >= 0xF0) {
+      return;
+    }
+
     const msgType = status & 0xF0;
     const channel = (status & 0x0F) + 1; // 1-16
 
@@ -224,9 +306,11 @@ export class MidiManager {
     // Store in live history
     this.liveMessages = [liveMsg, ...this.liveMessages.slice(0, this.maxLiveHistory - 1)];
 
-    // Notify activity listeners (LEDs, visualizers)
-    if (this.onActivity) {
-      this.onActivity(liveMsg);
+    // Notify activity listeners with ~80ms throttle to prevent UI thread lockup on continuous CC sweeps
+    const now = performance.now();
+    if (now - this.lastActivityEmitTime >= 80 || type === 'noteOn' || type === 'pc') {
+      this.lastActivityEmitTime = now;
+      this.notifyActivity(liveMsg);
     }
 
     // Check if MIDI Learn is actively waiting for an input
@@ -248,6 +332,15 @@ export class MidiManager {
 
     // Process matching action mappings
     this.dispatchMappedActions(liveMsg, commandType);
+  }
+
+  private notifyActivity(msg: MidiLiveMessage): void {
+    if (this._legacyOnActivity) {
+      this._legacyOnActivity(msg);
+    }
+    this.activityListeners.forEach(cb => {
+      try { cb(msg); } catch {}
+    });
   }
 
   /**

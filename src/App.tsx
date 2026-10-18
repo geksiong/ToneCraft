@@ -27,12 +27,9 @@ import { AmpCabSection } from './components/AmpCabSection';
 import { LooperPedal } from './components/LooperPedal';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { TunerModal } from './components/TunerModal';
-import { PresetLibraryModal } from './components/PresetLibraryModal';
 import { AddPedalModal } from './components/AddPedalModal';
 import { VstEditorModal } from './components/VstEditorModal';
-import { LatencyInspectorModal } from './components/LatencyInspectorModal';
-import { InputConditionerModal } from './components/InputConditionerModal';
-import { MidiSettingsModal } from './components/MidiSettingsModal';
+import { SettingsModal, SettingsModalTab } from './components/SettingsModal';
 import { midiManager } from './audio/midiManager';
 import { MidiActionTarget, MidiMapping } from './types/midi';
 import { calculateSignalChainLatency, SignalChainLatencyReport } from './audio/latencyTracker';
@@ -96,7 +93,14 @@ export default function App() {
       ampEngineMode: 'wasm-nam'
     })
   );
-  const [isLatencyInspectorOpen, setIsLatencyInspectorOpen] = useState<boolean>(false);
+  // Unified Settings Modal State
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsModalTab>('input');
+
+  const handleOpenSettings = (tab: SettingsModalTab = 'input') => {
+    setSettingsTab(tab);
+    setIsSettingsOpen(true);
+  };
   const [namStatus, setNamStatus] = useState<NamEngineStatus | null>(null);
 
   // Measurements
@@ -125,10 +129,8 @@ export default function App() {
 
   // Modals
   const [isTunerOpen, setIsTunerOpen] = useState<boolean>(false);
-  const [isPresetLibraryOpen, setIsPresetLibraryOpen] = useState<boolean>(false);
   const [isAddPedalOpen, setIsAddPedalOpen] = useState<boolean>(false);
   const [vstEditorPedal, setVstEditorPedal] = useState<VstPluginPedal | null>(null);
-  const [isMidiModalOpen, setIsMidiModalOpen] = useState<boolean>(false);
 
   // MIDI Controller & Hardware State
   const [midiDeviceCount, setMidiDeviceCount] = useState<number>(() => midiManager.devices.length);
@@ -137,6 +139,7 @@ export default function App() {
   const [midiStatusNotice, setMidiStatusNotice] = useState<string | null>(null);
 
   const midiActivityTimeoutRef = useRef<any>(null);
+  const isMidiActiveRef = useRef<boolean>(false);
   const tapTimesRef = useRef<number[]>([]);
   const midiNoticeTimeoutRef = useRef<any>(null);
 
@@ -147,7 +150,6 @@ export default function App() {
   }, []);
 
   // Input Conditioner State (Noise Gate & Anti-Whine Filter)
-  const [isInputConditionerOpen, setIsInputConditionerOpen] = useState<boolean>(false);
   const [conditionerConfig, setConditionerConfig] = useState<InputConditionerConfig>(() => ({
     ...audioEngine.getInputConditionerConfig(),
     gateEnabled: false
@@ -769,36 +771,48 @@ export default function App() {
     }
   }, [currentPreset.id, handleToggleMute, isBypassAll, isMuted, showMidiNotice, toggleEngine]);
 
-  // Connect MIDI Manager lifecycle
+  const handleMidiActionRef = useRef(handleMidiAction);
+  handleMidiActionRef.current = handleMidiAction;
+
+  // Connect MIDI Manager lifecycle ONCE on mount (empty dependency array prevents re-render loop)
   useEffect(() => {
-    midiManager.onAction = handleMidiAction;
-    midiManager.onActivity = () => {
-      setIsMidiActivity(true);
-      if (midiActivityTimeoutRef.current) clearTimeout(midiActivityTimeoutRef.current);
-      midiActivityTimeoutRef.current = setTimeout(() => setIsMidiActivity(false), 200);
-    };
-    midiManager.onDevicesChange = (devs) => {
-      setMidiDeviceCount(devs.length);
+    midiManager.onAction = (target, val, raw) => {
+      handleMidiActionRef.current?.(target, val, raw);
     };
 
-    // Attempt non-blocking initialization of Web MIDI
+    const unsubActivity = midiManager.subscribeActivity(() => {
+      if (!isMidiActiveRef.current) {
+        isMidiActiveRef.current = true;
+        setIsMidiActivity(true);
+      }
+      if (midiActivityTimeoutRef.current) clearTimeout(midiActivityTimeoutRef.current);
+      midiActivityTimeoutRef.current = setTimeout(() => {
+        isMidiActiveRef.current = false;
+        setIsMidiActivity(false);
+      }, 250);
+    });
+
+    const unsubDevices = midiManager.subscribeDevices((devs) => {
+      setMidiDeviceCount(prev => (prev === devs.length ? prev : devs.length));
+    });
+
+    // Attempt non-blocking initialization of Web MIDI once on startup
     midiManager.init().then(() => {
-      setMidiDeviceCount(midiManager.devices.length);
-      setMidiMappings([...midiManager.mappings]);
+      setMidiDeviceCount(prev => (prev === midiManager.devices.length ? prev : midiManager.devices.length));
     });
 
     return () => {
       midiManager.onAction = null;
-      midiManager.onActivity = null;
-      midiManager.onDevicesChange = null;
+      unsubActivity();
+      unsubDevices();
       if (midiActivityTimeoutRef.current) clearTimeout(midiActivityTimeoutRef.current);
     };
-  }, [handleMidiAction]);
+  }, []);
 
   // Keep midiMappings in sync when modal is opened/closed
   useEffect(() => {
     setMidiMappings([...midiManager.mappings]);
-  }, [isMidiModalOpen]);
+  }, [isSettingsOpen]);
 
   // Load Custom WAV IR
   const handleLoadCustomIrWav = async (buffer: ArrayBuffer, fileName: string) => {
@@ -825,13 +839,13 @@ export default function App() {
         gateEnabled={conditionerConfig.gateEnabled}
         onToggleGate={handleToggleGate}
         gateState={conditionerTelemetry.gateState}
-        onOpenInputConditioner={() => setIsInputConditionerOpen(true)}
+        onOpenInputConditioner={() => handleOpenSettings('input')}
         isRiffPlaying={isRiffPlaying}
         onToggleRiffPlaying={handleToggleRiffPlaying}
         currentPreset={currentPreset}
         presets={presets}
         onSelectPreset={handleSelectPreset}
-        onOpenPresetLibrary={() => setIsPresetLibraryOpen(true)}
+        onOpenPresetLibrary={() => handleOpenSettings('presets')}
         availableOutputDevices={availableOutputDevices}
         selectedOutputDeviceId={latencySettings.selectedOutputDeviceId}
         onSelectOutputDevice={handleSelectOutputDevice}
@@ -844,9 +858,10 @@ export default function App() {
           latencySettings.bypassOsVoiceProcessing
         }
         isBluetoothDetected={latencyReport.isBluetoothActive}
-        onOpenEngineSettings={() => setIsLatencyInspectorOpen(true)}
+        onOpenEngineSettings={() => handleOpenSettings('engine')}
         onMinimiseLatency={handleMinimiseLatency}
-        onOpenMidiSettings={() => setIsMidiModalOpen(true)}
+        onOpenMidiSettings={() => handleOpenSettings('midi')}
+        onOpenSettings={handleOpenSettings}
         midiDeviceCount={midiDeviceCount}
         isMidiActivity={isMidiActivity}
       />
@@ -920,7 +935,7 @@ export default function App() {
           isCollapsed={collapsedSections.pedalboard}
           onToggleCollapse={() => handleToggleSectionCollapse('pedalboard')}
           midiMappings={midiMappings}
-          onOpenMidiSettings={() => setIsMidiModalOpen(true)}
+          onOpenMidiSettings={() => handleOpenSettings('midi')}
         />
 
         {/* Amp & Cabinet Stage (NAM Modeler & IR Convolver) */}
@@ -932,7 +947,7 @@ export default function App() {
           onLoadCustomIrWav={handleLoadCustomIrWav}
           ampEngineMode={ampEngineMode}
           onSetAmpEngineMode={handleSetAmpEngineMode}
-          onOpenLatencyInspector={() => setIsLatencyInspectorOpen(true)}
+          onOpenLatencyInspector={() => handleOpenSettings('engine')}
           currentLatencyMs={latencyReport.totalCalculatedMs}
           isCollapsed={collapsedSections.ampCab}
           onToggleCollapse={() => handleToggleSectionCollapse('ampCab')}
@@ -973,7 +988,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-3 font-mono">
             <button
-              onClick={() => setIsMidiModalOpen(true)}
+              onClick={() => handleOpenSettings('midi')}
               className="hover:text-amber-400 transition-colors flex items-center gap-1.5 text-neutral-300"
               title="Click to open MIDI Controller settings & mapping console"
             >
@@ -993,7 +1008,7 @@ export default function App() {
             </button>
             <span>·</span>
             <button
-              onClick={() => setIsLatencyInspectorOpen(true)}
+              onClick={() => handleOpenSettings('engine')}
               className="hover:text-amber-400 transition-colors flex items-center gap-1.5"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -1014,21 +1029,6 @@ export default function App() {
         onClose={() => setIsTunerOpen(false)}
       />
 
-      <PresetLibraryModal
-        isOpen={isPresetLibraryOpen}
-        currentPreset={currentPreset}
-        presets={presets}
-        currentPedals={pedals}
-        currentNam={namModel}
-        currentCab={irCabinet}
-        onClose={() => setIsPresetLibraryOpen(false)}
-        onSelectPreset={handleSelectPreset}
-        onPresetsUpdated={(updatedList) => {
-          setPresets(updatedList);
-          savePresetsToStorage(updatedList);
-        }}
-      />
-
       <AddPedalModal
         isOpen={isAddPedalOpen}
         onClose={() => setIsAddPedalOpen(false)}
@@ -1045,10 +1045,27 @@ export default function App() {
         }}
       />
 
-      <LatencyInspectorModal
-        isOpen={isLatencyInspectorOpen}
-        onClose={() => setIsLatencyInspectorOpen(false)}
-        report={latencyReport}
+      {/* Unified Tabbed Settings Modal: Input & Gate, DSP Engine & Latency, MIDI, and Cloud Presets Hub */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        activeTab={settingsTab}
+        onTabChange={setSettingsTab}
+        // Input Conditioning & Noise Gate
+        conditionerConfig={conditionerConfig}
+        conditionerTelemetry={conditionerTelemetry}
+        onUpdateConditionerConfig={handleUpdateConditionerConfig}
+        onLearnNoiseFloor={handleLearnNoiseFloor}
+        isLearningNoiseFloor={isLearningNoiseFloor}
+        onApplyWhineKiller={handleApplyWhineKiller}
+        inputSource={inputSource}
+        inputGain={inputGain}
+        onInputGainChange={(val) => {
+          setInputGain(val);
+          audioEngine.setInputGain(val);
+        }}
+        // DSP Engine & Latency
+        latencyReport={latencyReport}
         coreEngineMode={coreEngineMode}
         onSetCoreEngineMode={handleSetCoreEngineMode}
         ampEngineMode={ampEngineMode}
@@ -1059,38 +1076,25 @@ export default function App() {
         onUpdateLatencySettings={handleUpdateLatencySettings}
         availableInputDevices={availableInputDevices}
         availableOutputDevices={availableOutputDevices}
-      />
-
-      <InputConditionerModal
-        isOpen={isInputConditionerOpen}
-        onClose={() => setIsInputConditionerOpen(false)}
-        config={conditionerConfig}
-        telemetry={conditionerTelemetry}
-        onUpdateConfig={handleUpdateConditionerConfig}
-        onLearnNoiseFloor={handleLearnNoiseFloor}
-        isLearningNoiseFloor={isLearningNoiseFloor}
-        onApplyWhineKiller={handleApplyWhineKiller}
-        inputSource={inputSource}
-        inputGain={inputGain}
-        onInputGainChange={(val) => {
-          setInputGain(val);
-          audioEngine.setInputGain(val);
-        }}
-      />
-
-      {/* MIDI Controller Settings & Mapping Modal */}
-      <MidiSettingsModal
-        isOpen={isMidiModalOpen}
-        onClose={() => setIsMidiModalOpen(false)}
+        // MIDI Controller & Hardware
         pedals={pedals}
         presets={presets}
         currentPreset={currentPreset}
         masterVolume={masterVolume}
-        inputGain={inputGain}
         isMuted={isMuted}
         onSelectPreset={handleSelectPreset}
         onUpdatePedal={handleUpdatePedal}
         onToggleMute={handleToggleMute}
+        midiDeviceCount={midiDeviceCount}
+        isMidiActivity={isMidiActivity}
+        // Cloud Hub & Preset Library
+        currentPedals={pedals}
+        currentNam={namModel}
+        currentCab={irCabinet}
+        onPresetsUpdated={(updatedList) => {
+          setPresets(updatedList);
+          savePresetsToStorage(updatedList);
+        }}
       />
 
       {/* Floating Real-Time MIDI Action Feedback Pill */}

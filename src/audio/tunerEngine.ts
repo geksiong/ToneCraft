@@ -48,7 +48,16 @@ export class TunerEngine {
   public start(): void {
     if (this.rafId !== null) return;
 
-    const detect = () => {
+    let lastDetectTime = 0;
+    const detect = (now: number) => {
+      this.rafId = requestAnimationFrame(detect);
+
+      // Throttle pitch analysis to ~20 Hz (every ~50ms) instead of running heavy YIN loop at 60-120 Hz
+      if (now - lastDetectTime < 50) {
+        return;
+      }
+      lastDetectTime = now;
+
       if (this.analyserNode && this.onUpdate) {
         this.analyserNode.getFloatTimeDomainData(this.buffer as any);
         const pitch = this.detectPitch(this.buffer, this.sampleRate);
@@ -59,8 +68,8 @@ export class TunerEngine {
           this.onUpdate(data);
         } else {
           this.silenceFrameCount++;
-          // If silent or below noise floor for ~25 frames (~400ms), reset tuner to listening state
-          if (this.silenceFrameCount > 25 && !this.isSilent) {
+          // If silent or below noise floor for ~8 frames (~400ms at 20Hz), reset tuner to listening state
+          if (this.silenceFrameCount > 8 && !this.isSilent) {
             this.isSilent = true;
             this.onUpdate({
               note: '',
@@ -73,7 +82,6 @@ export class TunerEngine {
           }
         }
       }
-      this.rafId = requestAnimationFrame(detect);
     };
 
     this.rafId = requestAnimationFrame(detect);
