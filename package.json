@@ -11,27 +11,33 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
+    "@google/genai": "^2.30.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "dotenv": "^17.2.3",
-    "express": "^4.21.2",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "lucide-react": "^1.59.0",
+    "motion": "^14.3.0",
     "neural-amp-modeler-wasm": "^2.0.1",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "vite": "^8.3.0"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "neural-amp-modeler-wasm": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
