@@ -209,11 +209,11 @@ export default function App() {
     try {
       const activeSource = sourceToUse || inputSource;
 
-      // Ensure minimise latency profile is active when turning DSP ON
+      // Ensure ultra-low latency profile is active with real acoustic IR Convolver enabled
       await audioEngine.updateLatencySettings({
         profile: 'ultra-low',
         sampleRateMode: 'native',
-        zeroLatencyCab: true,
+        zeroLatencyCab: false,
         zeroLookaheadLimiter: true,
         bypassOsVoiceProcessing: true
       });
@@ -402,6 +402,16 @@ export default function App() {
     setNamModel(sanitized);
     setAmpEngineMode(targetEngine);
     audioEngine.setAmpEngineMode(targetEngine);
+    if (audioEngine.isRunning) {
+      audioEngine.updateNamModel(sanitized);
+    }
+  };
+
+  const handleUpdateCab = (updated: IrCabinetConfig) => {
+    setIrCabinet(updated);
+    if (audioEngine.isRunning) {
+      audioEngine.updateIrCabinet(updated);
+    }
   };
 
   const refreshAudioDevices = useCallback(async () => {
@@ -431,7 +441,7 @@ export default function App() {
     await audioEngine.updateLatencySettings({
       profile: 'ultra-low',
       sampleRateMode: 'native',
-      zeroLatencyCab: true,
+      zeroLatencyCab: irCabinet.isCustom || irCabinet.isRealWav ? false : true,
       zeroLookaheadLimiter: true,
       bypassOsVoiceProcessing: true
     });
@@ -569,12 +579,15 @@ export default function App() {
     setPedals(prev => [...prev, newPedal]);
   };
 
-  // Global Bypass All
+  // Global Bypass All Pedals
   const handleToggleBypassAll = () => {
     const nextState = !isBypassAll;
     setIsBypassAll(nextState);
     const updated = pedals.map(p => ({ ...p, enabled: !nextState }));
     setPedals(updated);
+    if (audioEngine.isRunning) {
+      audioEngine.updatePedalboardChain(updated);
+    }
   };
 
   // MIDI Hardware Action Dispatcher
@@ -817,6 +830,7 @@ export default function App() {
   // Load Custom WAV IR
   const handleLoadCustomIrWav = async (buffer: ArrayBuffer, fileName: string) => {
     await audioEngine.loadCustomIrWav(buffer);
+    setLatencySettings({ ...audioEngine.latencySettings, zeroLatencyCab: false });
   };
 
   return (
@@ -853,7 +867,6 @@ export default function App() {
         isTurboActive={
           latencySettings.profile === 'ultra-low' &&
           latencySettings.sampleRateMode === 'native' &&
-          latencySettings.zeroLatencyCab &&
           latencySettings.zeroLookaheadLimiter &&
           latencySettings.bypassOsVoiceProcessing
         }
@@ -943,7 +956,7 @@ export default function App() {
           namModel={namModel}
           irCabinet={irCabinet}
           onUpdateNam={handleUpdateNam}
-          onUpdateCab={setIrCabinet}
+          onUpdateCab={handleUpdateCab}
           onLoadCustomIrWav={handleLoadCustomIrWav}
           ampEngineMode={ampEngineMode}
           onSetAmpEngineMode={handleSetAmpEngineMode}

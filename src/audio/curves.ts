@@ -99,10 +99,11 @@ export function createNamSaturationCurve(
   const n = 4096;
   const curve = new Float32Array(n);
 
-  // If gain is clean (<= 2.8) or saturation <= 1.2 (pure solid-state / clean amp),
-  // pass linear transfer curve with full, punchy headroom (~0.88)
-  // so clean chords and single notes maintain matched perceived loudness with saturated lead channels.
-  if (gain <= 2.8 || saturation <= 1.2) {
+  const effSaturation = Math.max(1.0, saturation || 2.5);
+
+  // Pure clean solid-state / FET acoustic amps (e.g. Roland JC-120, Studio Acoustic DI, Polytone)
+  // maintain 100% linear clean headroom across the entire 0-10 gain sweep
+  if (effSaturation <= 1.3) {
     const cleanOutputScale = 0.88;
     for (let i = 0; i < n; i++) {
       const x = (i * 2) / n - 1;
@@ -111,13 +112,37 @@ export function createNamSaturationCurve(
     return curve;
   }
 
-  // Calibrated drive: provides smooth edge-of-breakup and organic tube compression
-  // matching the touch response and headroom of real NAM neural models
-  const normGain = Math.max(0.1, gain / 5.0);
-  const effSaturation = Math.max(1.0, saturation || 2.5);
-  const drive = 0.9 + Math.pow(normGain, 1.2) * (effSaturation * 0.38);
+  // Dynamic breakup threshold based on amplifier architecture:
+  // High-gain amps (saturation >= 3.0: 5150, SLO, Rectifier, JCM800) breakup early around gain 1.5 - 2.5.
+  // Low-gain vintage tube amps (saturation ~ 1.4 - 2.8: Bassman, Deluxe, AC30, SVT) maintain clean until gain 5.0 - 7.0.
+  let breakupThreshold: number;
+  if (effSaturation >= 3.0) {
+    breakupThreshold = Math.max(1.5, 3.4 - (effSaturation - 3.0) * 1.1);
+  } else {
+    breakupThreshold = Math.max(5.0, Math.min(7.2, 7.5 - (effSaturation - 1.4) * 1.5));
+  }
+
+  if (gain <= breakupThreshold) {
+    // Clean headroom zone: transparent linear transmission without non-linear distortion
+    const cleanOutputScale = 0.88;
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1;
+      curve[i] = x * cleanOutputScale;
+    }
+    return curve;
+  }
+
+  // Harmonic overdrive & tube saturation past the breakup threshold
+  const overRatio = (gain - breakupThreshold) / Math.max(0.1, 10.0 - breakupThreshold);
+  const isHighGain = effSaturation >= 3.0;
+  const driveExponent = isHighGain ? 1.15 : 1.35;
+  const maxDriveMultiplier = isHighGain
+    ? (8.0 + Math.pow(effSaturation, 2.0) * 1.8)
+    : (2.5 + Math.pow(effSaturation, 1.4) * 1.5);
+  const drive = 1.0 + Math.pow(overRatio, driveExponent) * maxDriveMultiplier;
   const b = (bias || 0.06) * 0.2;
-  const outputScale = 0.72; // Calibrated for balanced loudness against clean channels
+  const driveCompression = Math.sqrt(Math.max(0.65, drive));
+  const outputScale = 0.90 / Math.pow(driveCompression, 0.42);
 
   for (let i = 0; i < n; i++) {
     const x = (i * 2) / n - 1;

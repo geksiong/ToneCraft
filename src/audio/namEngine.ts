@@ -18,7 +18,8 @@ import { HdWorkletEngine } from './hdWorkletEngine';
 import { NamModelConfig, IrCabinetConfig } from '../types/pedal';
 import { createNamSaturationCurve } from './curves';
 import { generateSyntheticCabIr, calibrateIrBuffer } from './irData';
-import { isNamModelProfile } from './namModels';
+import { isNamModelProfile, getDefaultTrimForModel } from './namModels';
+import { getAssetUrl } from '../utils/assetUrl';
 
 export interface NamEngineStatus {
   activeEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper';
@@ -85,9 +86,14 @@ export class NamEngine {
   private cabAnalogGain: GainNode | null = null;
   public cabEngineMode: 'ir-convolver' | 'analog-zero-latency' = 'ir-convolver';
   private cabLowCut: BiquadFilterNode | null = null;
+  private cabLowCut2: BiquadFilterNode | null = null;
   private cabHighCut: BiquadFilterNode | null = null;
+  private cabHighCut2: BiquadFilterNode | null = null;
+  private cabProximity: BiquadFilterNode | null = null;
+  private cabAir: BiquadFilterNode | null = null;
   private customCabBuffer: AudioBuffer | null = null;
   private currentIrUrl: string | null = null;
+  private currentCabId: string | null = null;
   private isCurrentIrReal: boolean = false;
   private irLoadSequence: number = 0;
 
@@ -197,17 +203,44 @@ export class NamEngine {
     this.masterGain.connect(this.cabStageInput);
     this.ampBypassGain.connect(this.cabStageInput);
 
-    // 7. Cabinet IR & Zero-Latency Analog Cabinet Stage
+    // 7. Cabinet IR & Multi-Stage Acoustic Modeling Stage
     this.cabConvolver = ctx.createConvolver();
     this.cabConvolver.normalize = false;
 
+    // 24 dB/octave studio highpass filter (Low Cut)
     this.cabLowCut = ctx.createBiquadFilter();
     this.cabLowCut.type = 'highpass';
     this.cabLowCut.frequency.value = 70;
+    this.cabLowCut.Q.value = 0.707;
 
+    this.cabLowCut2 = ctx.createBiquadFilter();
+    this.cabLowCut2.type = 'highpass';
+    this.cabLowCut2.frequency.value = 70;
+    this.cabLowCut2.Q.value = 0.707;
+
+    // 24 dB/octave studio lowpass filter (High Cut)
     this.cabHighCut = ctx.createBiquadFilter();
     this.cabHighCut.type = 'lowpass';
     this.cabHighCut.frequency.value = 7500;
+    this.cabHighCut.Q.value = 0.707;
+
+    this.cabHighCut2 = ctx.createBiquadFilter();
+    this.cabHighCut2.type = 'lowpass';
+    this.cabHighCut2.frequency.value = 7500;
+    this.cabHighCut2.Q.value = 0.707;
+
+    // Proximity effect filter: dynamically scales bass thud & punch based on Mic Dist knob
+    this.cabProximity = ctx.createBiquadFilter();
+    this.cabProximity.type = 'peaking';
+    this.cabProximity.frequency.value = 120;
+    this.cabProximity.Q.value = 1.1;
+    this.cabProximity.gain.value = 2.0;
+
+    // Distance air absorption & presence filter: dynamically scales upper sparkle based on Mic Dist knob
+    this.cabAir = ctx.createBiquadFilter();
+    this.cabAir.type = 'highshelf';
+    this.cabAir.frequency.value = 4800;
+    this.cabAir.gain.value = 0.5;
 
     // Convolver IR Branch
     const cabIrGain = ctx.createGain();
@@ -264,17 +297,25 @@ export class NamEngine {
     this.cabStageInput.connect(this.cabBypassGain);
     this.cabBypassGain.connect(this.outputNode);
 
-    // Filtered cabinet output connects to output
-    this.cabLowCut.connect(this.cabHighCut);
-    this.cabHighCut.connect(this.outputNode);
+    // Cascaded cabinet filter chain: LowCut (24dB) -> HighCut (24dB) -> Proximity -> Air -> Output
+    this.cabLowCut.connect(this.cabLowCut2);
+    this.cabLowCut2.connect(this.cabHighCut);
+    this.cabHighCut.connect(this.cabHighCut2);
+    this.cabHighCut2.connect(this.cabProximity);
+    this.cabProximity.connect(this.cabAir);
+    this.cabAir.connect(this.outputNode);
 
-    // Initialize convolver buffer immediately with authentic zero-latency cabinet IR so audio never starts silent
-    this.cabConvolver.buffer = generateSyntheticCabIr(ctx, 'celestion-v30', 30);
-    this.currentIrUrl = null;
-    this.isCurrentIrReal = false;
-
-    // Load initial default acoustic WAV IR in background with sequence protection
-    this.loadIrWavFile('/irs/celestion.wav');
+    // Initialize convolver buffer immediately: use customCabBuffer if present, or synthetic/real celestion
+    if (this.customCabBuffer) {
+      this.cabConvolver.buffer = this.customCabBuffer;
+      this.isCurrentIrReal = true;
+    } else {
+      this.cabConvolver.buffer = generateSyntheticCabIr(ctx, 'celestion-v30', 30);
+      this.currentIrUrl = null;
+      this.isCurrentIrReal = false;
+      // Load initial default acoustic WAV IR in background with sequence protection
+      this.loadIrWavFile('/irs/celestion.wav');
+    }
 
     // 6. Asynchronous Background Setup for WASM NAM and HD AudioWorklet
     this.enginesReadyPromise = this.initAsyncEngines(ctx);
@@ -405,7 +446,7 @@ export class NamEngine {
     }
 
     if (target === 'wasm-nam') {
-      this.applyNamSensitivityAndGains();
+      this.applyLoudnessAndEngineGains();
       this.workletInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
@@ -413,8 +454,7 @@ export class NamEngine {
     } else if (target === 'hd-triode') {
       this.wasmInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.wasmOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
-      this.workletInputGain.gain.setTargetAtTime(1.0, now, fadeTime);
-      this.workletOutputGain.gain.setTargetAtTime(1.0, now, fadeTime);
+      this.applyLoudnessAndEngineGains();
       this.waveshaperInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.waveshaperOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
     } else {
@@ -423,8 +463,7 @@ export class NamEngine {
       this.wasmOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletInputGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.workletOutputGain.gain.setTargetAtTime(0.0, now, fadeTime);
-      this.waveshaperInputGain.gain.setTargetAtTime(1.0, now, fadeTime);
-      this.waveshaperOutputGain.gain.setTargetAtTime(1.0, now, fadeTime);
+      this.applyLoudnessAndEngineGains();
     }
 
     // Refresh model configuration for active engine to maintain headroom calibration
@@ -447,7 +486,8 @@ export class NamEngine {
         gain: this.lastModelConfig.gain,
         bias: this.lastModelConfig.bias || 0.08,
         mode: isCleanSolidState ? 'clean-solid-state' : 'tube-amp',
-        enabled: !this.isAmpBypassed
+        enabled: !this.isAmpBypassed,
+        saturationCurve: this.lastModelConfig.saturationCurve
       });
     }
 
@@ -466,47 +506,109 @@ export class NamEngine {
     const now = this.ctx.currentTime;
     const fadeTime = 0.02;
 
-    if (mode === 'analog-zero-latency') {
+    if (this.isCabBypassed) {
+      this.cabIrGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.cabAnalogGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.cabBypassGain?.gain.setTargetAtTime(1.0, now, fadeTime);
+    } else if (mode === 'analog-zero-latency') {
       this.cabIrGain.gain.setTargetAtTime(0.0, now, fadeTime);
       this.cabAnalogGain.gain.setTargetAtTime(1.0, now, fadeTime);
+      this.cabBypassGain?.gain.setTargetAtTime(0.0, now, fadeTime);
     } else {
       this.cabIrGain.gain.setTargetAtTime(1.0, now, fadeTime);
       this.cabAnalogGain.gain.setTargetAtTime(0.0, now, fadeTime);
+      this.cabBypassGain?.gain.setTargetAtTime(0.0, now, fadeTime);
     }
 
     this.notifyStatus();
   }
 
   /**
-   * Applies calibrated input trim and output makeup gain for real NAM WaveNet models.
-   * Real NAM models have high intrinsic gain and sensitivity to low-level noise floor.
-   * Applying calibrated input trim (-8.0 dB default) brings the input into the exact
-   * nominal training zone (linear sweet spot), preventing ambient mic noise and USB hiss
-   * from being amplified by neural network saturation, while output makeup restores
-   * full perceived volume.
+   * Applies calibrated input trim and perceptual loudness balance across ALL engines:
+   * 1. WASM-NAM: Calibrates input into neural sweet spot while restoring full perceived volume.
+   * 2. HD Triode (AudioWorklet): Calibrates 12AX7 physical stage drive with clean headroom compensation.
+   * 3. Waveshaper: Calibrates input and linear clean boost so clean amps (JC-120, Twin Reverb,
+   *    Studio Acoustic DI, Polytone) are punchy, articulate, and match crunched/lead amps in loudness.
    */
-  public applyNamSensitivityAndGains(): void {
-    if (!this.ctx || !this.wasmInputGain || !this.wasmOutputGain) return;
-    if (this.currentEngineMode !== 'wasm-nam') return;
+  public applyLoudnessAndEngineGains(): void {
+    if (!this.ctx || !this.wasmInputGain || !this.wasmOutputGain ||
+        !this.workletInputGain || !this.workletOutputGain ||
+        !this.waveshaperInputGain || !this.waveshaperOutputGain) {
+      return;
+    }
 
     const now = this.ctx.currentTime;
     const fadeTime = 0.015;
     const isRealNam = isNamModelProfile(this.lastModelConfig);
+    const defaultTrim = getDefaultTrimForModel(this.lastModelConfig);
     const inputTrimDb = this.lastModelConfig?.inputTrim !== undefined
       ? this.lastModelConfig.inputTrim
-      : (isRealNam ? -8.0 : 0.0);
-    const namInputGainVal = Math.pow(10, inputTrimDb / 20);
+      : defaultTrim;
+    const inputGainVal = Math.pow(10, inputTrimDb / 20);
 
-    let outputMakeupDb = Math.abs(Math.min(0, inputTrimDb)) * 0.92;
-    if (isRealNam && this.lastModelInfo?.hasLoudness && typeof this.lastModelInfo.loudness === 'number') {
-      // If model has trained loudness metadata (e.g. deluxe: -8.73 dB), calibrate relative to -16 dBFS
-      const loudnessDiff = -16.0 - this.lastModelInfo.loudness;
-      outputMakeupDb += Math.max(-6, Math.min(6, loudnessDiff));
+    if (this.currentEngineMode === 'wasm-nam') {
+      const currentGain = this.lastModelConfig?.gain !== undefined ? this.lastModelConfig.gain : 5.0;
+      // Real NAM WaveNet captures are fixed neural snapshots. Modulating input drive with the gain knob
+      // allows players to clean up into chime at low gain or drive into rich tube saturation at high gain.
+      const wasmDriveOffsetDb = (currentGain - 5.0) * (this.lastModelConfig?.id === 'deluxe' ? 1.5 : 1.8);
+      const effectiveWasmTrimDb = inputTrimDb + wasmDriveOffsetDb;
+      const wasmInputGainVal = Math.pow(10, effectiveWasmTrimDb / 20);
+
+      let outputMakeupDb = Math.abs(Math.min(0, inputTrimDb)) * 0.90;
+      if (inputTrimDb > 0) {
+        outputMakeupDb += inputTrimDb * 0.25;
+      }
+      // Dynamic output level compensation against gain knob drive
+      outputMakeupDb -= wasmDriveOffsetDb * 0.40;
+
+      if (isRealNam && this.lastModelInfo?.hasLoudness && typeof this.lastModelInfo.loudness === 'number') {
+        // If model has trained loudness metadata (e.g. deluxe: -8.73 dB), calibrate relative to -16 dBFS
+        const loudnessDiff = -16.0 - this.lastModelInfo.loudness;
+        outputMakeupDb += Math.max(-6, Math.min(6, loudnessDiff));
+      }
+      // Extra clean bloom for Fender Deluxe Reverb so clean NAM sounds matched with AC10 crunch
+      if (this.lastModelConfig?.id === 'deluxe' || (this.lastModelConfig?.saturationCurve && this.lastModelConfig.saturationCurve <= 2.2)) {
+        outputMakeupDb += 2.2;
+      }
+      const wasmOutputGainVal = Math.pow(10, outputMakeupDb / 20);
+
+      this.wasmInputGain.gain.setTargetAtTime(wasmInputGainVal, now, fadeTime);
+      this.wasmOutputGain.gain.setTargetAtTime(wasmOutputGainVal, now, fadeTime);
+    } else if (this.currentEngineMode === 'hd-triode') {
+      // In HD Triode, inputTrimDb scales front-end into the 12AX7 physical stage.
+      // Clean amps (Bassman, AC30 clean) lack heavy saturation compression, so we add output makeup.
+      const isClean =
+        (this.lastModelConfig?.saturationCurve !== undefined && this.lastModelConfig.saturationCurve <= 2.0) ||
+        (this.lastModelConfig?.gain !== undefined && this.lastModelConfig.gain <= 3.8);
+      let workletOutputDb = isClean ? 2.5 : 0.0;
+      if (inputTrimDb < 0) {
+        workletOutputDb += Math.abs(inputTrimDb) * 0.40;
+      }
+      const workletOutputGainVal = Math.pow(10, workletOutputDb / 20);
+
+      this.workletInputGain.gain.setTargetAtTime(inputGainVal, now, fadeTime);
+      this.workletOutputGain.gain.setTargetAtTime(workletOutputGainVal, now, fadeTime);
+    } else {
+      // Waveshaper engine: Clean amplifiers (JC-120, Twin Reverb, Studio DI, Polytone)
+      // have low gain settings (2.0 - 2.8) and linear transfer curves.
+      // inputTrim + clean output makeup elevates them to robust, punchy studio levels.
+      const isClean =
+        (this.lastModelConfig?.saturationCurve !== undefined && this.lastModelConfig.saturationCurve <= 1.5) ||
+        (this.lastModelConfig?.gain !== undefined && this.lastModelConfig.gain <= 3.2);
+      let waveshaperOutputDb = isClean ? 3.0 : 0.0;
+      if (inputTrimDb < 0) {
+        waveshaperOutputDb += Math.abs(inputTrimDb) * 0.40;
+      }
+      const waveshaperOutputGainVal = Math.pow(10, waveshaperOutputDb / 20);
+
+      this.waveshaperInputGain.gain.setTargetAtTime(inputGainVal, now, fadeTime);
+      this.waveshaperOutputGain.gain.setTargetAtTime(waveshaperOutputGainVal, now, fadeTime);
     }
-    const namOutputGainVal = Math.pow(10, outputMakeupDb / 20);
+  }
 
-    this.wasmInputGain.gain.setTargetAtTime(namInputGainVal, now, fadeTime);
-    this.wasmOutputGain.gain.setTargetAtTime(namOutputGainVal, now, fadeTime);
+  // Alias for backward compatibility
+  public applyNamSensitivityAndGains(): void {
+    this.applyLoudnessAndEngineGains();
   }
 
   /**
@@ -515,9 +617,10 @@ export class NamEngine {
   public async loadNamModelFromUrl(url: string): Promise<boolean> {
     if (!this.namWasmNode) return false;
     try {
-      const resp = await fetch(url);
+      const targetUrl = getAssetUrl(url);
+      const resp = await fetch(targetUrl);
       if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status} fetching NAM model from ${url}`);
+        throw new Error(`HTTP ${resp.status} fetching NAM model from ${targetUrl}`);
       }
       const jsonText = await resp.text();
       this.lastModelInfo = await this.namWasmNode.loadModel(jsonText);
@@ -661,22 +764,43 @@ export class NamEngine {
       this.loadNamModelFromJson(jsonStr);
     }
 
-    // Wide-Range Dynamic Preamp Drive (0 to 10):
-    // Allows players to actually dial back the gain to whisper-clean / zero when desired,
-    // eliminating the former +1.05 hard floor that caused excessive gain and noise!
-    // gain = 0 -> 0.0 (muted)
-    // gain = 2.5 -> 0.42 (-7.5 dB attenuation: crystal clean, low noise floor)
-    // gain = 5.0 -> 1.00 (0.0 dB reference sweet spot)
-    // gain = 7.5 -> 1.65 (+4.3 dB harmonic punch)
-    // gain = 10.0 -> 2.35 (+7.4 dB rich tube compression)
+    // Dynamic Preamp Drive with Architecture-Aware Gain Taper:
+    // High-gain amps break up early around gain 1.5 - 2.5, transitioning into heavy crunch by 3.0.
+    // Low-gain vintage tube amps maintain pristine clean sound until gain 5.0 - 7.0.
+    // Ultra-clean solid-state amps maintain 100% clean headroom across the entire 0-10 sweep.
     const gainKnob = Math.max(0, Math.min(10, config.gain));
-    const preGain = gainKnob <= 0 ? 0 : Math.pow(gainKnob / 5.0, 1.25);
+    const S = config.saturationCurve || 2.5;
+    let preGain: number;
+    if (gainKnob <= 0) {
+      preGain = 0;
+    } else if (S <= 1.3) {
+      // Pure clean solid-state / acoustic (linear headroom sweep across 0-10, zero breakup)
+      preGain = 0.5 + (gainKnob / 10) * 0.7;
+    } else if (S >= 3.0) {
+      // High-gain amps:
+      // Gain 0 - 1.2: clean chime (preGain ~ 0.55 - 0.75)
+      // Gain 1.5 - 2.5: early breakup (preGain ~ 0.95 - 1.45)
+      // Gain 3.0+: thick crunch and heavy saturated sustain (preGain 1.8 - 4.2)
+      if (gainKnob <= 1.2) {
+        preGain = 0.55 + (gainKnob / 1.2) * 0.22;
+      } else {
+        preGain = 0.77 + Math.pow((gainKnob - 1.2) / 2.3, 1.2) * 1.55;
+      }
+    } else {
+      // Low-gain vintage tube amps:
+      // Gain 0 - 5.0: pristine clean headroom (preGain ~ 0.55 - 0.88)
+      // Gain 5.5 - 7.0: sweet touch-sensitive tube breakup (preGain ~ 0.95 - 1.35)
+      // Gain 7.5 - 10.0: rich vintage tube saturation (preGain ~ 1.50 - 2.65)
+      if (gainKnob <= 5.0) {
+        preGain = 0.55 + (gainKnob / 5.0) * 0.33;
+      } else {
+        preGain = 0.88 + Math.pow((gainKnob - 5.0) / 5.0, 1.35) * 1.75;
+      }
+    }
     this.ampPreampInput.gain.setTargetAtTime(preGain, this.ctx.currentTime, 0.015);
 
-    // Apply calibrated NAM input trim and output makeup if wasm-nam active
-    if (targetEngine === 'wasm-nam') {
-      this.applyNamSensitivityAndGains();
-    }
+    // Apply calibrated input trim and perceptual loudness balance across active engine
+    this.applyLoudnessAndEngineGains();
 
     // Update HD AudioWorklet tube parameters
     const isCleanSolidState =
@@ -689,7 +813,8 @@ export class NamEngine {
       gain: config.gain,
       bias: config.bias || 0.08,
       mode: isCleanSolidState ? 'clean-solid-state' : 'tube-amp',
-      enabled: !this.isAmpBypassed
+      enabled: !this.isAmpBypassed,
+      saturationCurve: config.saturationCurve
     });
 
     // Update classic WaveShaper curve fallback
@@ -711,14 +836,39 @@ export class NamEngine {
   }
 
   /**
+   * Safely swaps or updates the ConvolverNode impulse response buffer.
+   * Recreates and reconnects the ConvolverNode to prevent browser InvalidStateError exceptions
+   * on repeated buffer assignments and ensure instant audible response.
+   */
+  public setConvolverBuffer(buffer: AudioBuffer): void {
+    if (!this.ctx || !this.cabIrGain || !this.cabLowCut) return;
+    try {
+      if (this.cabConvolver) {
+        try {
+          this.cabIrGain.disconnect(this.cabConvolver);
+          this.cabConvolver.disconnect();
+        } catch {}
+      }
+      this.cabConvolver = this.ctx.createConvolver();
+      this.cabConvolver.normalize = false;
+      this.cabConvolver.buffer = buffer;
+      this.cabIrGain.connect(this.cabConvolver);
+      this.cabConvolver.connect(this.cabLowCut);
+    } catch (err) {
+      console.warn('[NamEngine] Error updating convolver buffer:', err);
+    }
+  }
+
+  /**
    * Fetches and decodes a real acoustic .wav Impulse Response file into the ConvolverNode.
    */
   public async loadIrWavFile(url: string): Promise<boolean> {
-    if (!this.ctx || !this.cabConvolver) return false;
+    if (!this.ctx) return false;
     const reqSeq = ++this.irLoadSequence;
     try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching IR WAV from ${url}`);
+      const targetUrl = getAssetUrl(url);
+      const resp = await fetch(targetUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching IR WAV from ${targetUrl}`);
       const arrayBuffer = await resp.arrayBuffer();
       const decoded = await this.ctx.decodeAudioData(arrayBuffer);
 
@@ -729,9 +879,10 @@ export class NamEngine {
 
       // Calibrate acoustic transfer gain across guitar spectrum to nominal 0dB (unity gain)
       calibrateIrBuffer(decoded);
-      this.cabConvolver.buffer = decoded;
+      this.setConvolverBuffer(decoded);
       this.currentIrUrl = url;
       this.isCurrentIrReal = true;
+      this.setCabEngineMode('ir-convolver');
       this.notifyStatus();
       return true;
     } catch (err) {
@@ -739,17 +890,18 @@ export class NamEngine {
       console.warn(`Failed to fetch/decode IR WAV ${url}, using synthetic fallback:`, err);
       this.isCurrentIrReal = false;
       this.currentIrUrl = null;
-      this.cabConvolver.buffer = generateSyntheticCabIr(this.ctx, this.lastCabConfig?.id || 'marshall-412-v30');
+      this.setConvolverBuffer(generateSyntheticCabIr(this.ctx, this.lastCabConfig?.id || 'marshall-412-v30'));
+      this.setCabEngineMode('ir-convolver');
       return false;
     }
   }
 
   /**
-   * Updates cabinet parameters (Low-cut, High-cut, and impulse response buffer)
+   * Updates cabinet parameters (Low-cut, High-cut, mic distance, and impulse response buffer)
    */
   public updateIrCabinet(config: IrCabinetConfig): void {
     this.lastCabConfig = config;
-    if (!this.ctx || !this.cabConvolver || !this.cabLowCut || !this.cabHighCut) return;
+    if (!this.ctx || !this.cabLowCut || !this.cabHighCut) return;
 
     if (config.bypassed !== undefined) {
       this.setCabBypass(config.bypassed);
@@ -757,23 +909,67 @@ export class NamEngine {
       this.setCabBypass(!config.enabled);
     }
 
-    this.cabLowCut.frequency.setTargetAtTime(config.lowCut, this.ctx.currentTime, 0.02);
-    this.cabHighCut.frequency.setTargetAtTime(config.highCut, this.ctx.currentTime, 0.02);
+    const now = this.ctx.currentTime;
+    const fadeTime = 0.015;
 
-    if (config.isCustom && this.customCabBuffer) {
-      this.irLoadSequence++;
-      this.currentIrUrl = null;
-      this.cabConvolver.buffer = this.customCabBuffer;
-      this.isCurrentIrReal = true;
-    } else if (config.irUrl) {
-      if (config.irUrl !== this.currentIrUrl) {
-        this.loadIrWavFile(config.irUrl);
+    // 1. Musical 24 dB/octave Low Cut (20 Hz - 160 Hz: cuts sub-rumble and tightens chug, preserves low E notes)
+    const lowCutFreq = Math.max(20, Math.min(160, config.lowCut || 70));
+    this.cabLowCut.frequency.setTargetAtTime(lowCutFreq, now, fadeTime);
+    if (this.cabLowCut2) {
+      this.cabLowCut2.frequency.setTargetAtTime(lowCutFreq, now, fadeTime);
+    }
+
+    // 2. Musical 24 dB/octave High Cut (4000 Hz - 12000 Hz: tames cone bite and fizz, preserves guitar body)
+    const highCutFreq = Math.max(4000, Math.min(12000, config.highCut || 7500));
+    this.cabHighCut.frequency.setTargetAtTime(highCutFreq, now, fadeTime);
+    if (this.cabHighCut2) {
+      this.cabHighCut2.frequency.setTargetAtTime(highCutFreq, now, fadeTime);
+    }
+
+    // 3. Dynamic Microphone Proximity & Distance modeling (audible across all IRs!)
+    const dist = Math.max(0, Math.min(100, config.micDistance !== undefined ? config.micDistance : 30));
+    const distRatio = dist / 100;
+    // 0% (Close mic on grille cloth): +4.5 dB proximity punch at 120Hz, +2.5 dB crisp pick attack
+    // 50% (Balanced studio placement): +1.0 dB proximity, 0 dB air
+    // 100% (Backed off distant mic): -2.5 dB proximity, -4.0 dB air absorption (open ambient bloom)
+    const proxGain = 4.5 - distRatio * 7.0;
+    const airGain = 2.5 - distRatio * 6.5;
+
+    if (this.cabProximity) {
+      this.cabProximity.gain.setTargetAtTime(proxGain, now, fadeTime);
+    }
+    if (this.cabAir) {
+      this.cabAir.gain.setTargetAtTime(airGain, now, fadeTime);
+    }
+
+    // 4. Cabinet Model Buffer Loading: ONLY when cabinet model selection actually changes!
+    const isModelSwitch = config.id !== this.currentCabId;
+    if (isModelSwitch) {
+      this.currentCabId = config.id;
+      if (config.isCustom && this.customCabBuffer) {
+        this.irLoadSequence++;
+        this.currentIrUrl = null;
+        this.setConvolverBuffer(this.customCabBuffer);
+        this.isCurrentIrReal = true;
+        if (this.cabEngineMode !== 'ir-convolver') {
+          this.setCabEngineMode('ir-convolver');
+        }
+      } else if (config.irUrl) {
+        if (this.cabEngineMode !== 'ir-convolver') {
+          this.setCabEngineMode('ir-convolver');
+        }
+        if (config.irUrl !== this.currentIrUrl) {
+          this.loadIrWavFile(config.irUrl);
+        }
+      } else {
+        this.irLoadSequence++; // Invalidate and cancel any in-flight WAV loads immediately!
+        this.currentIrUrl = null;
+        this.setConvolverBuffer(generateSyntheticCabIr(this.ctx, config.id, 30));
+        this.isCurrentIrReal = false;
+        if (this.cabEngineMode !== 'ir-convolver') {
+          this.setCabEngineMode('ir-convolver');
+        }
       }
-    } else {
-      this.irLoadSequence++; // Invalidate and cancel any in-flight WAV loads immediately!
-      this.currentIrUrl = null;
-      this.cabConvolver.buffer = generateSyntheticCabIr(this.ctx, config.id, config.micDistance);
-      this.isCurrentIrReal = false;
     }
 
     this.notifyStatus();
@@ -782,19 +978,40 @@ export class NamEngine {
   /**
    * Decodes and loads a user-uploaded custom .wav Impulse Response file.
    */
-  public async loadCustomIrWav(arrayBuffer: ArrayBuffer): Promise<void> {
-    if (!this.ctx || !this.cabConvolver) return;
+  public async loadCustomIrWav(arrayBuffer: ArrayBuffer): Promise<boolean> {
+    if (!this.ctx) return false;
     this.irLoadSequence++;
+    const reqSeq = this.irLoadSequence;
     try {
-      const decoded = await this.ctx.decodeAudioData(arrayBuffer);
+      const bufferCopy = arrayBuffer.slice(0);
+      const decoded = await this.ctx.decodeAudioData(bufferCopy);
+      if (reqSeq !== this.irLoadSequence) return false;
+
       calibrateIrBuffer(decoded);
       this.customCabBuffer = decoded;
+      this.currentCabId = null;
       this.currentIrUrl = null;
-      this.cabConvolver.buffer = decoded;
       this.isCurrentIrReal = true;
+
+      // Automatically engage IR convolver engine for the uploaded custom IR
+      this.setCabEngineMode('ir-convolver');
+      this.setConvolverBuffer(decoded);
+
+      // Un-bypass the cabinet so the user hears their custom IR immediately
+      if (this.isCabBypassed) {
+        this.setCabBypass(false);
+      } else {
+        const now = this.ctx.currentTime;
+        this.cabIrGain?.gain.setTargetAtTime(1.0, now, 0.015);
+        this.cabAnalogGain?.gain.setTargetAtTime(0.0, now, 0.015);
+        this.cabBypassGain?.gain.setTargetAtTime(0.0, now, 0.015);
+      }
+
       this.notifyStatus();
+      return true;
     } catch (err) {
       console.error('Failed to decode custom IR WAV:', err);
+      return false;
     }
   }
 

@@ -63,12 +63,14 @@ export class ToneCraftEngine {
   public latencySettings: AudioLatencySettings = {
     profile: 'ultra-low',
     sampleRateMode: 'native',
-    zeroLatencyCab: true,
+    zeroLatencyCab: false, // Default to FALSE so real acoustic IR Convolver is active and audible!
     zeroLookaheadLimiter: true,
     bypassOsVoiceProcessing: true,
     selectedInputDeviceId: '',
     selectedOutputDeviceId: ''
   };
+
+  private pendingCustomIrArrayBuffer: ArrayBuffer | null = null;
 
   public currentInputDeviceLabel: string = '';
   public currentOutputDeviceLabel: string = '';
@@ -230,6 +232,10 @@ export class ToneCraftEngine {
     // 4. Initialize Sub-Engines
     const namStage = this.namEngine.init(this.ctx);
     this.namEngine.setCabEngineMode(this.latencySettings.zeroLatencyCab ? 'analog-zero-latency' : 'ir-convolver');
+
+    if (this.pendingCustomIrArrayBuffer) {
+      await this.namEngine.loadCustomIrWav(this.pendingCustomIrArrayBuffer.slice(0));
+    }
 
     // Await async neural WASM engine and HD AudioWorklet ready before connecting downstream
     try {
@@ -1053,7 +1059,11 @@ export class ToneCraftEngine {
   }
 
   public async loadCustomIrWav(arrayBuffer: ArrayBuffer): Promise<void> {
-    await this.namEngine.loadCustomIrWav(arrayBuffer);
+    this.pendingCustomIrArrayBuffer = arrayBuffer.slice(0);
+    this.latencySettings.zeroLatencyCab = false;
+    if (this.ctx) {
+      await this.namEngine.loadCustomIrWav(arrayBuffer.slice(0));
+    }
     this.dispatchLatencyUpdate();
   }
 

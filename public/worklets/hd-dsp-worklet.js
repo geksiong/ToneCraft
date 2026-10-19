@@ -25,6 +25,7 @@ class HdCoreProcessor extends AudioWorkletProcessor {
 
     // Tube Preamp State (12AX7 Triode Physical Model)
     this.tubeGain = 5.0;
+    this.saturationCurve = 2.5; // High gain amps (>= 3.2) vs low gain amps (<= 2.2)
     this.tubeBias = 0.08;
     this.tubeSag = 0.4; // Dynamic cathode capacitor charging
     this.cathodeVoltage = 0.0; // Dynamic Vk state
@@ -82,6 +83,7 @@ class HdCoreProcessor extends AudioWorkletProcessor {
       switch (data.type) {
         case 'set-parameters':
           if (data.gain !== undefined) this.tubeGain = data.gain;
+          if (data.saturationCurve !== undefined) this.saturationCurve = data.saturationCurve;
           if (data.bias !== undefined) this.tubeBias = data.bias;
           if (data.mode !== undefined) this.mode = data.mode;
           if (data.drive !== undefined) this.diodeDrive = data.drive;
@@ -121,30 +123,70 @@ class HdCoreProcessor extends AudioWorkletProcessor {
       this.gridCapCharge *= 0.9996;
     }
 
-    // 2. Calibrated Tube Drive & Grid Bias:
-    // Musical drive scaling preventing harsh oversaturation while preserving touch sensitivity
-    const normGain = Math.max(0.1, this.tubeGain / 5.0);
-    const effDrive = 1.0 + Math.pow(normGain, 1.2) * 1.35;
-    const v = vgk * effDrive + (this.tubeBias || 0.06);
+    // 2. Calibrated Tube Drive & Architecture-Aware Breakup Threshold:
+    // High-gain amps (saturationCurve >= 3.0: 5150, SLO-100, Rectifier, JCM800, Darkglass)
+    // break up early around gain 1.5 - 2.5 with aggressive harmonic crunch.
+    // Low-gain vintage tube amps (saturationCurve ~ 1.4 - 2.8: Tweed Bassman, Deluxe, AC30, SVT)
+    // maintain clean, open, singing sound until gain 5.0 - 7.0, then break up smoothly.
+    // Ultra-clean solid-state amps (saturationCurve <= 1.3: JC-120, Studio DI) stay 100% clean across 0-10.
+    const S = this.saturationCurve || 2.5;
+    const G = Math.max(0.0, this.tubeGain);
+
+    let breakupThreshold;
+    if (S <= 1.3) {
+      breakupThreshold = 99.0; // Pure clean solid-state
+    } else if (S >= 3.0) {
+      // High-gain amps: break up early around 1.5 to 2.5
+      // S = 4.5 (5150) -> 1.7; S = 3.8 (SLO) -> 2.1; S = 3.2 (JCM800) -> 2.6
+      breakupThreshold = Math.max(1.5, 3.4 - (S - 3.0) * 1.1);
+    } else {
+      // Low-gain vintage tube amps: maintain clean until 5.0 to 7.0
+      // S = 1.8 (Bassman) -> 6.6; S = 2.0 (AC30) -> 6.2; S = 2.2 (Deluxe) -> 5.8; S = 2.6 (SVT) -> 5.3
+      breakupThreshold = Math.max(5.0, Math.min(7.2, 7.5 - (S - 1.4) * 1.5));
+    }
+
+    let effDrive;
+    if (G <= 0.05) {
+      effDrive = 0.0;
+    } else if (G <= breakupThreshold) {
+      // Clean headroom zone: soft linear small-signal transmission without non-linear clipping
+      // Perfectly clean and transparent on riffs and pick attacks
+      const cleanRatio = G / breakupThreshold;
+      effDrive = cleanRatio * 0.72;
+    } else {
+      // Overdrive & saturation zone beyond the breakup threshold
+      const overRatio = (G - breakupThreshold) / Math.max(0.1, 10.0 - breakupThreshold);
+      const isHighGain = S >= 3.0;
+      const driveExp = isHighGain ? 1.15 : 1.35;
+      const maxDriveMultiplier = isHighGain
+        ? (8.0 + Math.pow(S, 2.0) * 1.8)
+        : (2.5 + Math.pow(S, 1.4) * 1.5);
+      effDrive = 0.72 + Math.pow(overRatio, driveExp) * maxDriveMultiplier;
+    }
+
+    // Grid excitation with authentic 12AX7 sensitivity
+    const v = vgk * effDrive * 2.6 + (this.tubeBias || 0.06);
 
     // 3. Smooth, Continuous Norman Koren Triode Transfer Characteristic:
-    // Completely eliminates piecewise step discontinuities that caused buzzing/clipping.
+    // Completely eliminates piecewise step discontinuities.
     // Models 12AX7 grid conduction soft compression on positive swings and
     // progressive plate current cutoff (Child-Langmuir 3/2 law) on negative swings.
-    const asym = 0.12;
-    const vEffective = v + asym * Math.tanh(v * 0.75) * Math.abs(v);
-    const rawY = Math.tanh(vEffective * 0.82) - 0.06 * Math.tanh(vEffective * vEffective * 0.22);
+    const asym = S >= 3.0 ? 0.18 : 0.12;
+    const vEffective = v + asym * Math.tanh(v * 0.85) * Math.abs(v);
+    const rawY = Math.tanh(vEffective * 0.85) - 0.06 * Math.tanh(vEffective * vEffective * 0.25);
 
     // 4. Dynamic Cathode Capacitor Sag (RC time constant ~ 70ms)
-    // Tube current charges bypass capacitor, creating organic tube bloom and compression
+    // Tube current charges bypass capacitor, creating organic tube bloom and touch sag
     const instantaneousCurrent = Math.max(0, rawY + 0.4);
     const targetVk = instantaneousCurrent * 0.22 * (this.tubeSag || 0.4);
     this.cathodeVoltage += (targetVk - this.cathodeVoltage) * 0.0012;
 
-    // 5. Output Headroom Calibration:
-    // Calibrated with full linear small-signal transmission (~0.88x) so clean chords retain full body and volume,
-    // while high-gain saturation smoothly compresses to ~0.82 peak.
-    const scaledY = rawY * 0.88;
+    // 5. Output Headroom & Loudness Balancing:
+    // As drive increases into heavy saturation, apply gentle power sag compression
+    // so clean tones remain loud and punchy while extreme high gain doesn't blow out speakers.
+    const driveCompression = Math.sqrt(Math.max(0.65, effDrive));
+    const outputGain = 0.92 / Math.pow(driveCompression, 0.42);
+    const scaledY = rawY * outputGain;
 
     // 6. Sub-audio DC-Blocking Coupling Capacitor Filter (fc ~ 12Hz at 48kHz)
     // Strips DC offset caused by bias shifts before feeding downstream tone stack and cabinet

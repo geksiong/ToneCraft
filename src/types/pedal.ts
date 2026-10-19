@@ -219,8 +219,8 @@ export interface IrCabinetConfig {
   description: string;
   speakerType: string;
   micDistance: number; // 0 - 100%
-  highCut: number; // 2000 - 15000 Hz
-  lowCut: number; // 20 - 200 Hz
+  highCut: number; // 4000 - 12000 Hz
+  lowCut: number; // 20 - 160 Hz
   isCustom?: boolean;
   customFileName?: string;
   irUrl?: string;

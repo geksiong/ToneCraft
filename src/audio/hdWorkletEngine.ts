@@ -3,6 +3,8 @@
  * @description Main-thread manager for ToneCraft's High-Definition AudioWorklet DSP Engine.
  */
 
+import { getAssetUrl } from '../utils/assetUrl';
+
 export interface HdWorkletTelemetry {
   cpuPercent: number;
   avgExecTimeUs: number;
@@ -28,7 +30,7 @@ export class HdWorkletEngine {
     this.ctx = ctx;
 
     try {
-      await ctx.audioWorklet.addModule('/worklets/hd-dsp-worklet.js');
+      await ctx.audioWorklet.addModule(getAssetUrl('/worklets/hd-dsp-worklet.js'));
     } catch (err) {
       console.warn('Failed to load hd-dsp-worklet.js from /worklets/, trying blob/fallback:', err);
     }
@@ -78,6 +80,7 @@ export class HdWorkletEngine {
     mode?: 'tube-amp' | 'diode-drive' | 'bbd-mod' | 'full-rig' | 'clean-solid-state';
     drive?: number;
     enabled?: boolean;
+    saturationCurve?: number;
   }): void {
     if (!this.workletNode) return;
     this.workletNode.port.postMessage({

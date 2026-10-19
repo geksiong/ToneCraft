@@ -265,7 +265,7 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
 
         {/* Right Section: Bypass All, Master Mute & Volume */}
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 shrink-0">
-          {/* Signal Chain True Bypass All Toggle */}
+          {/* Signal Chain True Bypass All Pedals Toggle */}
           <button
             onClick={onToggleBypassAll}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
@@ -273,11 +273,11 @@ export const SignalChainControlStack: React.FC<SignalChainControlStackProps> = (
                 ? 'bg-rose-500/20 border-rose-500 text-rose-300 shadow-sm'
                 : 'bg-neutral-950/80 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
             }`}
-            title="Bypass all pedals in the signal chain"
+            title="Bypass all effects pedals (Amp & Cabinet remain active for clean tone testing)"
           >
             <Sliders size={13} className={isBypassAll ? 'text-rose-400' : 'text-neutral-400'} />
-            <span className="w-20 text-center inline-block">
-              {isBypassAll ? 'BYPASSED' : 'BYPASS ALL'}
+            <span className="w-28 text-center inline-block">
+              {isBypassAll ? 'PEDALS BYPASSED' : 'BYPASS PEDALS'}
             </span>
           </button>
 

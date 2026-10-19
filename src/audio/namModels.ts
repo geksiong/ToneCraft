@@ -35,7 +35,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     modelUrl: '/models/ac10.nam',
     isRealNam: true,
     engineMode: 'wasm-nam',
-    inputTrim: -8.0
+    inputTrim: -6.5
   },
   {
     id: 'deluxe',
@@ -55,7 +55,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     modelUrl: '/models/deluxe.nam',
     isRealNam: true,
     engineMode: 'wasm-nam',
-    inputTrim: -8.0
+    inputTrim: -2.5
   },
   {
     id: 'slo-100',
@@ -73,7 +73,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.12,
     weightsCount: 28440,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: -5.0
   },
   {
     id: 'jcm-800',
@@ -91,7 +92,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.08,
     weightsCount: 16384,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: -3.5
   },
   {
     id: 'tweed-59',
@@ -109,7 +111,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.04,
     weightsCount: 12288,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: 1.5
   },
   {
     id: 'pv-5150',
@@ -127,7 +130,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.15,
     weightsCount: 32768,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: -6.0
   },
   {
     id: 'ampeg-svt',
@@ -145,7 +149,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.06,
     weightsCount: 18432,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: -1.0
   },
   {
     id: 'darkglass-b7k',
@@ -163,7 +168,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.1,
     weightsCount: 14336,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: -4.0
   },
   {
     id: 'vox-ac30',
@@ -181,7 +187,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.05,
     weightsCount: 12288,
     isRealNam: false,
-    engineMode: 'hd-triode'
+    engineMode: 'hd-triode',
+    inputTrim: 0.0
   },
   {
     id: 'roland-jc120',
@@ -199,7 +206,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.0,
     weightsCount: 16384,
     isRealNam: false,
-    engineMode: 'waveshaper'
+    engineMode: 'waveshaper',
+    inputTrim: 5.0
   },
   {
     id: 'twin-reverb-ultraclean',
@@ -217,7 +225,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.02,
     weightsCount: 16384,
     isRealNam: false,
-    engineMode: 'waveshaper'
+    engineMode: 'waveshaper',
+    inputTrim: 4.5
   },
   {
     id: 'hiwatt-dr103',
@@ -235,7 +244,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.03,
     weightsCount: 16384,
     isRealNam: false,
-    engineMode: 'waveshaper'
+    engineMode: 'waveshaper',
+    inputTrim: 3.5
   },
   {
     id: 'studio-acoustic-di',
@@ -253,7 +263,8 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.0,
     weightsCount: 8192,
     isRealNam: false,
-    engineMode: 'waveshaper'
+    engineMode: 'waveshaper',
+    inputTrim: 5.5
   },
   {
     id: 'polytone-mini-brute',
@@ -271,9 +282,32 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     bias: 0.0,
     weightsCount: 12288,
     isRealNam: false,
-    engineMode: 'waveshaper'
+    engineMode: 'waveshaper',
+    inputTrim: 4.5
   }
 ];
+
+/**
+ * Returns the default calibrated input trim (dB) for an amp model config.
+ * Balances loudness across clean, crunch, and high-gain amplifiers.
+ */
+export function getDefaultTrimForModel(model?: NamModelConfig | null): number {
+  if (!model) return 0.0;
+  const builtIn = BUILT_IN_NAM_MODELS.find(m => m.id === model.id);
+  if (builtIn && builtIn.inputTrim !== undefined) {
+    return builtIn.inputTrim;
+  }
+  // Heuristic for custom uploaded profiles:
+  // If clean (low saturation/gain), default to +3.5 dB boost.
+  // If high-gain, default to -5.0 dB trim.
+  if ((model.saturationCurve && model.saturationCurve <= 1.5) || (model.gain && model.gain <= 3.0)) {
+    return 4.0;
+  }
+  if (isNamModelProfile(model)) {
+    return -6.0;
+  }
+  return 0.0;
+}
 
 export interface ParsedNamFile {
   name: string;

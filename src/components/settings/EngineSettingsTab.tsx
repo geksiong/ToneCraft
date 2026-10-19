@@ -69,7 +69,7 @@ export const EngineSettingsTab: React.FC<EngineSettingsTabProps> = ({
       await onUpdateLatencySettings({
         profile: 'ultra-low',
         sampleRateMode: 'native',
-        zeroLatencyCab: true,
+        zeroLatencyCab: false, // Keep real acoustic IR Convolver enabled!
         zeroLookaheadLimiter: true,
         bypassOsVoiceProcessing: true
       });
@@ -81,7 +81,6 @@ export const EngineSettingsTab: React.FC<EngineSettingsTabProps> = ({
   const isTurboActive =
     latencySettings.profile === 'ultra-low' &&
     latencySettings.sampleRateMode === 'native' &&
-    latencySettings.zeroLatencyCab &&
     latencySettings.zeroLookaheadLimiter &&
     latencySettings.bypassOsVoiceProcessing;
 
@@ -565,7 +564,11 @@ export const EngineSettingsTab: React.FC<EngineSettingsTabProps> = ({
               />
               <div>
                 <span className="block font-medium">Zero-Latency Analog Cab</span>
-                <span className="text-[10px] text-neutral-400 block font-normal">Saves ~2.7 ms vs FFT convolver</span>
+                <span className="text-[10px] text-neutral-400 block font-normal">
+                  {latencySettings.zeroLatencyCab
+                    ? 'Analog filter active (IR bypassed, 0.0ms delay)'
+                    : 'Acoustic IR Convolver active (WAV Impulse Response)'}
+                </span>
               </div>
             </label>
           </div>

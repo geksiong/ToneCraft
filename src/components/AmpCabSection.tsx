@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { NamModelConfig, IrCabinetConfig } from '../types/pedal';
-import { BUILT_IN_NAM_MODELS, parseNamJson, isNamModelProfile } from '../audio/namModels';
+import { BUILT_IN_NAM_MODELS, parseNamJson, isNamModelProfile, getDefaultTrimForModel } from '../audio/namModels';
 import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 import { RotaryKnob } from './RotaryKnob';
 import {
@@ -80,6 +80,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
         treble: selected.treble,
         presence: selected.presence,
         master: selected.master,
+        inputTrim: selected.inputTrim !== undefined ? selected.inputTrim : getDefaultTrimForModel(selected),
         isRealNam: isSelectedNam,
         engineMode: targetEngine,
         bypassed: namModel.bypassed
@@ -98,7 +99,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
         micDistance: selected.micDistance ?? irCabinet.micDistance,
         lowCut: selected.lowCut ?? irCabinet.lowCut,
         highCut: selected.highCut ?? irCabinet.highCut,
-        bypassed: irCabinet.bypassed
+        bypassed: false
       });
     }
   };
@@ -131,6 +132,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
         rawJson: parsed.rawJson || text,
         isRealNam: true,
         engineMode: 'wasm-nam',
+        inputTrim: -6.0,
         bypassed: namModel.bypassed
       };
 
@@ -165,7 +167,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
           isCustom: true,
           customFileName: file.name,
           isRealWav: true,
-          bypassed: irCabinet.bypassed
+          bypassed: false
         };
 
         onUpdateCab(customCab);
@@ -176,11 +178,31 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
   };
 
   const isNamProfile = isNamModelProfile(namModel);
+  const defaultTrim = getDefaultTrimForModel(namModel);
+  const currentTrim = namModel.inputTrim !== undefined ? namModel.inputTrim : defaultTrim;
+
+  // Modifying any amp parameter immediately engages the amp so adjustments take audible effect
+  const updateAmpParam = (partial: Partial<NamModelConfig>) => {
+    onUpdateNam({
+      ...namModel,
+      ...partial,
+      bypassed: false
+    });
+  };
 
   const toggleAmpBypass = () => {
     onUpdateNam({
       ...namModel,
       bypassed: !namModel.bypassed
+    });
+  };
+
+  // Modifying any cabinet parameter or knob immediately engages the cabinet so adjustments take audible effect
+  const updateCabParam = (partial: Partial<IrCabinetConfig>) => {
+    onUpdateCab({
+      ...irCabinet,
+      ...partial,
+      bypassed: false
     });
   };
 
@@ -203,12 +225,12 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             <div
               className={`w-2.5 h-2.5 rounded-full transition-all ${
                 namModel.bypassed
-                  ? 'bg-neutral-700'
+                  ? 'bg-amber-500 animate-pulse'
                   : 'bg-emerald-400 led-glow-emerald shadow-[0_0_6px_#34d399]'
               }`}
-              title={namModel.bypassed ? 'Amp is Bypassed' : 'Amp is Engaged'}
+              title={namModel.bypassed ? 'Amp is Bypassed (Click to Engage)' : 'Amp is Engaged'}
             />
-            <span className="text-[10px] font-mono text-neutral-400 font-semibold">AMP</span>
+            <span className={`text-[10px] font-mono font-semibold ${namModel.bypassed ? 'text-amber-400' : 'text-neutral-400'}`}>AMP</span>
             <ArrowRight size={10} className="text-neutral-600" />
             <div
               className={`w-2.5 h-2.5 rounded-full transition-all ${
@@ -241,7 +263,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             onClick={toggleAmpBypass}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold rounded-lg border transition-all active:scale-95 shadow-xs ${
               namModel.bypassed
-                ? 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-neutral-200'
+                ? 'bg-amber-950/40 text-amber-300 border-amber-500/60 hover:bg-amber-900/40 animate-pulse'
                 : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
             }`}
             title={namModel.bypassed ? 'Amp is BYPASSED (Click to Engage)' : 'Amp is ENGAGED (Click to Bypass)'}
@@ -249,11 +271,11 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             <div
               className={`w-1.5 h-1.5 rounded-full transition-all shrink-0 ${
                 namModel.bypassed
-                  ? 'bg-neutral-600'
+                  ? 'bg-amber-400 animate-ping'
                   : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]'
               }`}
             />
-            <span>{namModel.bypassed ? 'AMP BYPASS' : 'AMP ON'}</span>
+            <span>{namModel.bypassed ? 'AMP BYPASSED (CLICK TO ON)' : 'AMP ENGAGED'}</span>
           </button>
 
           {/* Cab Bypass Toggle */}
@@ -317,7 +339,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                     {namModel.category}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-mono text-neutral-400">
+                <div className="flex items-center gap-1.5 text-[10px] font-mono text-neutral-400 flex-wrap">
                   <span className={isNamProfile ? 'text-amber-400 font-semibold' : 'text-neutral-400'}>
                     {ampEngineMode === 'wasm-nam'
                       ? 'WASM NAM'
@@ -329,6 +351,8 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   <span>Gain: <strong className="text-white">{namModel.gain.toFixed(1)}</strong></span>
                   <span>·</span>
                   <span>Master: <strong className="text-white">{namModel.master.toFixed(1)}</strong></span>
+                  <span>·</span>
+                  <span>Trim: <strong className={currentTrim > 0 ? 'text-emerald-400' : currentTrim < 0 ? 'text-amber-400' : 'text-white'}>{currentTrim >= 0 ? '+' : ''}{currentTrim.toFixed(1)}dB</strong></span>
                 </div>
               </div>
             </div>
@@ -364,7 +388,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 onClick={toggleAmpBypass}
                 className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded-lg border transition-all active:scale-95 shadow-xs ${
                   namModel.bypassed
-                    ? 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-neutral-200'
+                    ? 'bg-amber-950/40 text-amber-300 border-amber-500/60 hover:bg-amber-900/40 animate-pulse'
                     : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
                 }`}
                 title={namModel.bypassed ? 'Amp is BYPASSED (Click to Engage)' : 'Amp is ENGAGED (Click to Bypass)'}
@@ -372,11 +396,11 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 <div
                   className={`w-1.5 h-1.5 rounded-full transition-all shrink-0 ${
                     namModel.bypassed
-                      ? 'bg-neutral-600'
+                      ? 'bg-amber-400 animate-ping'
                       : 'bg-emerald-400 shadow-[0_0_6px_#34d399]'
                   }`}
                 />
-                <span>{namModel.bypassed ? 'BYPASS' : 'ON'}</span>
+                <span>{namModel.bypassed ? 'BYPASSED' : 'ON'}</span>
               </button>
             </div>
           </div>
@@ -607,50 +631,116 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 </div>
               </div>
 
-              {/* NAM Sensitivity Trim Bar */}
-              {isNamProfile && (
-                <div className="flex flex-wrap items-center justify-between gap-1.5 mt-1.5 px-2.5 py-1.5 bg-gradient-to-r from-amber-950/30 via-neutral-900/40 to-neutral-900/60 border border-amber-500/25 rounded-xl text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-mono text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1">
-                      <Sliders size={11} className="text-amber-400" /> Sensitivity:
+              {/* Universal Amp Loudness Balance & Input Sensitivity Trim Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-2 px-2.5 py-1.5 bg-gradient-to-r from-neutral-900/90 via-neutral-950/80 to-neutral-900/90 border border-neutral-800 rounded-xl text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Sliders size={12} className={currentTrim > 0 ? 'text-emerald-400' : currentTrim < 0 ? 'text-amber-400' : 'text-neutral-400'} />
+                    <span className="text-[10px] font-mono text-neutral-300 font-bold uppercase tracking-wider">
+                      Loudness Trim:
                     </span>
-                    <span className="text-[10px] font-mono text-emerald-400 font-bold tabular-nums bg-emerald-950/60 border border-emerald-500/30 px-1 py-0.2 rounded">
-                      {((namModel.inputTrim ?? -8.0) >= 0 ? '+' : '') + (namModel.inputTrim ?? -8.0).toFixed(1)} dB
+                  </div>
+                  <span
+                    className={`text-[10px] font-mono font-bold tabular-nums px-1.5 py-0.5 rounded border transition-colors ${
+                      currentTrim > 0
+                        ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.15)]'
+                        : currentTrim < 0
+                        ? 'bg-amber-950/70 border-amber-500/40 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                        : 'bg-neutral-800/80 border-neutral-700 text-neutral-300'
+                    }`}
+                    title="Calibrated input sensitivity and perceptual loudness balance for this amp"
+                  >
+                    {(currentTrim >= 0 ? '+' : '') + currentTrim.toFixed(1)} dB
+                  </span>
+                  {currentTrim >= 3.0 && (
+                    <span className="hidden sm:inline text-[9px] font-mono text-emerald-400/90 bg-emerald-950/50 px-1 py-0.2 rounded border border-emerald-500/20">
+                      Clean Boost
                     </span>
+                  )}
+                  {currentTrim <= -4.0 && (
+                    <span className="hidden sm:inline text-[9px] font-mono text-amber-400/90 bg-amber-950/50 px-1 py-0.2 rounded border border-amber-500/20">
+                      High-Gain Pad
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {/* Fine Nudge Controls */}
+                  <div className="flex items-center gap-1 bg-neutral-950 px-1 py-0.5 rounded-lg border border-neutral-800">
+                    <button
+                      onClick={() => updateAmpParam({ inputTrim: Math.max(-18, Math.round((currentTrim - 1.0) * 2) / 2) })}
+                      className="w-5 h-5 flex items-center justify-center rounded text-[11px] font-bold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                      title="Nudge trim -1 dB"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="range"
+                      min="-18"
+                      max="12"
+                      step="0.5"
+                      value={currentTrim}
+                      onChange={(e) => updateAmpParam({ inputTrim: parseFloat(e.target.value) })}
+                      className="w-16 sm:w-24 h-1 accent-amber-500 bg-neutral-800 rounded-lg cursor-pointer"
+                      title={`Loudness Trim: ${(currentTrim >= 0 ? '+' : '') + currentTrim.toFixed(1)} dB`}
+                    />
+                    <button
+                      onClick={() => updateAmpParam({ inputTrim: Math.min(12, Math.round((currentTrim + 1.0) * 2) / 2) })}
+                      className="w-5 h-5 flex items-center justify-center rounded text-[11px] font-bold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                      title="Nudge trim +1 dB"
+                    >
+                      +
+                    </button>
                   </div>
 
+                  {/* Quick Preset Buttons */}
                   <div className="flex items-center gap-1 text-[10px] font-mono">
                     <button
-                      onClick={() => onUpdateNam({ ...namModel, inputTrim: -12.0 })}
+                      onClick={() => updateAmpParam({ inputTrim: defaultTrim })}
                       className={`px-1.5 py-0.5 rounded border transition-colors ${
-                        (namModel.inputTrim ?? -8.0) === -12.0
-                          ? 'bg-amber-500 text-black font-bold border-amber-400'
-                          : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
+                        Math.abs(currentTrim - defaultTrim) < 0.1
+                          ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-xs'
+                          : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
                       }`}
+                      title={`Reset to factory calibrated trim for ${namModel.name} (${(defaultTrim >= 0 ? '+' : '') + defaultTrim.toFixed(1)} dB)`}
                     >
-                      -12dB Quiet
+                      Def ({(defaultTrim >= 0 ? '+' : '') + defaultTrim.toFixed(1)}dB)
                     </button>
                     <button
-                      onClick={() => onUpdateNam({ ...namModel, inputTrim: -8.0 })}
+                      onClick={() => updateAmpParam({ inputTrim: 0.0 })}
                       className={`px-1.5 py-0.5 rounded border transition-colors ${
-                        (namModel.inputTrim ?? -8.0) === -8.0
-                          ? 'bg-amber-500 text-black font-bold border-amber-400'
-                          : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
+                        Math.abs(currentTrim - 0.0) < 0.1
+                          ? 'bg-neutral-200 text-black font-bold border-white shadow-xs'
+                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
                       }`}
+                      title="Set trim to 0.0 dB (Unity input)"
                     >
-                      -8dB Norm
+                      0dB
                     </button>
                     <button
-                      onClick={() => onUpdateNam({ ...namModel, inputTrim: -4.0 })}
-                      className={`px-1.5 py-0.5 rounded border transition-colors ${
-                        (namModel.inputTrim ?? -8.0) === -4.0
-                          ? 'bg-amber-500 text-black font-bold border-amber-400'
-                          : 'bg-neutral-950 border-neutral-700/80 text-neutral-300 hover:text-white'
-                      }`}
+                      onClick={() => updateAmpParam({ inputTrim: Math.min(12, currentTrim + 3.0) })}
+                      className="px-1.5 py-0.5 rounded border bg-neutral-950 border-neutral-800 text-emerald-400 hover:bg-emerald-950/40 hover:border-emerald-500/40 transition-colors"
+                      title="Add +3 dB loudness boost"
                     >
-                      -4dB Hot
+                      +3dB
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Amp Bypassed Notice Bar */}
+              {namModel.bypassed && (
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 my-2 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-xs font-mono shadow-md">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                    <span className="truncate">Amp is <strong>BYPASSED</strong> (Dry pass-through). Turn any knob or click to engage.</span>
+                  </div>
+                  <button
+                    onClick={() => onUpdateNam({ ...namModel, bypassed: false })}
+                    className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[10px] uppercase transition-colors shrink-0 shadow-xs"
+                  >
+                    Engage Amp
+                  </button>
                 </div>
               )}
 
@@ -663,7 +753,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   max={10}
                   step={0.1}
                   color="#f59e0b"
-                  onChange={(v) => onUpdateNam({ ...namModel, gain: v })}
+                  onChange={(v) => updateAmpParam({ gain: v })}
                 />
                 <RotaryKnob
                   label="Bass"
@@ -672,7 +762,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   max={10}
                   step={0.1}
                   color="#e2e8f0"
-                  onChange={(v) => onUpdateNam({ ...namModel, bass: v })}
+                  onChange={(v) => updateAmpParam({ bass: v })}
                 />
                 <RotaryKnob
                   label="Mid"
@@ -681,7 +771,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   max={10}
                   step={0.1}
                   color="#e2e8f0"
-                  onChange={(v) => onUpdateNam({ ...namModel, mid: v })}
+                  onChange={(v) => updateAmpParam({ mid: v })}
                 />
                 <RotaryKnob
                   label="Treble"
@@ -690,7 +780,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   max={10}
                   step={0.1}
                   color="#e2e8f0"
-                  onChange={(v) => onUpdateNam({ ...namModel, treble: v })}
+                  onChange={(v) => updateAmpParam({ treble: v })}
                 />
                 <RotaryKnob
                   label="Presence"
@@ -699,7 +789,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   max={10}
                   step={0.1}
                   color="#e2e8f0"
-                  onChange={(v) => onUpdateNam({ ...namModel, presence: v })}
+                  onChange={(v) => updateAmpParam({ presence: v })}
                 />
                 <RotaryKnob
                   label="Master"
@@ -708,7 +798,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   max={10}
                   step={0.1}
                   color="#10b981"
-                  onChange={(v) => onUpdateNam({ ...namModel, master: v })}
+                  onChange={(v) => updateAmpParam({ master: v })}
                 />
               </div>
             </div>
@@ -808,10 +898,38 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
               {/* Acoustic Convolver Engine Subtitle */}
               <div className="flex items-center justify-between gap-1 mt-1.5 px-1 py-1 text-xs text-neutral-400 font-mono">
                 <span className="text-[10px] text-neutral-400 uppercase">Acoustic Convolver:</span>
-                <span className="text-[10px] text-sky-400 bg-sky-950/60 border border-sky-500/30 px-1.5 py-0.2 rounded">
-                  {irCabinet.isRealWav || irCabinet.isCustom ? 'WAV Convolver Engine' : 'Synthetic Convolver'}
+                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border flex items-center gap-1 ${
+                  irCabinet.isCustom
+                    ? 'text-cyan-300 bg-cyan-950/80 border-cyan-500/40 shadow-xs'
+                    : irCabinet.isRealWav
+                    ? 'text-sky-300 bg-sky-950/80 border-sky-500/40'
+                    : 'text-neutral-300 bg-neutral-900 border-neutral-700'
+                }`}>
+                  {irCabinet.isCustom ? (
+                    <span>★ Custom IR: {irCabinet.customFileName || irCabinet.name} (Active)</span>
+                  ) : irCabinet.isRealWav ? (
+                    <span>Real WAV Acoustic IR (Active)</span>
+                  ) : (
+                    <span>Synthetic Convolver IR</span>
+                  )}
                 </span>
               </div>
+
+              {/* Cabinet Bypassed Notice Bar */}
+              {irCabinet.bypassed && (
+                <div className="flex items-center justify-between gap-2 px-3 py-1.5 my-2 rounded-xl bg-sky-950/40 border border-sky-500/50 text-sky-200 text-xs font-mono shadow-md">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping shrink-0" />
+                    <span className="truncate">Cabinet is <strong>BYPASSED</strong> (Flat direct line-out). Turn knob or click to engage.</span>
+                  </div>
+                  <button
+                    onClick={() => updateCabParam({ bypassed: false })}
+                    className="px-2.5 py-0.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-bold text-[10px] uppercase transition-colors shrink-0 shadow-xs"
+                  >
+                    Engage Cab
+                  </button>
+                </div>
+              )}
 
               {/* IR Controls (Mic Distance, Low Cut, High Cut) */}
               <div className="py-2 px-1 grid grid-cols-3 gap-2 bg-gradient-to-b from-neutral-950/40 to-neutral-900/60 rounded-xl my-2 border border-neutral-800/80">
@@ -820,29 +938,33 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   value={irCabinet.micDistance}
                   min={0}
                   max={100}
+                  step={1}
                   unit="%"
                   color="#38bdf8"
-                  onChange={(v) => onUpdateCab({ ...irCabinet, micDistance: v })}
+                  formatValue={(v) => `${Math.round(v)}%`}
+                  onChange={(v) => updateCabParam({ micDistance: v })}
                 />
                 <RotaryKnob
                   label="Low Cut"
                   value={irCabinet.lowCut}
                   min={20}
-                  max={200}
+                  max={160}
+                  step={1}
                   unit="Hz"
                   formatValue={(v) => `${Math.round(v)}Hz`}
                   color="#e2e8f0"
-                  onChange={(v) => onUpdateCab({ ...irCabinet, lowCut: v })}
+                  onChange={(v) => updateCabParam({ lowCut: v })}
                 />
                 <RotaryKnob
                   label="High Cut"
                   value={irCabinet.highCut}
-                  min={2000}
-                  max={15000}
+                  min={4000}
+                  max={12000}
+                  step={50}
                   unit="Hz"
-                  formatValue={(v) => `${Math.round(v / 100) / 10}k`}
+                  formatValue={(v) => `${(v / 1000).toFixed(1)}k`}
                   color="#e2e8f0"
-                  onChange={(v) => onUpdateCab({ ...irCabinet, highCut: v })}
+                  onChange={(v) => updateCabParam({ highCut: v })}
                 />
               </div>
             </div>

@@ -1157,17 +1157,19 @@ export function getStoredPresets(): Preset[] {
       }
     }
 
-    // Sanitize engineMode and isRealNam on all loaded presets
+    // Sanitize engineMode, isRealNam, and calibrated inputTrim on all loaded presets
     return merged.map((p: Preset) => {
       if (!p.namModel) return p;
       const isNam = isNamModelProfile(p.namModel);
       const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isNam
         ? 'wasm-nam'
         : (p.namModel.engineMode && p.namModel.engineMode !== 'wasm-nam' ? p.namModel.engineMode : 'hd-triode');
+      const baseModel = BUILT_IN_NAM_MODELS.find(m => m.id === p.namModel.id);
       return {
         ...p,
         namModel: {
           ...p.namModel,
+          inputTrim: p.namModel.inputTrim !== undefined ? p.namModel.inputTrim : (baseModel?.inputTrim ?? 0),
           isRealNam: isNam,
           engineMode: targetEngine
         }
@@ -1203,7 +1205,8 @@ export function encodePresetToShareUrl(preset: Preset): string {
         m: preset.namModel.mid,
         t: preset.namModel.treble,
         p: preset.namModel.presence,
-        vol: preset.namModel.master
+        vol: preset.namModel.master,
+        trim: preset.namModel.inputTrim
       },
       cab: {
         id: preset.irCabinet.id,
@@ -1255,7 +1258,8 @@ export function decodePresetFromShareUrl(): Preset | null {
         mid: data.nam.m ?? baseNam.mid,
         treble: data.nam.t ?? baseNam.treble,
         presence: data.nam.p ?? baseNam.presence,
-        master: data.nam.vol ?? baseNam.master
+        master: data.nam.vol ?? baseNam.master,
+        inputTrim: data.nam.trim ?? baseNam.inputTrim
       },
       irCabinet: {
         ...baseCab,
