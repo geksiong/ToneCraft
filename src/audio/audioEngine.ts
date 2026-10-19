@@ -42,6 +42,12 @@ import {
   InputConditionerConfig,
   InputConditionerTelemetry
 } from './inputConditioner';
+import {
+  InputChannelRouter,
+  InputChannelRoutingMode,
+  OutputChannelRoutingMode,
+  InputChannelTelemetry
+} from './inputChannelRouter';
 
 export interface AudioLatencySettings {
   profile: 'ultra-low' | 'balanced' | 'safe';
@@ -113,10 +119,22 @@ export class ToneCraftEngine {
   public currentCabConfig: IrCabinetConfig | null = null;
 
   // Sub-Engines
+  public inputRouter: InputChannelRouter = new InputChannelRouter();
   public namEngine: NamEngine = new NamEngine();
   private looperEngine: LooperEngine = new LooperEngine();
   private tunerEngine: TunerEngine = new TunerEngine();
   public inputConditioner: InputConditionerEngine = new InputConditionerEngine();
+
+  // Dual-Channel Output Routing Balancer
+  public outputRoutingMode: OutputChannelRoutingMode = 'stereo';
+  private outputStageInput: GainNode | null = null;
+  private outputSplitter: ChannelSplitterNode | null = null;
+  private outputMerger: ChannelMergerNode | null = null;
+  private outputLeftGain: GainNode | null = null;
+  private outputRightGain: GainNode | null = null;
+  private outputMonoLeftGain: GainNode | null = null;
+  private outputMonoRightGain: GainNode | null = null;
+  private outputStageNode: GainNode | null = null;
 
   // Telemetry & Latency State
   public lastMeasuredPing: number | null = null;
@@ -137,6 +155,7 @@ export class ToneCraftEngine {
   public onTelemetryUpdate: ((telemetry: HdWorkletTelemetry) => void) | null = null;
   public onLatencyUpdate: ((report: SignalChainLatencyReport) => void) | null = null;
   public onConditionerUpdate: ((telemetry: InputConditionerTelemetry) => void) | null = null;
+  public onInputChannelUpdate: ((telemetry: InputChannelTelemetry) => void) | null = null;
   private peakMeterTimer: any = null;
 
   constructor() {}
@@ -209,22 +228,27 @@ export class ToneCraftEngine {
       (window as any).__toneCraftEngine = this;
     }
 
-    // 1. Input Stage
+    // 1. Input Channel Router (Identifies Mono Input Sources & Routes to Both Channels L+R)
+    const routerStage = this.inputRouter.init(this.ctx);
+
+    // 2. Input Stage & Level Trim
     this.inputGainNode = this.ctx.createGain();
     this.inputGainNode.gain.value = 1.0;
+    routerStage.output.connect(this.inputGainNode);
 
-    // 2. Tuner Tap: Dedicated tap isolated from inputGainNode and riff playback
+    // 3. Tuner Tap: Dedicated tap from router output (always receives audio on both channels)
     this.tunerGainNode = this.ctx.createGain();
     this.tunerGainNode.gain.value = 1.0;
     this.tunerAnalyserNode = this.ctx.createAnalyser();
     this.tunerAnalyserNode.fftSize = 2048;
     this.tunerGainNode.connect(this.tunerAnalyserNode);
+    routerStage.output.connect(this.tunerGainNode);
 
-    // 3. Studio Input Conditioner (Dynamic Noise Gate, De-Hiss Filter, Anti-Whine Notch, Low-Cut)
+    // 4. Studio Input Conditioner (Dynamic Noise Gate, De-Hiss Filter, Anti-Whine Notch, Low-Cut)
     const conditionerStage = this.inputConditioner.init(this.ctx);
     this.inputGainNode.connect(conditionerStage.input);
 
-    // 4. Pedalboard Chain Boundary Nodes
+    // 5. Pedalboard Chain Boundary Nodes
     this.chainInputNode = this.ctx.createGain();
     this.chainOutputNode = this.ctx.createGain();
     conditionerStage.output.connect(this.chainInputNode);
@@ -312,21 +336,55 @@ export class ToneCraftEngine {
     // Looper layer playback mixes into master bus
     looperOutput.connect(this.masterGainNode);
 
-    // Master Bus -> Limiter Bus -> Analyser -> Output Routing Stage
+    // Master Bus -> Limiter Bus -> Analyser -> Output Dual-Channel Stage -> Output Routing Stage
     this.masterLimiterBus.connect(this.analyserNode);
+
+    // Output Dual-Channel Stage:
+    // Ensures audio is routed to both Left and Right output channels (Stereo or Dual-Mono)
+    this.outputStageInput = this.ctx.createGain();
+    this.analyserNode.connect(this.outputStageInput);
+
+    this.outputSplitter = this.ctx.createChannelSplitter(2);
+    this.outputMerger = this.ctx.createChannelMerger(2);
+
+    this.outputLeftGain = this.ctx.createGain();
+    this.outputRightGain = this.ctx.createGain();
+    this.outputMonoLeftGain = this.ctx.createGain();
+    this.outputMonoRightGain = this.ctx.createGain();
+
+    this.outputStageInput.connect(this.outputSplitter);
+
+    // Direct Stereo routing:
+    this.outputSplitter.connect(this.outputLeftGain, 0);
+    this.outputSplitter.connect(this.outputRightGain, 1);
+    this.outputLeftGain.connect(this.outputMerger, 0, 0);
+    this.outputRightGain.connect(this.outputMerger, 0, 1);
+
+    // Dual-Mono sum routing:
+    this.outputSplitter.connect(this.outputMonoLeftGain, 0);
+    this.outputSplitter.connect(this.outputMonoRightGain, 1);
+    this.outputMonoLeftGain.connect(this.outputMerger, 0, 0);
+    this.outputMonoLeftGain.connect(this.outputMerger, 0, 1);
+    this.outputMonoRightGain.connect(this.outputMerger, 0, 0);
+    this.outputMonoRightGain.connect(this.outputMerger, 0, 1);
+
+    this.outputStageNode = this.ctx.createGain();
+    this.outputMerger.connect(this.outputStageNode);
+
+    this.updateOutputRoutingMode();
 
     // Dual-route output stage:
     // 1. Direct hardware destination (default output / DAC)
     this.directDestinationGain = this.ctx.createGain();
     this.directDestinationGain.gain.value = 1.0;
-    this.analyserNode.connect(this.directDestinationGain);
+    this.outputStageNode.connect(this.directDestinationGain);
     this.directDestinationGain.connect(this.ctx.destination);
 
     // 2. MediaStreamDestination for explicit sinkId routing
     this.mediaStreamDest = this.ctx.createMediaStreamDestination();
     this.streamDestinationGain = this.ctx.createGain();
     this.streamDestinationGain.gain.value = 0.0;
-    this.analyserNode.connect(this.streamDestinationGain);
+    this.outputStageNode.connect(this.streamDestinationGain);
     this.streamDestinationGain.connect(this.mediaStreamDest);
 
     if (typeof Audio !== 'undefined') {
@@ -374,8 +432,42 @@ export class ToneCraftEngine {
       if (this.onConditionerUpdate) this.onConditionerUpdate(telemetry);
     };
 
+    this.inputRouter.onTelemetry = (telemetry) => {
+      if (this.onInputChannelUpdate) this.onInputChannelUpdate(telemetry);
+    };
+
     this.startPeakMeterLoop();
     this.dispatchLatencyUpdate();
+  }
+
+  public setOutputRoutingMode(mode: OutputChannelRoutingMode): void {
+    this.outputRoutingMode = mode;
+    this.inputRouter.setOutputMode(mode);
+    this.updateOutputRoutingMode();
+  }
+
+  private updateOutputRoutingMode(): void {
+    if (!this.ctx || !this.outputLeftGain || !this.outputRightGain || !this.outputMonoLeftGain || !this.outputMonoRightGain) return;
+    const now = this.ctx.currentTime;
+    if (this.outputRoutingMode === 'dual-mono') {
+      this.outputLeftGain.gain.setTargetAtTime(0.0, now, 0.02);
+      this.outputRightGain.gain.setTargetAtTime(0.0, now, 0.02);
+      this.outputMonoLeftGain.gain.setTargetAtTime(0.5, now, 0.02);
+      this.outputMonoRightGain.gain.setTargetAtTime(0.5, now, 0.02);
+    } else {
+      this.outputLeftGain.gain.setTargetAtTime(1.0, now, 0.02);
+      this.outputRightGain.gain.setTargetAtTime(1.0, now, 0.02);
+      this.outputMonoLeftGain.gain.setTargetAtTime(0.0, now, 0.02);
+      this.outputMonoRightGain.gain.setTargetAtTime(0.0, now, 0.02);
+    }
+  }
+
+  public setInputRoutingMode(mode: InputChannelRoutingMode): void {
+    this.inputRouter.setRoutingMode(mode);
+  }
+
+  public getInputRoutingMode(): InputChannelRoutingMode {
+    return this.inputRouter.routingMode;
   }
 
   private updateLimiterMode(): void {
@@ -755,15 +847,23 @@ export class ToneCraftEngine {
 
         this.micMediaStream = stream;
         const track = stream.getAudioTracks()[0];
+        let chCount = 1;
         if (track) {
           this.currentInputDeviceLabel = track.label || '';
+          const settings = (track as any).getSettings ? (track as any).getSettings() : null;
+          if (settings && settings.channelCount) {
+            chCount = settings.channelCount;
+          }
         }
         this.micSourceNode = this.ctx.createMediaStreamSource(stream);
-        // Connect to pedalboard & amp signal chain (subject to inputGain slider)
-        this.micSourceNode.connect(this.inputGainNode);
-        // Connect to dedicated tuner stage (pre-gain-slider, so low mic gain slider never kills tuner)
-        if (this.tunerGainNode) {
-          this.micSourceNode.connect(this.tunerGainNode);
+        if (this.micSourceNode.channelCount) {
+          chCount = Math.max(chCount, this.micSourceNode.channelCount);
+        }
+        this.inputRouter.setSourceChannelCount(chCount);
+
+        // Connect mic stream to inputRouter (identifies mono sources & routes to both channels)
+        if (this.inputRouter.inputNode) {
+          this.micSourceNode.connect(this.inputRouter.inputNode);
         }
         // Activate tuner loop when on mic input
         if (this.isRunning) {
@@ -811,7 +911,10 @@ export class ToneCraftEngine {
     const sourceNode = this.ctx.createBufferSource();
     sourceNode.buffer = buffer;
     sourceNode.loop = true;
-    sourceNode.connect(this.inputGainNode);
+    this.inputRouter.setSourceChannelCount(buffer.numberOfChannels || 1);
+    if (this.inputRouter.inputNode) {
+      sourceNode.connect(this.inputRouter.inputNode);
+    }
     sourceNode.start(0);
     this.sampleSourceNode = sourceNode;
     this.isRiffPlaying = true;
@@ -1139,10 +1242,19 @@ export class ToneCraftEngine {
     this.looperEngine.dispose();
     this.namEngine.dispose();
     this.inputConditioner.dispose();
+    this.inputRouter.dispose();
     if (this.tunerGainNode) {
       try { this.tunerGainNode.disconnect(); } catch {}
       this.tunerGainNode = null;
     }
+    this.outputStageInput = null;
+    this.outputSplitter = null;
+    this.outputMerger = null;
+    this.outputLeftGain = null;
+    this.outputRightGain = null;
+    this.outputMonoLeftGain = null;
+    this.outputMonoRightGain = null;
+    this.outputStageNode = null;
     if (this.outputAudioElement) {
       try {
         this.outputAudioElement.pause();

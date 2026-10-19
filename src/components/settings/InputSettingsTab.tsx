@@ -8,12 +8,23 @@ import {
   HelpCircle,
   Activity,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Radio,
+  Split,
+  GitBranch,
+  ArrowRight,
+  Headphones,
+  Check
 } from 'lucide-react';
 import {
   InputConditionerConfig,
   InputConditionerTelemetry
 } from '../../audio/inputConditioner';
+import {
+  InputChannelTelemetry,
+  InputChannelRoutingMode,
+  OutputChannelRoutingMode
+} from '../../audio/inputChannelRouter';
 
 export interface InputSettingsTabProps {
   config: InputConditionerConfig;
@@ -25,6 +36,11 @@ export interface InputSettingsTabProps {
   inputSource: string;
   inputGain?: number;
   onInputGainChange?: (gain: number) => void;
+  channelTelemetry?: InputChannelTelemetry;
+  inputRoutingMode?: InputChannelRoutingMode;
+  onInputRoutingChange?: (mode: InputChannelRoutingMode) => void;
+  outputRoutingMode?: OutputChannelRoutingMode;
+  onOutputRoutingChange?: (mode: OutputChannelRoutingMode) => void;
 }
 
 export const InputSettingsTab: React.FC<InputSettingsTabProps> = ({
@@ -36,9 +52,14 @@ export const InputSettingsTab: React.FC<InputSettingsTabProps> = ({
   onApplyWhineKiller,
   inputSource,
   inputGain,
-  onInputGainChange
+  onInputGainChange,
+  channelTelemetry,
+  inputRoutingMode = 'auto',
+  onInputRoutingChange,
+  outputRoutingMode = 'stereo',
+  onOutputRoutingChange
 }) => {
-  const [filterSubTab, setFilterSubTab] = useState<'all' | 'gate' | 'filter'>('all');
+  const [filterSubTab, setFilterSubTab] = useState<'all' | 'routing' | 'gate' | 'filter'>('all');
   const [showExplanation, setShowExplanation] = useState<boolean>(false);
 
   // Calculate percentage for visual meter (-80dB to 0dB)
@@ -58,8 +79,268 @@ export const InputSettingsTab: React.FC<InputSettingsTabProps> = ({
     return `${db > 0 ? '+' : ''}${db.toFixed(1)} dB`;
   };
 
+  const ch1LevelPercent = channelTelemetry
+    ? Math.min(100, Math.max(0, ((channelTelemetry.ch1LevelDb + 80) / 80) * 100))
+    : 0;
+  const ch2LevelPercent = channelTelemetry
+    ? Math.min(100, Math.max(0, ((channelTelemetry.ch2LevelDb + 80) / 80) * 100))
+    : 0;
+
   return (
     <div className="space-y-6">
+      {/* 0. MONO INPUT SOURCE IDENTIFICATION & DUAL-CHANNEL OUTPUT ROUTING */}
+      {(filterSubTab === 'all' || filterSubTab === 'routing') && (
+        <div className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-5 shadow-inner space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <GitBranch size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white tracking-wide">
+                    Mono Input Detection &amp; Dual-Channel Routing
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                      channelTelemetry?.isMonoIdentified !== false
+                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                        : 'bg-sky-500/20 border-sky-500/40 text-sky-400'
+                    }`}
+                  >
+                    {channelTelemetry?.isMonoIdentified !== false ? 'Mono ➔ Both Channels (L+R)' : 'Stereo Input'}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400">
+                  Identifies mono guitar inputs on USB audio interfaces and routes output to both channels so you hear sound in both ears
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono text-neutral-400">Output Routing:</span>
+              <span className="px-2.5 py-1 rounded bg-neutral-950 border border-neutral-800 text-xs font-mono font-bold text-emerald-400 flex items-center gap-1.5">
+                <Check size={12} className="text-emerald-400" />
+                <span>Stereo L+R Active</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Dual Channel Live Activity Meters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-neutral-950/70 p-3.5 rounded-xl border border-neutral-850">
+            {/* Input 1 / Left */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-neutral-300">Input 1 (Left / Jack 1)</span>
+                  {channelTelemetry && channelTelemetry.ch1LevelDb > -58 ? (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      ACTIVE GUITAR
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-neutral-900 text-neutral-500 border border-neutral-800">
+                      IDLE
+                    </span>
+                  )}
+                </div>
+                <span className="font-mono text-emerald-400 font-bold tabular-nums">
+                  {channelTelemetry && channelTelemetry.ch1LevelDb > -90 ? `${channelTelemetry.ch1LevelDb} dB` : '-∞ dB'}
+                </span>
+              </div>
+              <div className="h-3 bg-neutral-900 rounded overflow-hidden border border-neutral-800 flex">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-600 via-teal-500 to-amber-500 transition-all duration-75"
+                  style={{ width: `${ch1LevelPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Input 2 / Right */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-neutral-300">Input 2 (Right / Jack 2)</span>
+                  {channelTelemetry && channelTelemetry.ch2LevelDb > -58 ? (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      ACTIVE GUITAR
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-neutral-900 text-neutral-500 border border-neutral-800">
+                      FLOATING / QUIET
+                    </span>
+                  )}
+                </div>
+                <span className="font-mono text-emerald-400 font-bold tabular-nums">
+                  {channelTelemetry && channelTelemetry.ch2LevelDb > -90 ? `${channelTelemetry.ch2LevelDb} dB` : '-∞ dB'}
+                </span>
+              </div>
+              <div className="h-3 bg-neutral-900 rounded overflow-hidden border border-neutral-800 flex">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-600 via-teal-500 to-amber-500 transition-all duration-75"
+                  style={{ width: `${ch2LevelPercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Current Routing Explanation Banner */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300">
+            <Radio size={14} className="text-emerald-400 shrink-0 animate-pulse" />
+            <span className="font-bold shrink-0">Current Routing:</span>
+            <span className="font-mono text-[11px] truncate text-emerald-200">
+              {channelTelemetry?.description || 'Mono Source (Input 1 / Left) ➔ Duplicated to Both Channels (L+R)'}
+            </span>
+          </div>
+
+          {/* Routing Mode Selection Buttons */}
+          <div className="space-y-1.5">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-300 block">
+              Channel Routing Configuration
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => onInputRoutingChange && onInputRoutingChange('auto')}
+                className={`p-2.5 rounded-xl text-left border transition-all ${
+                  inputRoutingMode === 'auto'
+                    ? 'bg-emerald-500/20 border-emerald-500/60 text-white shadow-sm ring-1 ring-emerald-500/40'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Zap size={13} />
+                    Auto-Detect Mono
+                  </span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                    Recommended
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-tight">
+                  Automatically identifies mono input (single-channel or active interface jack) and routes to both channels (L+R).
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onInputRoutingChange && onInputRoutingChange('mono-ch1')}
+                className={`p-2.5 rounded-xl text-left border transition-all ${
+                  inputRoutingMode === 'mono-ch1'
+                    ? 'bg-emerald-500/20 border-emerald-500/60 text-white shadow-sm ring-1 ring-emerald-500/40'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    Mono: Input 1 (Left) ➔ L+R
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-tight">
+                  Always duplicates Input 1 to both Left &amp; Right channels. Standard for Focusrite, Behringer, and MOTU.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onInputRoutingChange && onInputRoutingChange('mono-ch2')}
+                className={`p-2.5 rounded-xl text-left border transition-all ${
+                  inputRoutingMode === 'mono-ch2'
+                    ? 'bg-emerald-500/20 border-emerald-500/60 text-white shadow-sm ring-1 ring-emerald-500/40'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    Mono: Input 2 (Right) ➔ L+R
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-tight">
+                  Always duplicates Input 2 to both Left &amp; Right channels. Use when your guitar is in the 2nd jack.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onInputRoutingChange && onInputRoutingChange('mono-sum')}
+                className={`p-2.5 rounded-xl text-left border transition-all ${
+                  inputRoutingMode === 'mono-sum'
+                    ? 'bg-emerald-500/20 border-emerald-500/60 text-white shadow-sm ring-1 ring-emerald-500/40'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                    Mono Sum: (1 + 2) ➔ L+R
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-tight">
+                  Blends Input 1 and Input 2 equally to both channels. Useful for dual-pickup or stereo mic sum.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onInputRoutingChange && onInputRoutingChange('stereo')}
+                className={`p-2.5 rounded-xl text-left border transition-all ${
+                  inputRoutingMode === 'stereo'
+                    ? 'bg-sky-500/20 border-sky-500/60 text-white shadow-sm ring-1 ring-sky-500/40'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-sky-400 flex items-center gap-1.5">
+                    Stereo Pass-Through
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-tight">
+                  Discrete stereo routing (Input 1 ➔ Left, Input 2 ➔ Right) without mono duplication.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Master Output Distribution Mode */}
+          <div className="pt-3 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Headphones size={15} className="text-neutral-400 shrink-0" />
+              <div>
+                <span className="text-xs font-bold text-neutral-200 block">
+                  Master Output Channel Mode
+                </span>
+                <span className="text-[10px] text-neutral-400">
+                  Select whether output preserves wide stereo effects or locks to strictly identical dual-mono
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onOutputRoutingChange && onOutputRoutingChange('stereo')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
+                  outputRoutingMode === 'stereo'
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-bold'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+              >
+                Stereo (L/R)
+              </button>
+              <button
+                type="button"
+                onClick={() => onOutputRoutingChange && onOutputRoutingChange('dual-mono')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
+                  outputRoutingMode === 'dual-mono'
+                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-bold'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                }`}
+              >
+                Dual-Mono (Both Ears)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Section Summary & Gate Master Toggle */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-neutral-900/70 border border-neutral-800">
         <div className="flex items-center gap-3">
@@ -383,11 +664,11 @@ export const InputSettingsTab: React.FC<InputSettingsTabProps> = ({
         </button>
       </div>
 
-      {/* Filter / Gate Subtabs */}
-      <div className="flex border-b border-neutral-800 gap-4">
+      {/* Filter / Gate / Routing Subtabs */}
+      <div className="flex border-b border-neutral-800 gap-4 overflow-x-auto">
         <button
           onClick={() => setFilterSubTab('all')}
-          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 ${
+          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${
             filterSubTab === 'all'
               ? 'border-emerald-400 text-emerald-400'
               : 'border-transparent text-neutral-400 hover:text-white'
@@ -396,8 +677,18 @@ export const InputSettingsTab: React.FC<InputSettingsTabProps> = ({
           All Processors
         </button>
         <button
+          onClick={() => setFilterSubTab('routing')}
+          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${
+            filterSubTab === 'routing'
+              ? 'border-emerald-400 text-emerald-400'
+              : 'border-transparent text-neutral-400 hover:text-white'
+          }`}
+        >
+          Mono Detection &amp; Routing
+        </button>
+        <button
           onClick={() => setFilterSubTab('filter')}
-          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 ${
+          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${
             filterSubTab === 'filter'
               ? 'border-amber-400 text-amber-400'
               : 'border-transparent text-neutral-400 hover:text-white'
@@ -407,7 +698,7 @@ export const InputSettingsTab: React.FC<InputSettingsTabProps> = ({
         </button>
         <button
           onClick={() => setFilterSubTab('gate')}
-          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 ${
+          className={`pb-2 text-xs font-mono font-bold uppercase tracking-wider transition-colors border-b-2 whitespace-nowrap ${
             filterSubTab === 'gate'
               ? 'border-teal-400 text-teal-400'
               : 'border-transparent text-neutral-400 hover:text-white'

@@ -269,6 +269,9 @@ class HdCoreProcessor extends AudioWorkletProcessor {
 
     if (!this.enabled) {
       outChannel.set(inChannel);
+      if (output.length > 1 && output[1]) {
+        output[1].set(inChannel);
+      }
       return true;
     }
 

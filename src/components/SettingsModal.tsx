@@ -15,6 +15,11 @@ import {
   InputConditionerConfig,
   InputConditionerTelemetry
 } from '../audio/inputConditioner';
+import {
+  InputChannelTelemetry,
+  InputChannelRoutingMode,
+  OutputChannelRoutingMode
+} from '../audio/inputChannelRouter';
 import { SignalChainLatencyReport } from '../audio/latencyTracker';
 import { AudioLatencySettings } from '../audio/audioEngine';
 import { AnyPedal, Preset, NamModelConfig, IrCabinetConfig } from '../types/pedal';
@@ -41,6 +46,11 @@ export interface SettingsModalProps {
   inputSource: string;
   inputGain: number;
   onInputGainChange: (gain: number) => void;
+  channelTelemetry?: InputChannelTelemetry;
+  inputRoutingMode?: InputChannelRoutingMode;
+  onInputRoutingChange?: (mode: InputChannelRoutingMode) => void;
+  outputRoutingMode?: OutputChannelRoutingMode;
+  onOutputRoutingChange?: (mode: OutputChannelRoutingMode) => void;
 
   // 2. Engine & Latency Props
   latencyReport: SignalChainLatencyReport;
@@ -90,6 +100,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   inputSource,
   inputGain,
   onInputGainChange,
+  channelTelemetry,
+  inputRoutingMode,
+  onInputRoutingChange,
+  outputRoutingMode,
+  onOutputRoutingChange,
 
   // Engine props
   latencyReport,
@@ -294,6 +309,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               inputSource={inputSource}
               inputGain={inputGain}
               onInputGainChange={onInputGainChange}
+              channelTelemetry={channelTelemetry}
+              inputRoutingMode={inputRoutingMode}
+              onInputRoutingChange={onInputRoutingChange}
+              outputRoutingMode={outputRoutingMode}
+              onOutputRoutingChange={onOutputRoutingChange}
             />
           )}
 

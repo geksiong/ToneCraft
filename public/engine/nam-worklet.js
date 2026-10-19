@@ -181,9 +181,15 @@ class NamProcessor extends AudioWorkletProcessor {
             // Pass-through (or silence when there is no input to pass).
             if (inputChannel !== null) {
                 outputChannel.set(inputChannel);
+                if (output.length > 1 && output[1]) {
+                    output[1].set(inputChannel);
+                }
             }
             else {
                 outputChannel.fill(0);
+                if (output.length > 1 && output[1]) {
+                    output[1].fill(0);
+                }
             }
             return true;
         }
@@ -204,6 +210,10 @@ class NamProcessor extends AudioWorkletProcessor {
                 outputChannel[i] *= progress;
                 this.fadeInRemaining--;
             }
+        }
+        // Duplicate output to second channel if output is stereo
+        if (output.length > 1 && output[1]) {
+            output[1].set(outputChannel);
         }
         return true;
     }

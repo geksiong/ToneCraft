@@ -14,8 +14,13 @@ import {
   Speaker,
   RotateCcw,
   Radio,
-  Settings
+  Settings,
+  GitBranch
 } from 'lucide-react';
+import {
+  InputChannelTelemetry,
+  InputChannelRoutingMode
+} from '../audio/inputChannelRouter';
 
 interface HeaderProps {
   isRunning: boolean;
@@ -33,6 +38,9 @@ interface HeaderProps {
   onToggleGate: () => void;
   gateState?: 'open' | 'hold' | 'closed';
   onOpenInputConditioner: () => void;
+  channelTelemetry?: InputChannelTelemetry;
+  inputRoutingMode?: InputChannelRoutingMode;
+  onInputRoutingChange?: (mode: InputChannelRoutingMode) => void;
   isRiffPlaying: boolean;
   onToggleRiffPlaying: () => void;
   // Row 2: DSP controls
@@ -69,6 +77,9 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleGate,
   gateState,
   onOpenInputConditioner,
+  channelTelemetry,
+  inputRoutingMode,
+  onInputRoutingChange,
   isRiffPlaying,
   onToggleRiffPlaying,
   currentPreset,
@@ -312,6 +323,30 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 />
                 <span>{gateEnabled ? 'Gate: ON' : 'Gate: OFF'}</span>
+              </button>
+
+              {/* 4. Mono Input Identification & Dual-Channel Output Routing Badge */}
+              <button
+                type="button"
+                onClick={() => onOpenSettings && onOpenSettings('input')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono font-bold transition-all shrink-0 ${
+                  channelTelemetry?.isMonoIdentified !== false
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                    : 'bg-sky-500/15 border-sky-500/40 text-sky-300 hover:bg-sky-500/25'
+                }`}
+                title={
+                  channelTelemetry
+                    ? `${channelTelemetry.description} (Click to configure channel routing)`
+                    : 'Mono source identified: audio is routed to both output channels (L+R). Click to configure.'
+                }
+              >
+                <GitBranch size={12} className={channelTelemetry?.isMonoIdentified !== false ? 'text-emerald-400' : 'text-sky-400'} />
+                <span className="hidden sm:inline">
+                  {channelTelemetry?.isMonoIdentified !== false ? 'Mono ➔ Both (L+R)' : 'Stereo Input'}
+                </span>
+                <span className="sm:hidden">
+                  {channelTelemetry?.isMonoIdentified !== false ? 'Mono L+R' : 'Stereo'}
+                </span>
               </button>
             </div>
 

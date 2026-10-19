@@ -38,6 +38,11 @@ import {
   InputConditionerConfig,
   InputConditionerTelemetry
 } from './audio/inputConditioner';
+import {
+  InputChannelTelemetry,
+  InputChannelRoutingMode,
+  OutputChannelRoutingMode
+} from './audio/inputChannelRouter';
 import { isNamModelProfile } from './audio/namModels';
 import { Music2, Power, Radio } from 'lucide-react';
 
@@ -163,6 +168,32 @@ export default function App() {
   });
   const [isLearningNoiseFloor, setIsLearningNoiseFloor] = useState<boolean>(false);
 
+  // Mono Input Detection & Dual-Channel Output Routing State
+  const [inputRoutingMode, setInputRoutingMode] = useState<InputChannelRoutingMode>(() => {
+    try {
+      return (localStorage.getItem('tonecraft_input_routing') as InputChannelRoutingMode) || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const [outputRoutingMode, setOutputRoutingMode] = useState<OutputChannelRoutingMode>(() => {
+    try {
+      return (localStorage.getItem('tonecraft_output_routing') as OutputChannelRoutingMode) || 'stereo';
+    } catch {
+      return 'stereo';
+    }
+  });
+  const [inputChannelTelemetry, setInputChannelTelemetry] = useState<InputChannelTelemetry>({
+    sourceChannelCount: 1,
+    detectedType: 'mono-ch1',
+    isMonoIdentified: true,
+    routingMode: 'auto',
+    effectiveRouting: 'mono-ch1',
+    ch1LevelDb: -100,
+    ch2LevelDb: -100,
+    description: 'Mono Source (Input 1 / Left) ➔ Routed to Both Channels (L+R)'
+  });
+
   // Collapsed Rig Views State (persisted to localStorage)
   const [collapsedSections, setCollapsedSections] = useState<CollapsedSectionsState>(() => {
     try {
@@ -226,6 +257,8 @@ export default function App() {
         audioEngine.updateIrCabinet(irCabinet);
         audioEngine.setMasterGain(masterVolume);
         audioEngine.setInputGain(inputGain);
+        audioEngine.setInputRoutingMode(inputRoutingMode);
+        audioEngine.setOutputRoutingMode(outputRoutingMode);
 
         if (activeSource.startsWith('mic')) {
           audioEngine.stopSampleRiff();
@@ -315,6 +348,9 @@ export default function App() {
     audioEngine.onConditionerUpdate = (stats) => {
       setConditionerTelemetry(stats);
     };
+    audioEngine.onInputChannelUpdate = (stats) => {
+      setInputChannelTelemetry(stats);
+    };
 
     return () => {
       audioEngine.onTunerUpdate = null;
@@ -323,8 +359,19 @@ export default function App() {
       audioEngine.onLatencyUpdate = null;
       audioEngine.onNamStatusUpdate = null;
       audioEngine.onConditionerUpdate = null;
+      audioEngine.onInputChannelUpdate = null;
     };
   }, []);
+
+  const handleInputRoutingChange = (mode: InputChannelRoutingMode) => {
+    setInputRoutingMode(mode);
+    audioEngine.setInputRoutingMode(mode);
+  };
+
+  const handleOutputRoutingChange = (mode: OutputChannelRoutingMode) => {
+    setOutputRoutingMode(mode);
+    audioEngine.setOutputRoutingMode(mode);
+  };
 
   const handleToggleMute = useCallback(() => {
     setIsMuted(prev => {
@@ -854,6 +901,9 @@ export default function App() {
         onToggleGate={handleToggleGate}
         gateState={conditionerTelemetry.gateState}
         onOpenInputConditioner={() => handleOpenSettings('input')}
+        channelTelemetry={inputChannelTelemetry}
+        inputRoutingMode={inputRoutingMode}
+        onInputRoutingChange={handleInputRoutingChange}
         isRiffPlaying={isRiffPlaying}
         onToggleRiffPlaying={handleToggleRiffPlaying}
         currentPreset={currentPreset}
@@ -1077,6 +1127,11 @@ export default function App() {
           setInputGain(val);
           audioEngine.setInputGain(val);
         }}
+        channelTelemetry={inputChannelTelemetry}
+        inputRoutingMode={inputRoutingMode}
+        onInputRoutingChange={handleInputRoutingChange}
+        outputRoutingMode={outputRoutingMode}
+        onOutputRoutingChange={handleOutputRoutingChange}
         // DSP Engine & Latency
         latencyReport={latencyReport}
         coreEngineMode={coreEngineMode}
