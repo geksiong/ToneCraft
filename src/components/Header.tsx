@@ -15,7 +15,8 @@ import {
   RotateCcw,
   Radio,
   Settings,
-  GitBranch
+  GitBranch,
+  BookOpen
 } from 'lucide-react';
 import {
   InputChannelTelemetry,
@@ -58,6 +59,7 @@ interface HeaderProps {
   onMinimiseLatency?: () => Promise<void>;
   onOpenMidiSettings?: () => void;
   onOpenSettings?: (tab?: 'input' | 'engine' | 'midi' | 'presets') => void;
+  onOpenAbout?: () => void;
   midiDeviceCount?: number;
   isMidiActivity?: boolean;
 }
@@ -95,6 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenEngineSettings,
   onOpenMidiSettings,
   onOpenSettings,
+  onOpenAbout,
   midiDeviceCount = 0,
   isMidiActivity = false
 }) => {
@@ -140,19 +143,23 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Left Side: Brand Logo & 2 Rows of Controls */}
         <div className="flex items-center gap-3 sm:gap-5 flex-1 min-w-0">
           {/* Brand Identification */}
-          <div className="shrink-0 flex flex-col justify-center pr-3 sm:pr-4 border-r border-neutral-800/80">
+          <button
+            onClick={onOpenAbout}
+            className="shrink-0 flex flex-col justify-center pr-3 sm:pr-4 border-r border-neutral-800/80 text-left hover:opacity-85 transition-opacity group cursor-pointer"
+            title="About ToneCraft, Tone Guide & Project Info (by Gek Siong)"
+          >
             <div className="flex items-center gap-1.5">
-              <span className="text-base sm:text-lg font-black tracking-wider uppercase bg-gradient-to-r from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent font-sans">
+              <span className="text-base sm:text-lg font-black tracking-wider uppercase bg-gradient-to-r from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent font-sans group-hover:from-amber-100 group-hover:to-amber-400">
                 ToneCraft
               </span>
-              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 uppercase tracking-wider">
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 uppercase tracking-wider group-hover:border-amber-500/40 group-hover:text-amber-300">
                 DSP
               </span>
             </div>
-            <span className="text-[10px] text-neutral-400 font-mono tracking-tight hidden md:block">
-              Neural Modeler
+            <span className="text-[10px] text-neutral-400 font-mono tracking-tight hidden md:block group-hover:text-neutral-300">
+              Neural Modeler · Guide
             </span>
-          </div>
+          </button>
 
           {/* Main 2-Row Control Surface */}
           <div className="flex flex-col gap-1.5 flex-1 min-w-0">
@@ -451,7 +458,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {/* 4. Unified Settings Button (Input, DSP Engine, MIDI, Cloud Presets) */}
+              {/* 4. About & Tone Guide Button */}
+              <button
+                onClick={onOpenAbout}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-amber-500/40 text-neutral-200 hover:text-white transition-colors shrink-0 font-medium"
+                title="About ToneCraft, Tone Crafting Tips & Project Info (by Gek Siong)"
+              >
+                <BookOpen size={12} className="text-amber-400 shrink-0" />
+                <span>About &amp; Guide</span>
+              </button>
+
+              {/* 5. Unified Settings Button (Input, DSP Engine, MIDI, Cloud Presets) */}
               <button
                 onClick={() => (onOpenSettings ? onOpenSettings() : undefined)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-amber-500/40 text-neutral-200 hover:text-white transition-colors shrink-0 font-medium"

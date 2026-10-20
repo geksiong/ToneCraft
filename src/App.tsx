@@ -30,6 +30,7 @@ import { TunerModal } from './components/TunerModal';
 import { AddPedalModal } from './components/AddPedalModal';
 import { VstEditorModal } from './components/VstEditorModal';
 import { SettingsModal, SettingsModalTab } from './components/SettingsModal';
+import { AboutModal } from './components/AboutModal';
 import { midiManager } from './audio/midiManager';
 import { MidiActionTarget, MidiMapping } from './types/midi';
 import { calculateSignalChainLatency, SignalChainLatencyReport } from './audio/latencyTracker';
@@ -136,6 +137,21 @@ export default function App() {
   const [isTunerOpen, setIsTunerOpen] = useState<boolean>(false);
   const [isAddPedalOpen, setIsAddPedalOpen] = useState<boolean>(false);
   const [vstEditorPedal, setVstEditorPedal] = useState<VstPluginPedal | null>(null);
+  const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
+
+  // Keyboard shortcut listener ('?' or F1 opens About & Tone Guide)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === '?' || (e.key === '/' && e.shiftKey) || e.key === 'F1') {
+        e.preventDefault();
+        setIsAboutOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   // MIDI Controller & Hardware State
   const [midiDeviceCount, setMidiDeviceCount] = useState<number>(() => midiManager.devices.length);
@@ -925,6 +941,7 @@ export default function App() {
         onMinimiseLatency={handleMinimiseLatency}
         onOpenMidiSettings={() => handleOpenSettings('midi')}
         onOpenSettings={handleOpenSettings}
+        onOpenAbout={() => setIsAboutOpen(true)}
         midiDeviceCount={midiDeviceCount}
         isMidiActivity={isMidiActivity}
       />
@@ -1035,9 +1052,20 @@ export default function App() {
       <footer className="border-t border-neutral-900 bg-neutral-950 px-4 py-1.5 text-[11px] text-neutral-400">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-neutral-300">ToneCraft DSP Engine</span>
+            <button
+              onClick={() => setIsAboutOpen(true)}
+              className="hover:text-amber-300 transition-colors flex items-center gap-1.5 text-neutral-200 cursor-pointer font-medium"
+              title="About ToneCraft & Tone Guide · By Gek Siong (geksiong@gmail.com)"
+            >
+              <span className="font-semibold text-white">ToneCraft DSP</span>
+              <span className="text-neutral-600">·</span>
+              <span className="text-amber-400 hover:underline">About &amp; Tone Guide</span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                by Gek Siong
+              </span>
+            </button>
             <span>·</span>
-            <span className="font-mono text-amber-400">
+            <span className="font-mono text-neutral-400">
               {coreEngineMode === 'hd-worklet' ? 'HD AudioWorklet Core' : 'Native Web Audio'}
             </span>
             <span>·</span>
@@ -1163,6 +1191,12 @@ export default function App() {
           setPresets(updatedList);
           savePresetsToStorage(updatedList);
         }}
+      />
+
+      {/* About App, Tone Crafting Guide & Author Attribution Modal */}
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
       />
 
       {/* Floating Real-Time MIDI Action Feedback Pill */}
