@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Preset, AnyPedal, NamModelConfig, IrCabinetConfig } from '../types/pedal';
+import { Preset, AnyPedal, AmpModelConfig, IrCabinetConfig } from '../types/pedal';
 import {
   encodePresetToShareUrl,
   savePresetsToStorage
@@ -24,7 +24,7 @@ interface PresetLibraryModalProps {
   currentPreset: Preset;
   presets: Preset[];
   currentPedals: AnyPedal[];
-  currentNam: NamModelConfig;
+  currentAmp: AmpModelConfig;
   currentCab: IrCabinetConfig;
   onClose: () => void;
   onSelectPreset: (preset: Preset) => void;
@@ -36,7 +36,7 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
   currentPreset,
   presets,
   currentPedals,
-  currentNam,
+  currentAmp,
   currentCab,
   onClose,
   onSelectPreset,
@@ -79,7 +79,7 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
     const target = presetToShare || {
       ...currentPreset,
       pedals: currentPedals,
-      namModel: currentNam,
+      ampModel: currentAmp,
       irCabinet: currentCab
     };
     const shareUrl = encodePresetToShareUrl(target);
@@ -98,7 +98,7 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
       name: publishName || currentPreset.name,
       author: publishAuthor || currentPreset.author || 'ToneCraft Musician',
       pedals: currentPedals,
-      namModel: currentNam,
+      ampModel: currentAmp,
       irCabinet: currentCab,
       dateExported: new Date().toISOString()
     };
@@ -120,10 +120,12 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const imported = JSON.parse(text) as Preset;
-        if (imported && imported.pedals && imported.namModel) {
+        const imported = JSON.parse(text) as any;
+        const importedModel = imported?.ampModel || imported?.namModel;
+        if (imported && imported.pedals && importedModel) {
           const newPreset: Preset = {
             ...imported,
+            ampModel: importedModel,
             id: `imported-${Date.now()}`,
             isCommunity: true
           };
@@ -155,7 +157,7 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
       description: publishDesc.trim() || 'Custom community pedalboard preset.',
       tags: publishTags.split(',').map(t => t.trim()).filter(Boolean),
       pedals: currentPedals,
-      namModel: currentNam,
+      ampModel: currentAmp,
       irCabinet: currentCab,
       bpm: currentPreset.bpm || 120,
       likes: 1,
@@ -362,7 +364,7 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
 
                         {/* Tone Chain Details */}
                         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-neutral-400">
-                          <span className="font-mono text-neutral-400">Amp: {preset.namModel?.name}</span>
+                          <span className="font-mono text-neutral-400">Amp: {preset.ampModel?.name}</span>
                           <span>·</span>
                           <span className="font-mono text-neutral-400">Cab: {preset.irCabinet?.name}</span>
                           <span>·</span>

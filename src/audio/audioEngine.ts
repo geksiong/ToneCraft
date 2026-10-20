@@ -15,13 +15,13 @@
 
 import {
   AnyPedal,
-  NamModelConfig,
+  AmpModelConfig,
   IrCabinetConfig,
   LooperState,
   TunerData
 } from '../types/pedal';
-import { NamEngine, NamEngineStatus } from './namEngine';
-import { isNamModelProfile } from './namModels';
+import { AmpEngine, AmpEngineStatus } from './ampEngine';
+import { isNamModelProfile } from './ampModels';
 import { LooperEngine } from './looperEngine';
 import { TunerEngine } from './tunerEngine';
 import {
@@ -115,12 +115,12 @@ export class ToneCraftEngine {
   private pedalNodes: Map<string, PedalNodeWrapper> = new Map();
   private connectedPedalIds: string[] = [];
   public currentPedals: AnyPedal[] = [];
-  public currentNamConfig: NamModelConfig | null = null;
+  public currentAmpConfig: AmpModelConfig | null = null;
   public currentCabConfig: IrCabinetConfig | null = null;
 
   // Sub-Engines
   public inputRouter: InputChannelRouter = new InputChannelRouter();
-  public namEngine: NamEngine = new NamEngine();
+  public ampEngine: AmpEngine = new AmpEngine();
   private looperEngine: LooperEngine = new LooperEngine();
   private tunerEngine: TunerEngine = new TunerEngine();
   public inputConditioner: InputConditionerEngine = new InputConditionerEngine();
@@ -151,7 +151,7 @@ export class ToneCraftEngine {
   public onTunerUpdate: ((data: TunerData) => void) | null = null;
   public onLooperUpdate: ((state: LooperState) => void) | null = null;
   public onPeakUpdate: ((inputPeak: number, outputPeak: number) => void) | null = null;
-  public onNamStatusUpdate: ((status: NamEngineStatus) => void) | null = null;
+  public onAmpStatusUpdate: ((status: AmpEngineStatus) => void) | null = null;
   public onTelemetryUpdate: ((telemetry: HdWorkletTelemetry) => void) | null = null;
   public onLatencyUpdate: ((report: SignalChainLatencyReport) => void) | null = null;
   public onConditionerUpdate: ((telemetry: InputConditionerTelemetry) => void) | null = null;
@@ -254,16 +254,16 @@ export class ToneCraftEngine {
     conditionerStage.output.connect(this.chainInputNode);
 
     // 4. Initialize Sub-Engines
-    const namStage = this.namEngine.init(this.ctx);
-    this.namEngine.setCabEngineMode(this.latencySettings.zeroLatencyCab ? 'analog-zero-latency' : 'ir-convolver');
+    const ampStage = this.ampEngine.init(this.ctx);
+    this.ampEngine.setCabEngineMode(this.latencySettings.zeroLatencyCab ? 'analog-zero-latency' : 'ir-convolver');
 
     if (this.pendingCustomIrArrayBuffer) {
-      await this.namEngine.loadCustomIrWav(this.pendingCustomIrArrayBuffer.slice(0));
+      await this.ampEngine.loadCustomIrWav(this.pendingCustomIrArrayBuffer.slice(0));
     }
 
     // Await async neural WASM engine and HD AudioWorklet ready before connecting downstream
     try {
-      await this.namEngine.waitForEnginesReady();
+      await this.ampEngine.waitForEnginesReady();
     } catch (err) {
       console.warn('[ToneCraftEngine] Async engine readiness fallback:', err);
     }
@@ -326,12 +326,12 @@ export class ToneCraftEngine {
     this.analyserNode.smoothingTimeConstant = 0.8;
 
     // 6. Assemble Full Signal Path:
-    // ChainOutput -> NAM Preamp & Cab -> Master Bus
-    this.chainOutputNode.connect(namStage.input);
+    // ChainOutput -> Amp & Cab Stage -> Master Bus
+    this.chainOutputNode.connect(ampStage.input);
 
     // Post-Cab signal feeds both master bus and looper
-    namStage.output.connect(this.masterGainNode);
-    namStage.output.connect(this.looperEngine.getRecordTapNode());
+    ampStage.output.connect(this.masterGainNode);
+    ampStage.output.connect(this.looperEngine.getRecordTapNode());
 
     // Looper layer playback mixes into master bus
     looperOutput.connect(this.masterGainNode);
@@ -418,12 +418,12 @@ export class ToneCraftEngine {
       this.tunerEngine.stop();
     }
 
-    this.namEngine.onStatusUpdate = (status) => {
-      if (this.onNamStatusUpdate) this.onNamStatusUpdate(status);
+    this.ampEngine.onStatusUpdate = (status) => {
+      if (this.onAmpStatusUpdate) this.onAmpStatusUpdate(status);
       this.dispatchLatencyUpdate();
     };
 
-    this.namEngine.hdWorkletEngine.onTelemetry = (stats) => {
+    this.ampEngine.hdWorkletEngine.onTelemetry = (stats) => {
       this.lastTelemetry = stats;
       if (this.onTelemetryUpdate) this.onTelemetryUpdate(stats);
     };
@@ -684,7 +684,7 @@ export class ToneCraftEngine {
       await this.restartAudioContext();
     } else {
       if (newSettings.zeroLatencyCab !== undefined) {
-        this.namEngine.setCabEngineMode(this.latencySettings.zeroLatencyCab ? 'analog-zero-latency' : 'ir-convolver');
+        this.ampEngine.setCabEngineMode(this.latencySettings.zeroLatencyCab ? 'analog-zero-latency' : 'ir-convolver');
       }
       if (newSettings.zeroLookaheadLimiter !== undefined) {
         this.updateLimiterMode();
@@ -701,7 +701,7 @@ export class ToneCraftEngine {
     const wasRunning = this.isRunning;
     const wasRiffPlaying = this.isRiffPlaying;
     const prevPedals = [...this.currentPedals];
-    const prevNam = this.currentNamConfig;
+    const prevAmp = this.currentAmpConfig;
     const prevCab = this.currentCabConfig;
     const prevSource = this.currentInputSource;
 
@@ -709,7 +709,7 @@ export class ToneCraftEngine {
     await this.init();
 
     if (prevPedals.length > 0) this.updatePedalboardChain(prevPedals);
-    if (prevNam) this.updateNamModel(prevNam);
+    if (prevAmp) this.updateAmpModel(prevAmp);
     if (prevCab) this.updateIrCabinet(prevCab);
     await this.setInputSource(prevSource, wasRiffPlaying);
 
@@ -726,20 +726,20 @@ export class ToneCraftEngine {
   }
 
   public setAmpEngineMode(mode: 'wasm-nam' | 'hd-triode' | 'waveshaper'): void {
-    const isNam = isNamModelProfile(this.currentNamConfig);
+    const isNam = isNamModelProfile(this.currentAmpConfig);
     let target = mode;
     if (isNam) {
       target = 'wasm-nam';
     } else if (target === 'wasm-nam') {
-      target = (this.currentNamConfig?.engineMode && this.currentNamConfig.engineMode !== 'wasm-nam')
-        ? this.currentNamConfig.engineMode
+      target = (this.currentAmpConfig?.engineMode && this.currentAmpConfig.engineMode !== 'wasm-nam')
+        ? this.currentAmpConfig.engineMode
         : 'hd-triode';
     }
 
-    this.namEngine.setEngineMode(target);
-    if (this.currentNamConfig) {
-      this.currentNamConfig.engineMode = target;
-      this.currentNamConfig.isRealNam = isNam;
+    this.ampEngine.setEngineMode(target);
+    if (this.currentAmpConfig) {
+      this.currentAmpConfig.engineMode = target;
+      this.currentAmpConfig.isRealNam = isNam;
     }
     this.dispatchLatencyUpdate();
   }
@@ -747,8 +747,8 @@ export class ToneCraftEngine {
   public getLatencyReport(): SignalChainLatencyReport {
     return calculateSignalChainLatency(this.ctx, this.currentPedals, {
       coreEngineMode: this.coreEngineMode,
-      ampEngineMode: this.namEngine.currentEngineMode,
-      cabEngineMode: this.namEngine.cabEngineMode,
+      ampEngineMode: this.ampEngine.currentEngineMode,
+      cabEngineMode: this.ampEngine.cabEngineMode,
       latencyProfile: this.latencySettings.profile,
       sampleRateMode: this.latencySettings.sampleRateMode,
       zeroLookaheadLimiter: this.latencySettings.zeroLookaheadLimiter,
@@ -999,9 +999,9 @@ export class ToneCraftEngine {
    * Bypasses the NAM amplifier stage
    */
   public setAmpBypass(bypassed: boolean): void {
-    this.namEngine.setAmpBypass(bypassed);
-    if (this.currentNamConfig) {
-      this.currentNamConfig = { ...this.currentNamConfig, bypassed };
+    this.ampEngine.setAmpBypass(bypassed);
+    if (this.currentAmpConfig) {
+      this.currentAmpConfig = { ...this.currentAmpConfig, bypassed };
     }
     this.dispatchLatencyUpdate();
   }
@@ -1010,7 +1010,7 @@ export class ToneCraftEngine {
    * Bypasses the IR / speaker cabinet stage
    */
   public setCabBypass(bypassed: boolean): void {
-    this.namEngine.setCabBypass(bypassed);
+    this.ampEngine.setCabBypass(bypassed);
     if (this.currentCabConfig) {
       this.currentCabConfig = { ...this.currentCabConfig, bypassed };
     }
@@ -1146,18 +1146,18 @@ export class ToneCraftEngine {
   }
 
   // ==========================================================================
-  // NAM AMP & IR CABINET DELEGATION
+  // AMPLIFIER & IR CABINET DELEGATION
   // ==========================================================================
 
-  public updateNamModel(config: NamModelConfig): void {
-    this.currentNamConfig = config;
-    this.namEngine.updateNamModel(config);
+  public updateAmpModel(config: AmpModelConfig): void {
+    this.currentAmpConfig = config;
+    this.ampEngine.updateAmpModel(config);
     this.dispatchLatencyUpdate();
   }
 
   public updateIrCabinet(config: IrCabinetConfig): void {
     this.currentCabConfig = config;
-    this.namEngine.updateIrCabinet(config);
+    this.ampEngine.updateIrCabinet(config);
     this.dispatchLatencyUpdate();
   }
 
@@ -1165,7 +1165,7 @@ export class ToneCraftEngine {
     this.pendingCustomIrArrayBuffer = arrayBuffer.slice(0);
     this.latencySettings.zeroLatencyCab = false;
     if (this.ctx) {
-      await this.namEngine.loadCustomIrWav(arrayBuffer.slice(0));
+      await this.ampEngine.loadCustomIrWav(arrayBuffer.slice(0));
     }
     this.dispatchLatencyUpdate();
   }
@@ -1240,7 +1240,7 @@ export class ToneCraftEngine {
     this.isRunning = false;
     this.tunerEngine.stop();
     this.looperEngine.dispose();
-    this.namEngine.dispose();
+    this.ampEngine.dispose();
     this.inputConditioner.dispose();
     this.inputRouter.dispose();
     if (this.tunerGainNode) {
@@ -1352,7 +1352,7 @@ export class ToneCraftEngine {
   public async restart(): Promise<void> {
     console.log('[ToneCraftEngine] Restarting audio engine from scratch for clean recovery...');
     const savedPedals = [...this.currentPedals];
-    const savedNamConfig = this.currentNamConfig;
+    const savedAmpConfig = this.currentAmpConfig;
     const savedCabConfig = this.currentCabConfig;
     const savedVolume = this.currentMasterVolume;
     const savedSource = this.currentInputSource;
@@ -1363,8 +1363,8 @@ export class ToneCraftEngine {
     if (savedPedals.length > 0) {
       this.updatePedalboardChain(savedPedals);
     }
-    if (savedNamConfig) {
-      this.updateNamModel(savedNamConfig);
+    if (savedAmpConfig) {
+      this.updateAmpModel(savedAmpConfig);
     }
     if (savedCabConfig) {
       this.updateIrCabinet(savedCabConfig);

@@ -187,12 +187,21 @@ export type AnyPedal =
   | HarmonizerPedal
   | VstPluginPedal;
 
-export interface NamModelConfig {
+export type AmpArchitectureType =
+  | 'wavenet'
+  | 'lstm'
+  | 'neural'
+  | 'hd-triode'
+  | 'triode'
+  | 'waveshaper'
+  | 'component';
+
+export interface AmpModelConfig {
   id: string;
   name: string;
   category: 'Guitar' | 'Bass';
   description: string;
-  type: 'neural' | 'lstm' | 'wavenet';
+  type: AmpArchitectureType;
   gain: number; // 0 - 10
   bass: number; // 0 - 10
   mid: number; // 0 - 10
@@ -202,14 +211,14 @@ export interface NamModelConfig {
   saturationCurve: number; // 1.0 - 5.0
   bias: number;
   customProfileName?: string;
-  weightsCount?: number;
+  weightsCount?: number; // Only for real NAM neural models! Physical and waveshaper models have no weights.
   modelUrl?: string;
   rawJson?: any;
   isRealNam?: boolean;
   engineMode?: 'wasm-nam' | 'hd-triode' | 'waveshaper';
   enabled?: boolean;
   bypassed?: boolean;
-  inputTrim?: number; // In dB: -24 to +6 dB (calibrated NAM input sensitivity / headroom trim)
+  inputTrim?: number; // In dB: -24 to +6 dB (calibrated input sensitivity / headroom trim)
 }
 
 export interface IrCabinetConfig {
@@ -249,7 +258,7 @@ export interface Preset {
   description: string;
   tags: string[];
   pedals: AnyPedal[];
-  namModel: NamModelConfig;
+  ampModel: AmpModelConfig;
   irCabinet: IrCabinetConfig;
   bpm: number;
   likes: number;

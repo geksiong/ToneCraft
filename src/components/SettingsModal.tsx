@@ -22,7 +22,7 @@ import {
 } from '../audio/inputChannelRouter';
 import { SignalChainLatencyReport } from '../audio/latencyTracker';
 import { AudioLatencySettings } from '../audio/audioEngine';
-import { AnyPedal, Preset, NamModelConfig, IrCabinetConfig } from '../types/pedal';
+import { AnyPedal, Preset, AmpModelConfig, IrCabinetConfig } from '../types/pedal';
 import { InputSettingsTab } from './settings/InputSettingsTab';
 import { EngineSettingsTab } from './settings/EngineSettingsTab';
 import { MidiSettingsTab } from './settings/MidiSettingsTab';
@@ -79,7 +79,7 @@ export interface SettingsModalProps {
 
   // 4. Cloud Hub & Preset Library Props
   currentPedals?: AnyPedal[];
-  currentNam?: NamModelConfig;
+  currentAmp?: AmpModelConfig;
   currentCab?: IrCabinetConfig;
   onPresetsUpdated?: (updatedList: Preset[]) => void;
 }
@@ -131,7 +131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   midiDeviceCount = 0,
   isMidiActivity = false,
   currentPedals,
-  currentNam,
+  currentAmp,
   currentCab,
   onPresetsUpdated
 }) => {
@@ -352,13 +352,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               currentPreset={currentPreset}
               presets={presets}
               currentPedals={currentPedals || pedals}
-              currentNam={
-                currentNam || {
+              currentAmp={
+                currentAmp || {
                   id: 'deluxe',
                   name: 'American Clean Deluxe',
                   category: 'Guitar',
                   description: 'Classic American tube clean tone',
-                  type: 'neural',
+                  type: 'wavenet',
                   gain: 4.5,
                   bass: 6.0,
                   mid: 5.0,

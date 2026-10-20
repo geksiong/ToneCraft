@@ -1,5 +1,5 @@
 import { Preset } from '../types/pedal';
-import { BUILT_IN_NAM_MODELS, isNamModelProfile } from '../audio/namModels';
+import { BUILT_IN_AMP_MODELS, isNamModelProfile } from '../audio/ampModels';
 import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 
 export const INITIAL_PRESETS: Preset[] = [
@@ -14,8 +14,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 120,
     likes: 894,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'ac10')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'ac10')!,
       gain: 5.5,
       bass: 5.8,
       mid: 6.5,
@@ -79,8 +79,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 110,
     likes: 428,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'jcm-800')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'jcm-800')!,
       gain: 6.2,
       bass: 6.0,
       mid: 7.2,
@@ -143,8 +143,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 125,
     likes: 612,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'tweed-59')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'tweed-59')!,
       gain: 4.5,
       bass: 7.0,
       mid: 6.5,
@@ -233,8 +233,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 115,
     likes: 389,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'tweed-59')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'tweed-59')!,
       gain: 5.2,
       bass: 6.8,
       mid: 6.0,
@@ -286,8 +286,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 190,
     likes: 512,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'pv-5150')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'pv-5150')!,
       gain: 8.2,
       bass: 7.5,
       mid: 3.5,
@@ -351,8 +351,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 110,
     likes: 470,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'ampeg-svt')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'ampeg-svt')!,
       gain: 4.8,
       bass: 7.8,
       mid: 6.2,
@@ -402,8 +402,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 130,
     likes: 584,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'darkglass-b7k')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'darkglass-b7k')!,
       gain: 6.5,
       bass: 7.0,
       mid: 7.4,
@@ -468,8 +468,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 135,
     likes: 642,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'vox-ac30')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'vox-ac30')!,
       gain: 3.8,
       bass: 5.5,
       mid: 6.8,
@@ -546,8 +546,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 85,
     likes: 495,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'tweed-59')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'tweed-59')!,
       gain: 3.2,
       bass: 6.0,
       mid: 5.5,
@@ -612,8 +612,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 105,
     likes: 642,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'deluxe')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'deluxe')!,
       gain: 3.2,
       bass: 5.6,
       mid: 5.8,
@@ -679,8 +679,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 112,
     likes: 819,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'tweed-59')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'tweed-59')!,
       gain: 4.8,
       bass: 6.2,
       mid: 6.6,
@@ -744,8 +744,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 124,
     likes: 756,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'vox-ac30')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'vox-ac30')!,
       gain: 5.0,
       bass: 5.2,
       mid: 6.8,
@@ -800,8 +800,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 130,
     likes: 512,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'deluxe')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'deluxe')!,
       gain: 2.8,
       bass: 5.0,
       mid: 6.2,
@@ -854,8 +854,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 118,
     likes: 923,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'deluxe')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'deluxe')!,
       gain: 4.2,
       bass: 5.8,
       mid: 5.5,
@@ -921,8 +921,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 110,
     likes: 980,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'roland-jc120')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'roland-jc120')!,
       gain: 2.2,
       bass: 5.4,
       mid: 5.0,
@@ -988,8 +988,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 100,
     likes: 720,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'roland-jc120')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'roland-jc120')!,
       name: 'Studio Class-A Clean Preamp',
       gain: 2.0,
       bass: 5.0,
@@ -1045,8 +1045,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 115,
     likes: 840,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'twin-reverb-ultraclean')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'twin-reverb-ultraclean')!,
       gain: 2.2,
       bass: 5.8,
       mid: 4.8,
@@ -1104,8 +1104,8 @@ export const INITIAL_PRESETS: Preset[] = [
     bpm: 96,
     likes: 670,
     isCommunity: false,
-    namModel: {
-      ...BUILT_IN_NAM_MODELS.find(m => m.id === 'polytone-mini-brute')!,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS.find(m => m.id === 'polytone-mini-brute')!,
       gain: 2.2,
       bass: 6.8,
       mid: 4.6,
@@ -1159,17 +1159,18 @@ export function getStoredPresets(): Preset[] {
 
     // Sanitize engineMode, isRealNam, and calibrated inputTrim on all loaded presets
     return merged.map((p: Preset) => {
-      if (!p.namModel) return p;
-      const isNam = isNamModelProfile(p.namModel);
+      const model = p.ampModel || (p as any).namModel;
+      if (!model) return p;
+      const isNam = isNamModelProfile(model);
       const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isNam
         ? 'wasm-nam'
-        : (p.namModel.engineMode && p.namModel.engineMode !== 'wasm-nam' ? p.namModel.engineMode : 'hd-triode');
-      const baseModel = BUILT_IN_NAM_MODELS.find(m => m.id === p.namModel.id);
+        : (model.engineMode && model.engineMode !== 'wasm-nam' ? model.engineMode : 'hd-triode');
+      const baseModel = BUILT_IN_AMP_MODELS.find(m => m.id === model.id);
       return {
         ...p,
-        namModel: {
-          ...p.namModel,
-          inputTrim: p.namModel.inputTrim !== undefined ? p.namModel.inputTrim : (baseModel?.inputTrim ?? 0),
+        ampModel: {
+          ...model,
+          inputTrim: model.inputTrim !== undefined ? model.inputTrim : (baseModel?.inputTrim ?? 0),
           isRealNam: isNam,
           engineMode: targetEngine
         }
@@ -1198,15 +1199,15 @@ export function encodePresetToShareUrl(preset: Preset): string {
       inst: preset.instrument,
       genre: preset.genre,
       bpm: preset.bpm,
-      nam: {
-        id: preset.namModel.id,
-        g: preset.namModel.gain,
-        b: preset.namModel.bass,
-        m: preset.namModel.mid,
-        t: preset.namModel.treble,
-        p: preset.namModel.presence,
-        vol: preset.namModel.master,
-        trim: preset.namModel.inputTrim
+      amp: {
+        id: preset.ampModel.id,
+        g: preset.ampModel.gain,
+        b: preset.ampModel.bass,
+        m: preset.ampModel.mid,
+        t: preset.ampModel.treble,
+        p: preset.ampModel.presence,
+        vol: preset.ampModel.master,
+        trim: preset.ampModel.inputTrim
       },
       cab: {
         id: preset.irCabinet.id,
@@ -1236,8 +1237,9 @@ export function decodePresetFromShareUrl(): Preset | null {
 
     const jsonStr = decodeURIComponent(atob(b64));
     const data = JSON.parse(jsonStr);
+    const ampData = data.amp || data.nam || {};
 
-    const baseNam = BUILT_IN_NAM_MODELS.find(m => m.id === data.nam.id) || BUILT_IN_NAM_MODELS[0];
+    const baseAmp = BUILT_IN_AMP_MODELS.find(m => m.id === ampData.id) || BUILT_IN_AMP_MODELS[0];
     const baseCab = BUILT_IN_IR_CABINETS.find(c => c.id === data.cab.id) || BUILT_IN_IR_CABINETS[0];
 
     const preset: Preset = {
@@ -1251,15 +1253,15 @@ export function decodePresetFromShareUrl(): Preset | null {
       bpm: data.bpm || 120,
       likes: 1,
       isCommunity: true,
-      namModel: {
-        ...baseNam,
-        gain: data.nam.g ?? baseNam.gain,
-        bass: data.nam.b ?? baseNam.bass,
-        mid: data.nam.m ?? baseNam.mid,
-        treble: data.nam.t ?? baseNam.treble,
-        presence: data.nam.p ?? baseNam.presence,
-        master: data.nam.vol ?? baseNam.master,
-        inputTrim: data.nam.trim ?? baseNam.inputTrim
+      ampModel: {
+        ...baseAmp,
+        gain: ampData.g ?? baseAmp.gain,
+        bass: ampData.b ?? baseAmp.bass,
+        mid: ampData.m ?? baseAmp.mid,
+        treble: ampData.t ?? baseAmp.treble,
+        presence: ampData.p ?? baseAmp.presence,
+        master: ampData.vol ?? baseAmp.master,
+        inputTrim: ampData.trim ?? baseAmp.inputTrim
       },
       irCabinet: {
         ...baseCab,

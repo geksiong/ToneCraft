@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { NamModelConfig, IrCabinetConfig } from '../types/pedal';
-import { BUILT_IN_NAM_MODELS, parseNamJson, isNamModelProfile, getDefaultTrimForModel } from '../audio/namModels';
+import { AmpModelConfig, IrCabinetConfig } from '../types/pedal';
+import { BUILT_IN_AMP_MODELS, parseNamJson, isNamModelProfile, getDefaultTrimForModel } from '../audio/ampModels';
 import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 import { RotaryKnob } from './RotaryKnob';
 import {
@@ -17,9 +17,9 @@ import {
 } from 'lucide-react';
 
 interface AmpCabSectionProps {
-  namModel: NamModelConfig;
+  ampModel: AmpModelConfig;
   irCabinet: IrCabinetConfig;
-  onUpdateNam: (updated: NamModelConfig) => void;
+  onUpdateAmp: (updated: AmpModelConfig) => void;
   onUpdateCab: (updated: IrCabinetConfig) => void;
   onLoadCustomIrWav: (buffer: ArrayBuffer, fileName: string) => void;
   ampEngineMode?: 'wasm-nam' | 'hd-triode' | 'waveshaper';
@@ -28,17 +28,12 @@ interface AmpCabSectionProps {
   currentLatencyMs?: number;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  // Backward compatibility props
-  isAmpCollapsed?: boolean;
-  isCabCollapsed?: boolean;
-  onToggleAmpCollapse?: () => void;
-  onToggleCabCollapse?: () => void;
 }
 
 export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
-  namModel,
+  ampModel,
   irCabinet,
-  onUpdateNam,
+  onUpdateAmp,
   onUpdateCab,
   onLoadCustomIrWav,
   ampEngineMode = 'wasm-nam',
@@ -46,33 +41,29 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
   onOpenLatencyInspector,
   currentLatencyMs,
   isCollapsed: controlledCollapsed,
-  onToggleCollapse: controlledToggleCollapse,
-  isAmpCollapsed,
-  isCabCollapsed,
-  onToggleAmpCollapse
+  onToggleCollapse: controlledToggleCollapse
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(false);
   const isCollapsed =
     controlledCollapsed !== undefined
       ? controlledCollapsed
-      : (isAmpCollapsed !== undefined ? isAmpCollapsed : internalCollapsed);
+      : internalCollapsed;
   const toggleCollapse =
     controlledToggleCollapse ||
-    onToggleAmpCollapse ||
     (() => setInternalCollapsed(prev => !prev));
 
   const namFileInputRef = useRef<HTMLInputElement>(null);
   const irFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSelectNam = (id: string) => {
-    const selected = BUILT_IN_NAM_MODELS.find(m => m.id === id);
+  const handleSelectAmp = (id: string) => {
+    const selected = BUILT_IN_AMP_MODELS.find(m => m.id === id);
     if (selected) {
       const isSelectedNam = isNamModelProfile(selected);
       const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isSelectedNam
         ? 'wasm-nam'
         : (selected.engineMode && selected.engineMode !== 'wasm-nam' ? selected.engineMode : 'hd-triode');
 
-      onUpdateNam({
+      onUpdateAmp({
         ...selected,
         gain: selected.gain,
         bass: selected.bass,
@@ -83,7 +74,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
         inputTrim: selected.inputTrim !== undefined ? selected.inputTrim : getDefaultTrimForModel(selected),
         isRealNam: isSelectedNam,
         engineMode: targetEngine,
-        bypassed: namModel.bypassed
+        bypassed: ampModel.bypassed
       });
       if (onSetAmpEngineMode) {
         onSetAmpEngineMode(targetEngine);
@@ -113,7 +104,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
       const text = event.target?.result as string;
       const parsed = parseNamJson(text, file.name);
 
-      const customNam: NamModelConfig = {
+      const customAmp: AmpModelConfig = {
         id: `custom-nam-${Date.now()}`,
         name: parsed.name,
         category: 'Guitar',
@@ -133,10 +124,10 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
         isRealNam: true,
         engineMode: 'wasm-nam',
         inputTrim: -6.0,
-        bypassed: namModel.bypassed
+        bypassed: ampModel.bypassed
       };
 
-      onUpdateNam(customNam);
+      onUpdateAmp(customAmp);
       if (onSetAmpEngineMode) {
         onSetAmpEngineMode('wasm-nam');
       }
@@ -177,23 +168,23 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
     e.target.value = '';
   };
 
-  const isNamProfile = isNamModelProfile(namModel);
-  const defaultTrim = getDefaultTrimForModel(namModel);
-  const currentTrim = namModel.inputTrim !== undefined ? namModel.inputTrim : defaultTrim;
+  const isNamProfile = isNamModelProfile(ampModel);
+  const defaultTrim = getDefaultTrimForModel(ampModel);
+  const currentTrim = ampModel.inputTrim !== undefined ? ampModel.inputTrim : defaultTrim;
 
   // Modifying any amp parameter immediately engages the amp so adjustments take audible effect
-  const updateAmpParam = (partial: Partial<NamModelConfig>) => {
-    onUpdateNam({
-      ...namModel,
+  const updateAmpParam = (partial: Partial<AmpModelConfig>) => {
+    onUpdateAmp({
+      ...ampModel,
       ...partial,
       bypassed: false
     });
   };
 
   const toggleAmpBypass = () => {
-    onUpdateNam({
-      ...namModel,
-      bypassed: !namModel.bypassed
+    onUpdateAmp({
+      ...ampModel,
+      bypassed: !ampModel.bypassed
     });
   };
 
@@ -224,13 +215,13 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
           <div className="flex items-center gap-1.5 shrink-0 bg-neutral-950 px-2 py-1 rounded-lg border border-neutral-800">
             <div
               className={`w-2.5 h-2.5 rounded-full transition-all ${
-                namModel.bypassed
+                ampModel.bypassed
                   ? 'bg-amber-500 animate-pulse'
                   : 'bg-emerald-400 led-glow-emerald shadow-[0_0_6px_#34d399]'
               }`}
-              title={namModel.bypassed ? 'Amp is Bypassed (Click to Engage)' : 'Amp is Engaged'}
+              title={ampModel.bypassed ? 'Amp is Bypassed (Click to Engage)' : 'Amp is Engaged'}
             />
-            <span className={`text-[10px] font-mono font-semibold ${namModel.bypassed ? 'text-amber-400' : 'text-neutral-400'}`}>AMP</span>
+            <span className={`text-[10px] font-mono font-semibold ${ampModel.bypassed ? 'text-amber-400' : 'text-neutral-400'}`}>AMP</span>
             <ArrowRight size={10} className="text-neutral-600" />
             <div
               className={`w-2.5 h-2.5 rounded-full transition-all ${
@@ -262,20 +253,20 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
           <button
             onClick={toggleAmpBypass}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold rounded-lg border transition-all active:scale-95 shadow-xs ${
-              namModel.bypassed
+              ampModel.bypassed
                 ? 'bg-amber-950/40 text-amber-300 border-amber-500/60 hover:bg-amber-900/40 animate-pulse'
                 : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
             }`}
-            title={namModel.bypassed ? 'Amp is BYPASSED (Click to Engage)' : 'Amp is ENGAGED (Click to Bypass)'}
+            title={ampModel.bypassed ? 'Amp is BYPASSED (Click to Engage)' : 'Amp is ENGAGED (Click to Bypass)'}
           >
             <div
               className={`w-1.5 h-1.5 rounded-full transition-all shrink-0 ${
-                namModel.bypassed
+                ampModel.bypassed
                   ? 'bg-amber-400 animate-ping'
                   : 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]'
               }`}
             />
-            <span>{namModel.bypassed ? 'AMP BYPASSED (CLICK TO ON)' : 'AMP ENGAGED'}</span>
+            <span>{ampModel.bypassed ? 'AMP BYPASSED (CLICK TO ON)' : 'AMP ENGAGED'}</span>
           </button>
 
           {/* Cab Bypass Toggle */}
@@ -324,7 +315,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             <div className="flex items-center gap-2 min-w-0">
               <div
                 className={`w-2.5 h-2.5 rounded-full border transition-all shrink-0 ${
-                  namModel.bypassed
+                  ampModel.bypassed
                     ? 'bg-neutral-800 border-neutral-700'
                     : 'bg-emerald-500 led-glow-emerald border-emerald-300'
                 }`}
@@ -333,10 +324,10 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-mono text-neutral-500 font-bold uppercase shrink-0">AMP:</span>
                   <span className="text-xs font-bold text-white truncate drop-shadow-sm">
-                    {namModel.name}
+                    {ampModel.name}
                   </span>
                   <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 shrink-0">
-                    {namModel.category}
+                    {ampModel.category}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono text-neutral-400 flex-wrap">
@@ -348,9 +339,9 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                       : 'Waveshaper'}
                   </span>
                   <span>·</span>
-                  <span>Gain: <strong className="text-white">{namModel.gain.toFixed(1)}</strong></span>
+                  <span>Gain: <strong className="text-white">{ampModel.gain.toFixed(1)}</strong></span>
                   <span>·</span>
-                  <span>Master: <strong className="text-white">{namModel.master.toFixed(1)}</strong></span>
+                  <span>Master: <strong className="text-white">{ampModel.master.toFixed(1)}</strong></span>
                   <span>·</span>
                   <span>Trim: <strong className={currentTrim > 0 ? 'text-emerald-400' : currentTrim < 0 ? 'text-amber-400' : 'text-white'}>{currentTrim >= 0 ? '+' : ''}{currentTrim.toFixed(1)}dB</strong></span>
                 </div>
@@ -360,10 +351,10 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             {/* Quick Model Select & Amp Bypass Toggle */}
             <div className="flex items-center gap-1.5 shrink-0">
               <select
-                value={namModel.customProfileName ? 'custom' : namModel.id}
+                value={ampModel.customProfileName ? 'custom' : ampModel.id}
                 onChange={(e) => {
                   if (e.target.value !== 'custom') {
-                    handleSelectNam(e.target.value);
+                    handleSelectAmp(e.target.value);
                   }
                 }}
                 className="w-32 sm:w-40 bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-0.5 text-xs text-neutral-200 focus:outline-none focus:border-amber-500 truncate"
@@ -373,34 +364,34 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                   <option value="deluxe">⚡ Fender '65 Deluxe</option>
                 </optgroup>
                 <optgroup label="Preamp Models">
-                  {BUILT_IN_NAM_MODELS.filter(m => m.id !== 'ac10' && m.id !== 'deluxe').map(m => (
+                  {BUILT_IN_AMP_MODELS.filter(m => m.id !== 'ac10' && m.id !== 'deluxe').map(m => (
                     <option key={m.id} value={m.id}>
                       {m.name}
                     </option>
                   ))}
                 </optgroup>
-                {namModel.customProfileName && (
-                  <option value="custom">★ {namModel.customProfileName}</option>
+                {ampModel.customProfileName && (
+                  <option value="custom">★ {ampModel.customProfileName}</option>
                 )}
               </select>
 
               <button
                 onClick={toggleAmpBypass}
                 className={`flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded-lg border transition-all active:scale-95 shadow-xs ${
-                  namModel.bypassed
+                  ampModel.bypassed
                     ? 'bg-amber-950/40 text-amber-300 border-amber-500/60 hover:bg-amber-900/40 animate-pulse'
                     : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
                 }`}
-                title={namModel.bypassed ? 'Amp is BYPASSED (Click to Engage)' : 'Amp is ENGAGED (Click to Bypass)'}
+                title={ampModel.bypassed ? 'Amp is BYPASSED (Click to Engage)' : 'Amp is ENGAGED (Click to Bypass)'}
               >
                 <div
                   className={`w-1.5 h-1.5 rounded-full transition-all shrink-0 ${
-                    namModel.bypassed
+                    ampModel.bypassed
                       ? 'bg-amber-400 animate-ping'
                       : 'bg-emerald-400 shadow-[0_0_6px_#34d399]'
                   }`}
                 />
-                <span>{namModel.bypassed ? 'BYPASSED' : 'ON'}</span>
+                <span>{ampModel.bypassed ? 'BYPASSED' : 'ON'}</span>
               </button>
             </div>
           </div>
@@ -497,30 +488,30 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-3 h-3 rounded-full border transition-all shrink-0 ${
-                      namModel.bypassed
+                      ampModel.bypassed
                         ? 'bg-neutral-800 border-neutral-700'
                         : 'bg-emerald-500 led-glow-emerald border-emerald-300'
                     }`}
                   />
                   <div>
                     <h4 className="text-xs sm:text-sm font-bold tracking-wider uppercase text-neutral-100 flex items-center gap-1.5">
-                      <span>{namModel.name}</span>
+                      <span>{ampModel.name}</span>
                       <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-400 border border-neutral-700">
-                        {namModel.category}
+                        {ampModel.category}
                       </span>
                     </h4>
                     <p className="text-[10px] text-neutral-400 truncate max-w-xs">
-                      {namModel.description}
+                      {ampModel.description}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1.5">
                   <select
-                    value={namModel.customProfileName ? 'custom' : namModel.id}
+                    value={ampModel.customProfileName ? 'custom' : ampModel.id}
                     onChange={(e) => {
                       if (e.target.value !== 'custom') {
-                        handleSelectNam(e.target.value);
+                        handleSelectAmp(e.target.value);
                       }
                     }}
                     className="w-36 sm:w-48 bg-neutral-800 border border-neutral-700 rounded-lg px-2 py-1 text-xs text-neutral-200 focus:outline-none focus:border-amber-500 truncate"
@@ -530,14 +521,14 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                       <option value="deluxe">⚡ Fender '65 Deluxe</option>
                     </optgroup>
                     <optgroup label="Tube & Preamp Profiles">
-                      {BUILT_IN_NAM_MODELS.filter(m => m.id !== 'ac10' && m.id !== 'deluxe').map(m => (
+                      {BUILT_IN_AMP_MODELS.filter(m => m.id !== 'ac10' && m.id !== 'deluxe').map(m => (
                         <option key={m.id} value={m.id}>
                           {m.name} ({m.category})
                         </option>
                       ))}
                     </optgroup>
-                    {namModel.customProfileName && (
-                      <option value="custom">★ {namModel.customProfileName}</option>
+                    {ampModel.customProfileName && (
+                      <option value="custom">★ {ampModel.customProfileName}</option>
                     )}
                   </select>
 
@@ -702,7 +693,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                           ? 'bg-amber-500 text-black font-bold border-amber-400 shadow-xs'
                           : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
                       }`}
-                      title={`Reset to factory calibrated trim for ${namModel.name} (${(defaultTrim >= 0 ? '+' : '') + defaultTrim.toFixed(1)} dB)`}
+                      title={`Reset to factory calibrated trim for ${ampModel.name} (${(defaultTrim >= 0 ? '+' : '') + defaultTrim.toFixed(1)} dB)`}
                     >
                       Def ({(defaultTrim >= 0 ? '+' : '') + defaultTrim.toFixed(1)}dB)
                     </button>
@@ -729,14 +720,14 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
               </div>
 
               {/* Amp Bypassed Notice Bar */}
-              {namModel.bypassed && (
+              {ampModel.bypassed && (
                 <div className="flex items-center justify-between gap-2 px-3 py-1.5 my-2 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 text-xs font-mono shadow-md">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
                     <span className="truncate">Amp is <strong>BYPASSED</strong> (Dry pass-through). Turn any knob or click to engage.</span>
                   </div>
                   <button
-                    onClick={() => onUpdateNam({ ...namModel, bypassed: false })}
+                    onClick={() => onUpdateAmp({ ...ampModel, bypassed: false })}
                     className="px-2.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-[10px] uppercase transition-colors shrink-0 shadow-xs"
                   >
                     Engage Amp
@@ -748,7 +739,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
               <div className="py-2 px-1 grid grid-cols-6 gap-1 bg-gradient-to-b from-neutral-950/40 to-neutral-900/60 rounded-xl my-2 border border-neutral-800/80">
                 <RotaryKnob
                   label="Gain"
-                  value={namModel.gain}
+                  value={ampModel.gain}
                   min={0}
                   max={10}
                   step={0.1}
@@ -757,7 +748,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 />
                 <RotaryKnob
                   label="Bass"
-                  value={namModel.bass}
+                  value={ampModel.bass}
                   min={0}
                   max={10}
                   step={0.1}
@@ -766,7 +757,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 />
                 <RotaryKnob
                   label="Mid"
-                  value={namModel.mid}
+                  value={ampModel.mid}
                   min={0}
                   max={10}
                   step={0.1}
@@ -775,7 +766,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 />
                 <RotaryKnob
                   label="Treble"
-                  value={namModel.treble}
+                  value={ampModel.treble}
                   min={0}
                   max={10}
                   step={0.1}
@@ -784,7 +775,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 />
                 <RotaryKnob
                   label="Presence"
-                  value={namModel.presence}
+                  value={ampModel.presence}
                   min={0}
                   max={10}
                   step={0.1}
@@ -793,7 +784,7 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
                 />
                 <RotaryKnob
                   label="Master"
-                  value={namModel.master}
+                  value={ampModel.master}
                   min={0}
                   max={10}
                   step={0.1}
@@ -807,9 +798,21 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-1.5 border-t border-neutral-800/60">
               <div className="flex items-center gap-1.5 truncate">
                 <Cpu size={11} className="text-amber-400 shrink-0" />
-                <span>{namModel.customProfileName || namModel.name}</span>
+                <span>{ampModel.customProfileName || ampModel.name}</span>
                 <span>·</span>
-                <span>{namModel.type.toUpperCase()}</span>
+                <span className="font-mono text-neutral-300">
+                  {isNamProfile
+                    ? (ampModel.type?.toUpperCase() || 'WAVENET')
+                    : ampModel.engineMode === 'waveshaper'
+                    ? 'ANALYTIC WAVESHAPER'
+                    : 'HD TRIODE TUBE DSP'}
+                </span>
+                {isNamProfile && ampModel.weightsCount && (
+                  <>
+                    <span>·</span>
+                    <span className="text-amber-400 font-mono">{ampModel.weightsCount.toLocaleString()} weights</span>
+                  </>
+                )}
               </div>
 
               {onOpenLatencyInspector && (

@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AnyPedal,
-  NamModelConfig,
+  AmpModelConfig,
   IrCabinetConfig,
   LooperState,
   TunerData,
@@ -33,7 +33,7 @@ import { SettingsModal, SettingsModalTab } from './components/SettingsModal';
 import { midiManager } from './audio/midiManager';
 import { MidiActionTarget, MidiMapping } from './types/midi';
 import { calculateSignalChainLatency, SignalChainLatencyReport } from './audio/latencyTracker';
-import { NamEngineStatus } from './audio/namEngine';
+import { AmpEngineStatus } from './audio/ampEngine';
 import {
   InputConditionerConfig,
   InputConditionerTelemetry
@@ -43,7 +43,7 @@ import {
   InputChannelRoutingMode,
   OutputChannelRoutingMode
 } from './audio/inputChannelRouter';
-import { isNamModelProfile } from './audio/namModels';
+import { isNamModelProfile } from './audio/ampModels';
 import { Music2, Power, Radio } from 'lucide-react';
 
 export default function App() {
@@ -55,15 +55,15 @@ export default function App() {
   });
 
   const [pedals, setPedals] = useState<AnyPedal[]>(currentPreset.pedals);
-  const [namModel, setNamModel] = useState<NamModelConfig>(() => {
-    const isNam = isNamModelProfile(currentPreset.namModel);
+  const [ampModel, setAmpModel] = useState<AmpModelConfig>(() => {
+    const isNam = isNamModelProfile(currentPreset.ampModel);
     const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isNam
       ? 'wasm-nam'
-      : (currentPreset.namModel.engineMode && currentPreset.namModel.engineMode !== 'wasm-nam'
-          ? currentPreset.namModel.engineMode
+      : (currentPreset.ampModel.engineMode && currentPreset.ampModel.engineMode !== 'wasm-nam'
+          ? currentPreset.ampModel.engineMode
           : 'hd-triode');
     return {
-      ...currentPreset.namModel,
+      ...currentPreset.ampModel,
       isRealNam: isNam,
       engineMode: targetEngine
     };
@@ -83,10 +83,10 @@ export default function App() {
   // Engine Modes & Latency Diagnostics
   const [coreEngineMode, setCoreEngineMode] = useState<'hd-worklet' | 'standard'>('hd-worklet');
   const [ampEngineMode, setAmpEngineMode] = useState<'wasm-nam' | 'hd-triode' | 'waveshaper'>(() => {
-    const isNam = isNamModelProfile(currentPreset.namModel);
+    const isNam = isNamModelProfile(currentPreset.ampModel);
     if (isNam) return 'wasm-nam';
-    return (currentPreset.namModel.engineMode && currentPreset.namModel.engineMode !== 'wasm-nam')
-      ? currentPreset.namModel.engineMode
+    return (currentPreset.ampModel.engineMode && currentPreset.ampModel.engineMode !== 'wasm-nam')
+      ? currentPreset.ampModel.engineMode
       : 'hd-triode';
   });
   const [latencySettings, setLatencySettings] = useState<AudioLatencySettings>(() => audioEngine.latencySettings);
@@ -106,7 +106,7 @@ export default function App() {
     setSettingsTab(tab);
     setIsSettingsOpen(true);
   };
-  const [namStatus, setNamStatus] = useState<NamEngineStatus | null>(null);
+  const [ampStatus, setAmpStatus] = useState<AmpEngineStatus | null>(null);
 
   // Measurements
   const [inputPeak, setInputPeak] = useState<number>(0);
@@ -253,7 +253,7 @@ export default function App() {
       if (!audioEngine.ctx || audioEngine.ctx.state === 'closed') {
         await audioEngine.init();
         audioEngine.updatePedalboardChain(pedals);
-        audioEngine.updateNamModel(namModel);
+        audioEngine.updateAmpModel(ampModel);
         audioEngine.updateIrCabinet(irCabinet);
         audioEngine.setMasterGain(masterVolume);
         audioEngine.setInputGain(inputGain);
@@ -341,8 +341,8 @@ export default function App() {
     audioEngine.onLatencyUpdate = (report) => {
       setLatencyReport(report);
     };
-    audioEngine.onNamStatusUpdate = (status) => {
-      setNamStatus(status);
+    audioEngine.onAmpStatusUpdate = (status) => {
+      setAmpStatus(status);
       setAmpEngineMode(status.activeEngine);
     };
     audioEngine.onConditionerUpdate = (stats) => {
@@ -357,7 +357,7 @@ export default function App() {
       audioEngine.onLooperUpdate = null;
       audioEngine.onPeakUpdate = null;
       audioEngine.onLatencyUpdate = null;
-      audioEngine.onNamStatusUpdate = null;
+      audioEngine.onAmpStatusUpdate = null;
       audioEngine.onConditionerUpdate = null;
       audioEngine.onInputChannelUpdate = null;
     };
@@ -425,32 +425,32 @@ export default function App() {
   };
 
   const handleSetAmpEngineMode = (mode: 'wasm-nam' | 'hd-triode' | 'waveshaper') => {
-    const isNam = isNamModelProfile(namModel);
+    const isNam = isNamModelProfile(ampModel);
     if (isNam && mode !== 'wasm-nam') return;
     if (!isNam && mode === 'wasm-nam') return;
 
     setAmpEngineMode(mode);
     audioEngine.setAmpEngineMode(mode);
-    setNamModel(prev => ({ ...prev, engineMode: mode }));
+    setAmpModel(prev => ({ ...prev, engineMode: mode }));
   };
 
-  const handleUpdateNam = (updated: NamModelConfig) => {
+  const handleUpdateAmp = (updated: AmpModelConfig) => {
     const isNam = isNamModelProfile(updated);
     const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isNam
       ? 'wasm-nam'
       : (updated.engineMode && updated.engineMode !== 'wasm-nam' ? updated.engineMode : 'hd-triode');
 
-    const sanitized: NamModelConfig = {
+    const sanitized: AmpModelConfig = {
       ...updated,
       isRealNam: isNam,
       engineMode: targetEngine
     };
 
-    setNamModel(sanitized);
+    setAmpModel(sanitized);
     setAmpEngineMode(targetEngine);
     audioEngine.setAmpEngineMode(targetEngine);
     if (audioEngine.isRunning) {
-      audioEngine.updateNamModel(sanitized);
+      audioEngine.updateAmpModel(sanitized);
     }
   };
 
@@ -549,12 +549,12 @@ export default function App() {
     }
   }, [pedals, isRunning]);
 
-  // Sync NAM Model
+  // Sync Amp Model
   useEffect(() => {
     if (isRunning) {
-      audioEngine.updateNamModel(namModel);
+      audioEngine.updateAmpModel(ampModel);
     }
-  }, [namModel, isRunning]);
+  }, [ampModel, isRunning]);
 
   // Sync Cabinet
   useEffect(() => {
@@ -568,21 +568,21 @@ export default function App() {
     setCurrentPreset(preset);
     setPedals(preset.pedals);
 
-    const isPresetNam = isNamModelProfile(preset.namModel);
+    const isPresetNam = isNamModelProfile(preset.ampModel);
     const targetEngine: 'wasm-nam' | 'hd-triode' | 'waveshaper' = isPresetNam
       ? 'wasm-nam'
-      : (preset.namModel.engineMode && preset.namModel.engineMode !== 'wasm-nam'
-          ? preset.namModel.engineMode
+      : (preset.ampModel.engineMode && preset.ampModel.engineMode !== 'wasm-nam'
+          ? preset.ampModel.engineMode
           : 'hd-triode');
 
-    const updatedNamModel: NamModelConfig = {
-      ...preset.namModel,
+    const updatedAmpModel: AmpModelConfig = {
+      ...preset.ampModel,
       isRealNam: isPresetNam,
       engineMode: targetEngine,
-      bypassed: preset.namModel.bypassed ?? false
+      bypassed: preset.ampModel.bypassed ?? false
     };
 
-    setNamModel(updatedNamModel);
+    setAmpModel(updatedAmpModel);
     setAmpEngineMode(targetEngine);
 
     setIrCabinet(preset.irCabinet);
@@ -593,12 +593,12 @@ export default function App() {
     if (!isRunning) {
       audioEngine.currentPedals = preset.pedals;
     }
-    audioEngine.currentNamConfig = updatedNamModel;
+    audioEngine.currentAmpConfig = updatedAmpModel;
     audioEngine.currentCabConfig = preset.irCabinet;
 
     if (isRunning) {
       audioEngine.updatePedalboardChain(preset.pedals);
-      audioEngine.updateNamModel(updatedNamModel);
+      audioEngine.updateAmpModel(updatedAmpModel);
       audioEngine.updateIrCabinet(preset.irCabinet);
     }
   };
@@ -771,14 +771,14 @@ export default function App() {
 
       case 'amp_param': {
         if (target.paramKey === 'bypassed') {
-          setNamModel(prev => {
+          setAmpModel(prev => {
             const nextState = !prev.bypassed;
             showMidiNotice(`Amp: ${nextState ? 'BYPASS' : 'ACTIVE'}`);
             return { ...prev, bypassed: nextState };
           });
         } else {
           const ampVal = Math.round((value / 10) * 10) / 10;
-          setNamModel(prev => ({ ...prev, [target.paramKey]: ampVal }));
+          setAmpModel(prev => ({ ...prev, [target.paramKey]: ampVal }));
         }
         break;
       }
@@ -1001,11 +1001,11 @@ export default function App() {
           onOpenMidiSettings={() => handleOpenSettings('midi')}
         />
 
-        {/* Amp & Cabinet Stage (NAM Modeler & IR Convolver) */}
+        {/* Amp & Cabinet Stage */}
         <AmpCabSection
-          namModel={namModel}
+          ampModel={ampModel}
           irCabinet={irCabinet}
-          onUpdateNam={handleUpdateNam}
+          onUpdateAmp={handleUpdateAmp}
           onUpdateCab={handleUpdateCab}
           onLoadCustomIrWav={handleLoadCustomIrWav}
           ampEngineMode={ampEngineMode}
@@ -1138,7 +1138,7 @@ export default function App() {
         onSetCoreEngineMode={handleSetCoreEngineMode}
         ampEngineMode={ampEngineMode}
         onSetAmpEngineMode={handleSetAmpEngineMode}
-        isWasmReady={audioEngine.namEngine.isWasmReady}
+        isWasmReady={audioEngine.ampEngine.isWasmReady}
         onRunLatencyPing={handleRunLatencyPing}
         latencySettings={latencySettings}
         onUpdateLatencySettings={handleUpdateLatencySettings}
@@ -1157,7 +1157,7 @@ export default function App() {
         isMidiActivity={isMidiActivity}
         // Cloud Hub & Preset Library
         currentPedals={pedals}
-        currentNam={namModel}
+        currentAmp={ampModel}
         currentCab={irCabinet}
         onPresetsUpdated={(updatedList) => {
           setPresets(updatedList);

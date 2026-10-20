@@ -1,10 +1,11 @@
-import { NamModelConfig } from '../types/pedal';
+import { AmpModelConfig } from '../types/pedal';
 
 /**
  * Helper to determine if an amp config is a real Neural Amp Modeler (NAM) profile
  * with neural network weights that must run via the WASM NAM engine.
+ * Only models running via wasm-nam with real weights/profiles are NAM models.
  */
-export function isNamModelProfile(model?: NamModelConfig | null): boolean {
+export function isNamModelProfile(model?: AmpModelConfig | null): boolean {
   if (!model) return false;
   return Boolean(
     model.isRealNam ||
@@ -16,7 +17,7 @@ export function isNamModelProfile(model?: NamModelConfig | null): boolean {
   );
 }
 
-export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
+export const BUILT_IN_AMP_MODELS: AmpModelConfig[] = [
   {
     id: 'ac10',
     name: 'Vox AC10 Custom (Real NAM)',
@@ -62,7 +63,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Soldano SLO-100 Lead',
     category: 'Guitar',
     description: 'Legendary boutique high-gain tube amp with articulate harmonic saturation and searing lead sustain.',
-    type: 'wavenet',
+    type: 'hd-triode',
     gain: 6.8,
     bass: 5.5,
     mid: 6.2,
@@ -71,7 +72,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.5,
     saturationCurve: 3.8,
     bias: 0.12,
-    weightsCount: 28440,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: -5.0
@@ -81,7 +81,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Marshall JCM800 2203',
     category: 'Guitar',
     description: 'The definitive British rock roar: punchy upper mids, aggressive bite, and tight low-end crunch.',
-    type: 'lstm',
+    type: 'hd-triode',
     gain: 5.8,
     bass: 6.0,
     mid: 7.5,
@@ -90,7 +90,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.0,
     saturationCurve: 3.2,
     bias: 0.08,
-    weightsCount: 16384,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: -3.5
@@ -100,7 +99,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: "Fender '59 Tweed Bassman",
     category: 'Guitar',
     description: 'Vintage American warm clean tone with rich harmonic bloom and organic touch-sensitive breakup.',
-    type: 'neural',
+    type: 'hd-triode',
     gain: 3.8,
     bass: 6.5,
     mid: 5.0,
@@ -109,7 +108,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.0,
     saturationCurve: 1.8,
     bias: 0.04,
-    weightsCount: 12288,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: 1.5
@@ -119,7 +117,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Peavey 5150 Block Letter',
     category: 'Guitar',
     description: 'Aggressive modern high-gain metal titan with blistering palm-mute chug and saturated harmonics.',
-    type: 'wavenet',
+    type: 'hd-triode',
     gain: 7.5,
     bass: 6.8,
     mid: 4.5,
@@ -128,7 +126,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 6.5,
     saturationCurve: 4.5,
     bias: 0.15,
-    weightsCount: 32768,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: -6.0
@@ -138,7 +135,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Ampeg SVT-CL Bass Tube',
     category: 'Bass',
     description: 'The undisputed 300W all-tube bass stadium monolith. Colossal foundation, punchy growl, and fat grit.',
-    type: 'lstm',
+    type: 'hd-triode',
     gain: 5.0,
     bass: 7.5,
     mid: 6.0,
@@ -147,7 +144,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.0,
     saturationCurve: 2.6,
     bias: 0.06,
-    weightsCount: 18432,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: -1.0
@@ -157,7 +153,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Darkglass Microtubes B7K',
     category: 'Bass',
     description: 'Modern progressive bass preamp with ultra-clean sub-bass articulation and razor-sharp distortion.',
-    type: 'neural',
+    type: 'hd-triode',
     gain: 6.2,
     bass: 6.8,
     mid: 7.0,
@@ -166,7 +162,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.2,
     saturationCurve: 3.4,
     bias: 0.1,
-    weightsCount: 14336,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: -4.0
@@ -176,7 +171,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Vox AC30 Top Boost',
     category: 'Guitar',
     description: 'Jangly British chime with sparkling highs, bell-like clarity, and smooth class-A EL84 compression.',
-    type: 'neural',
+    type: 'hd-triode',
     gain: 4.2,
     bass: 5.0,
     mid: 6.5,
@@ -185,7 +180,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 7.5,
     saturationCurve: 2.2,
     bias: 0.05,
-    weightsCount: 12288,
     isRealNam: false,
     engineMode: 'hd-triode',
     inputTrim: 0.0
@@ -195,7 +189,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Roland Jazz Chorus JC-120 (Solid State Clean)',
     category: 'Guitar',
     description: 'The definitive benchmark for ultra-clean guitar amplification. Pure crystal-clear solid-state headroom with zero breakup, sparkling chime, and legendary stereo chorus voicing.',
-    type: 'neural',
+    type: 'waveshaper',
     gain: 2.2,
     bass: 5.4,
     mid: 5.0,
@@ -204,7 +198,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.0,
     saturationCurve: 1.0,
     bias: 0.0,
-    weightsCount: 16384,
     isRealNam: false,
     engineMode: 'waveshaper',
     inputTrim: 5.0
@@ -214,7 +207,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: "Fender '65 Twin Reverb (Ultra Clean Headroom)",
     category: 'Guitar',
     description: 'Iconic 100W all-tube American giant with immense clean headroom. High dynamic punch, crystalline open highs, tight low end, and zero unwanted preamp clipping.',
-    type: 'neural',
+    type: 'waveshaper',
     gain: 2.5,
     bass: 5.8,
     mid: 4.8,
@@ -223,7 +216,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.2,
     saturationCurve: 1.2,
     bias: 0.02,
-    weightsCount: 16384,
     isRealNam: false,
     engineMode: 'waveshaper',
     inputTrim: 4.5
@@ -233,7 +225,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Hiwatt Custom 100 DR103 (Bold British Clean)',
     category: 'Guitar',
     description: 'David Gilmour & Pete Townshend high-headroom benchmark. Massive Partridge transformer clean punch, uncompressed articulate dynamics, and ringing clarity.',
-    type: 'neural',
+    type: 'waveshaper',
     gain: 2.8,
     bass: 6.0,
     mid: 6.2,
@@ -242,7 +234,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.0,
     saturationCurve: 1.3,
     bias: 0.03,
-    weightsCount: 16384,
     isRealNam: false,
     engineMode: 'waveshaper',
     inputTrim: 3.5
@@ -252,7 +243,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Studio Acoustic Preamp & Active DI (Ultra Clean)',
     category: 'Guitar',
     description: 'Pristine Class-A FET acoustic guitar preamp with 100% linear frequency response, anti-feedback notch, and studio DI clarity for acoustic and clean jazz guitars.',
-    type: 'neural',
+    type: 'waveshaper',
     gain: 2.0,
     bass: 5.0,
     mid: 5.0,
@@ -261,7 +252,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.5,
     saturationCurve: 1.0,
     bias: 0.0,
-    weightsCount: 8192,
     isRealNam: false,
     engineMode: 'waveshaper',
     inputTrim: 5.5
@@ -271,7 +261,7 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     name: 'Polytone Mini-Brute (Velvet Jazz Clean)',
     category: 'Guitar',
     description: 'The definitive jazz guitar amplifier (Joe Pass / George Benson). Warm, dark, velvety solid-state clean tone with zero distortion and rich woody low-mids.',
-    type: 'neural',
+    type: 'waveshaper',
     gain: 2.2,
     bass: 6.8,
     mid: 4.6,
@@ -280,7 +270,6 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
     master: 8.2,
     saturationCurve: 1.0,
     bias: 0.0,
-    weightsCount: 12288,
     isRealNam: false,
     engineMode: 'waveshaper',
     inputTrim: 4.5
@@ -291,9 +280,9 @@ export const BUILT_IN_NAM_MODELS: NamModelConfig[] = [
  * Returns the default calibrated input trim (dB) for an amp model config.
  * Balances loudness across clean, crunch, and high-gain amplifiers.
  */
-export function getDefaultTrimForModel(model?: NamModelConfig | null): number {
+export function getDefaultTrimForModel(model?: AmpModelConfig | null): number {
   if (!model) return 0.0;
-  const builtIn = BUILT_IN_NAM_MODELS.find(m => m.id === model.id);
+  const builtIn = BUILT_IN_AMP_MODELS.find(m => m.id === model.id);
   if (builtIn && builtIn.inputTrim !== undefined) {
     return builtIn.inputTrim;
   }

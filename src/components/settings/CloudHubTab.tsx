@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Preset, AnyPedal, NamModelConfig, IrCabinetConfig } from '../../types/pedal';
+import { Preset, AnyPedal, AmpModelConfig, IrCabinetConfig } from '../../types/pedal';
 import {
   encodePresetToShareUrl,
   savePresetsToStorage
@@ -20,7 +20,7 @@ export interface CloudHubTabProps {
   currentPreset: Preset;
   presets: Preset[];
   currentPedals: AnyPedal[];
-  currentNam: NamModelConfig;
+  currentAmp: AmpModelConfig;
   currentCab: IrCabinetConfig;
   onSelectPreset: (preset: Preset) => void;
   onPresetsUpdated: (updatedList: Preset[]) => void;
@@ -31,7 +31,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
   currentPreset,
   presets,
   currentPedals,
-  currentNam,
+  currentAmp,
   currentCab,
   onSelectPreset,
   onPresetsUpdated,
@@ -72,7 +72,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
     const target = presetToShare || {
       ...currentPreset,
       pedals: currentPedals,
-      namModel: currentNam,
+      ampModel: currentAmp,
       irCabinet: currentCab
     };
     const shareUrl = encodePresetToShareUrl(target);
@@ -91,7 +91,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
       name: publishName || currentPreset.name,
       author: publishAuthor || currentPreset.author || 'ToneCraft Musician',
       pedals: currentPedals,
-      namModel: currentNam,
+      ampModel: currentAmp,
       irCabinet: currentCab,
       dateExported: new Date().toISOString()
     };
@@ -113,10 +113,12 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const imported = JSON.parse(text) as Preset;
-        if (imported && imported.pedals && imported.namModel) {
+        const imported = JSON.parse(text) as any;
+        const importedModel = imported?.ampModel || imported?.namModel;
+        if (imported && imported.pedals && importedModel) {
           const newPreset: Preset = {
             ...imported,
+            ampModel: importedModel,
             id: `imported-${Date.now()}`,
             isCommunity: true
           };
@@ -148,7 +150,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
       description: publishDesc.trim() || 'Custom community pedalboard preset.',
       tags: publishTags.split(',').map(t => t.trim()).filter(Boolean),
       pedals: currentPedals,
-      namModel: currentNam,
+      ampModel: currentAmp,
       irCabinet: currentCab,
       bpm: currentPreset.bpm || 120,
       likes: 1,
@@ -335,7 +337,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
 
                       {/* Tone Chain Details */}
                       <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-neutral-400 font-mono">
-                        <span>Amp: {preset.namModel?.name}</span>
+                        <span>Amp: {preset.ampModel?.name}</span>
                         <span>·</span>
                         <span>Cab: {preset.irCabinet?.name}</span>
                         <span>·</span>
