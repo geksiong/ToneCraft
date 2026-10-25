@@ -193,6 +193,187 @@ export const INITIAL_PRESETS: Preset[] = [
     ]
   },
   {
+    id: 'vocal-bohemian-choir',
+    name: 'Bohemian Vocal Harmony Choir',
+    author: 'Freddie & ToneCraft',
+    instrument: 'vocal',
+    genre: 'Rock',
+    description: 'Magnificent multi-voice vocal harmonies with stereo choir spread, tube preamp presence, and celestial cathedral hall reverb.',
+    tags: ['Vocal', 'Harmony', 'Choir', 'Multi-Voice', 'Tube Preamp', 'Reverb'],
+    bpm: 110,
+    likes: 820,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vpre-choir-1',
+        type: 'vocalPreamp',
+        name: 'Tube Vocal Strip',
+        enabled: true,
+        color: '#b45309',
+        warmth: 40,
+        compression: 55,
+        air: 65,
+        body: 50,
+        lowCut: true,
+        outputGain: 55
+      },
+      {
+        id: 'pedal-vharm-choir-1',
+        type: 'vocalHarmony',
+        name: 'Vocal Choir',
+        enabled: true,
+        color: '#4f46e5',
+        voice1: '+3',
+        voice2: '+7',
+        key: 'C',
+        scale: 'major',
+        spread: 80,
+        humanize: 35,
+        mix: 65
+      },
+      {
+        id: 'pedal-reverb-choir-1',
+        type: 'reverb',
+        name: 'Cathedral Hall',
+        enabled: true,
+        color: '#4338ca',
+        decay: 65,
+        preDelay: 25,
+        mix: 30,
+        damping: 20,
+        shimmer: true,
+        roomType: 'hall'
+      }
+    ]
+  },
+  {
+    id: 'vocal-studio-tube-strip',
+    name: 'Analog Tube Vocal Channel Strip',
+    author: 'Grammy Vocal Master',
+    instrument: 'vocal',
+    genre: 'Pop',
+    description: 'Broadcast-grade analog vocal chain: 80Hz rumble cut, 200Hz warm chest body, 12kHz silky air, optical leveling compression, and precision sibilance de-essing.',
+    tags: ['Vocal', 'Tube Preamp', 'Compressor', 'De-Esser', 'Air Shelf', 'Broadcast'],
+    bpm: 100,
+    likes: 745,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vpre-strip-1',
+        type: 'vocalPreamp',
+        name: 'Tube Vocal Strip',
+        enabled: true,
+        color: '#b45309',
+        warmth: 50,
+        compression: 65,
+        air: 70,
+        body: 55,
+        lowCut: true,
+        outputGain: 55
+      },
+      {
+        id: 'pedal-deess-strip-1',
+        type: 'deEsser',
+        name: 'Vocal De-Esser',
+        enabled: true,
+        color: '#d97706',
+        frequency: 6200,
+        threshold: -38,
+        reduction: 70,
+        listen: false,
+        bandwidth: 'wide'
+      },
+      {
+        id: 'pedal-vdbl-strip-1',
+        type: 'vocalDoubler',
+        name: 'Studio Doubler',
+        enabled: true,
+        color: '#6366f1',
+        detune: 35,
+        spread: 85,
+        delay: 28,
+        depth: 30,
+        mix: 55
+      }
+    ]
+  },
+  {
+    id: 'vocal-edm-stutter-glitch',
+    name: 'Hyperpop Vocal Chopper & Dalek Alien',
+    author: 'Glitch Mob & Skrillex',
+    instrument: 'vocal',
+    genre: 'Pop',
+    description: 'Futuristic EDM and hyperpop vocal effect: rhythmic tempo-synced chopper, vinyl tape slow plunge, sci-fi Dalek ring modulator, and stereo delay repeats.',
+    tags: ['Vocal', 'Stutter', 'Glitch', 'Ring Modulator', 'Sci-Fi', 'EDM', 'Hyperpop'],
+    bpm: 130,
+    likes: 615,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vstut-edm-1',
+        type: 'vocalStutter',
+        name: 'Vocal Chopper',
+        enabled: true,
+        color: '#059669',
+        rate: '1/8',
+        bpm: 130,
+        depth: 90,
+        glitch: 40,
+        tapeSlow: true,
+        mix: 80
+      },
+      {
+        id: 'pedal-valien-edm-1',
+        type: 'vocalAlien',
+        name: 'Alien Dalek',
+        enabled: true,
+        color: '#0d9488',
+        frequency: 220,
+        carrierShape: 'triangle',
+        modDepth: 75,
+        lfoRate: 4.5,
+        tracking: 50,
+        mix: 65
+      },
+      {
+        id: 'pedal-delay-edm-1',
+        type: 'delay',
+        name: 'Ping-Pong Delay',
+        enabled: true,
+        color: '#047857',
+        time: 230,
+        feedback: 48,
+        mix: 35,
+        flutter: 20,
+        pingPong: true
+      }
+    ]
+  },
+  {
     id: 'vox-ac10-real-nam',
     name: 'Vox AC10 Real NAM Studio',
     author: 'ToneCraft Studio',

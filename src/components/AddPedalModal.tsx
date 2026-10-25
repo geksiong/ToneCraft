@@ -401,6 +401,87 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       mix: 100
     })
   },
+  {
+    type: 'vocalHarmony',
+    title: 'Multi-Voice Vocal Harmony Choir',
+    category: 'Vocal & Speech',
+    description: 'Dual intelligent vocal harmony voices with custom interval selection (3rds, 5ths, octaves), wide stereo spread, and humanize micro-detuning.',
+    color: '#4f46e5',
+    createDefault: () => ({
+      id: `pedal-vharm-${Date.now()}`,
+      type: 'vocalHarmony',
+      name: 'Vocal Choir',
+      enabled: true,
+      color: '#4f46e5',
+      voice1: '+3',
+      voice2: '+7',
+      key: 'C',
+      scale: 'major',
+      spread: 75,
+      humanize: 30,
+      mix: 65
+    })
+  },
+  {
+    type: 'vocalPreamp',
+    title: 'Vintage Studio Tube Vocal Strip',
+    category: 'Vocal & Speech',
+    description: 'Broadcast-grade analog tube channel strip with 80Hz rumble low-cut, 200Hz body warmth, 12kHz silk "Air" shelf, and smooth optical LA-2A leveling.',
+    color: '#b45309',
+    createDefault: () => ({
+      id: `pedal-vpre-${Date.now()}`,
+      type: 'vocalPreamp',
+      name: 'Tube Vocal Strip',
+      enabled: true,
+      color: '#b45309',
+      warmth: 45,
+      compression: 55,
+      air: 60,
+      body: 50,
+      lowCut: true,
+      outputGain: 50
+    })
+  },
+  {
+    type: 'vocalStutter',
+    title: 'Rhythmic Vocal Stutter & Chopper',
+    category: 'Vocal & Speech',
+    description: 'EDM & hyperpop rhythmic tempo-synced chopper (1/4 to 1/32 notes), glitch repeat buffer, and vinyl tape-stop speed plunge.',
+    color: '#059669',
+    createDefault: () => ({
+      id: `pedal-vstut-${Date.now()}`,
+      type: 'vocalStutter',
+      name: 'Vocal Chopper',
+      enabled: true,
+      color: '#059669',
+      rate: '1/8',
+      bpm: 120,
+      depth: 85,
+      glitch: 30,
+      tapeSlow: false,
+      mix: 75
+    })
+  },
+  {
+    type: 'vocalAlien',
+    title: 'Sci-Fi Alien & Dalek Ring Modulator',
+    category: 'Vocal & Speech',
+    description: 'Extraterrestrial robotic voice transformer with balanced ring modulation, speech amplitude tracking, LFO flutter, and metallic Dalek resonance.',
+    color: '#0d9488',
+    createDefault: () => ({
+      id: `pedal-valien-${Date.now()}`,
+      type: 'vocalAlien',
+      name: 'Alien Dalek',
+      enabled: true,
+      color: '#0d9488',
+      frequency: 240,
+      carrierShape: 'sine',
+      modDepth: 80,
+      lfoRate: 3.5,
+      tracking: 45,
+      mix: 100
+    })
+  },
 
   // Custom VST
   {

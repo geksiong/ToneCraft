@@ -21,6 +21,10 @@ import {
   DeEsserPedal,
   TelephoneVoicePedal,
   VocalFormantPedal,
+  VocalHarmonyPedal,
+  VocalPreampPedal,
+  VocalStutterPedal,
+  VocalAlienPedal,
   VstPluginPedal
 } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
@@ -1285,6 +1289,302 @@ function renderPedalControls(
             <div className="text-center text-[7.5px] font-mono text-fuchsia-300/80 tracking-widest uppercase">
               {p.formant < -2 ? '👹 DEEP MECH TRACT' : p.formant > 2 ? '✨ CYBORG / ANDROID' : 'BALANCED TRACT'}
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalHarmony': {
+      const p = pedal as VocalHarmonyPedal;
+      const intervals1: Array<VocalHarmonyPedal['voice1']> = ['-12', '-7', '-5', '-3', '+3', '+4', '+5', '+7', '+12'];
+      const intervals2: Array<VocalHarmonyPedal['voice2']> = ['off', '-12', '-7', '-5', '+3', '+4', '+5', '+7', '+12'];
+      return (
+        <div className="space-y-2">
+          {/* Harmony Interval Selectors */}
+          <div className="space-y-1 bg-black/40 p-1.5 rounded border border-white/10">
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-indigo-300 font-bold">VOICE 1:</span>
+              <div className="flex gap-0.5 flex-wrap justify-end">
+                {intervals1.map((iv) => (
+                  <button
+                    key={iv}
+                    onClick={() => onUpdate({ ...p, voice1: iv })}
+                    className={`px-1 py-0.5 rounded text-[7.5px] font-mono transition-colors ${
+                      p.voice1 === iv
+                        ? 'bg-indigo-500 text-white font-bold shadow-sm'
+                        : 'bg-black/50 text-white/70 hover:text-white'
+                    }`}
+                  >
+                    {iv}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-mono pt-1 border-t border-white/5">
+              <span className="text-purple-300 font-bold">VOICE 2:</span>
+              <div className="flex gap-0.5 flex-wrap justify-end">
+                {intervals2.map((iv) => (
+                  <button
+                    key={iv}
+                    onClick={() => onUpdate({ ...p, voice2: iv })}
+                    className={`px-1 py-0.5 rounded text-[7.5px] font-mono transition-colors ${
+                      p.voice2 === iv
+                        ? 'bg-purple-500 text-white font-bold shadow-sm'
+                        : 'bg-black/50 text-white/70 hover:text-white'
+                    }`}
+                  >
+                    {iv}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Knobs */}
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Spread"
+              value={p.spread}
+              unit="%"
+              midiBadge={getKnobBadge('spread')}
+              onChange={(v) => onUpdate({ ...p, spread: v })}
+            />
+            <RotaryKnob
+              label="Human"
+              value={p.humanize}
+              unit="%"
+              midiBadge={getKnobBadge('humanize')}
+              onChange={(v) => onUpdate({ ...p, humanize: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {p.mix >= 99 && (
+            <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
+              ✓ 100% WET • DRY VOICE IS MUTED
+            </div>
+          )}
+          <div className="text-center text-[7.5px] font-mono text-indigo-300/80 tracking-widest uppercase">
+            🎶 STEREO MULTI-VOICE CHOIR
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalPreamp': {
+      const p = pedal as VocalPreampPedal;
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-y-2 gap-x-1">
+            <RotaryKnob
+              label="Warmth"
+              value={p.warmth}
+              unit="%"
+              midiBadge={getKnobBadge('warmth')}
+              onChange={(v) => onUpdate({ ...p, warmth: v })}
+            />
+            <RotaryKnob
+              label="Comp"
+              value={p.compression}
+              unit="%"
+              midiBadge={getKnobBadge('compression')}
+              onChange={(v) => onUpdate({ ...p, compression: v })}
+            />
+            <RotaryKnob
+              label="Air 12k"
+              value={p.air}
+              unit="%"
+              midiBadge={getKnobBadge('air')}
+              onChange={(v) => onUpdate({ ...p, air: v })}
+            />
+            <RotaryKnob
+              label="Body"
+              value={p.body}
+              unit="%"
+              midiBadge={getKnobBadge('body')}
+              onChange={(v) => onUpdate({ ...p, body: v })}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[9px] font-mono">
+            <button
+              onClick={() => onUpdate({ ...p, lowCut: !p.lowCut })}
+              className={`px-2 py-1 rounded font-bold uppercase transition-colors flex items-center gap-1 ${
+                p.lowCut
+                  ? 'bg-amber-500 text-black shadow-sm'
+                  : 'bg-black/40 text-white/50 border border-white/10'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${p.lowCut ? 'bg-black' : 'bg-white/20'}`} />
+              <span>80Hz LOW-CUT</span>
+            </button>
+            <div className="w-16">
+              <RotaryKnob
+                size="sm"
+                label="Output"
+                value={p.outputGain}
+                unit="%"
+                midiBadge={getKnobBadge('outputGain')}
+                onChange={(v) => onUpdate({ ...p, outputGain: v })}
+              />
+            </div>
+          </div>
+          <div className="text-center text-[7.5px] font-mono text-amber-300/80 tracking-widest uppercase">
+            🎙️ CLASS-A TUBE STRIP (NEVE/LA-2A)
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalStutter': {
+      const p = pedal as VocalStutterPedal;
+      const rates: Array<VocalStutterPedal['rate']> = ['1/4', '1/8', '1/16', '1/32', 'triplet'];
+      return (
+        <div className="space-y-2">
+          {/* Rate Selector */}
+          <div className="flex justify-between gap-1 bg-black/40 p-1 rounded border border-white/10">
+            {rates.map((r) => (
+              <button
+                key={r}
+                onClick={() => onUpdate({ ...p, rate: r })}
+                className={`flex-1 py-0.5 rounded text-[8px] font-mono uppercase transition-colors ${
+                  p.rate === r
+                    ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          {/* Knobs */}
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Depth"
+              value={p.depth}
+              unit="%"
+              midiBadge={getKnobBadge('depth')}
+              onChange={(v) => onUpdate({ ...p, depth: v })}
+            />
+            <RotaryKnob
+              label="Glitch"
+              value={p.glitch}
+              unit="%"
+              midiBadge={getKnobBadge('glitch')}
+              onChange={(v) => onUpdate({ ...p, glitch: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {/* Tape slow toggle */}
+          <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[9px] font-mono">
+            <button
+              onClick={() => onUpdate({ ...p, tapeSlow: !p.tapeSlow })}
+              className={`w-full py-1 rounded text-[8.5px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 ${
+                p.tapeSlow
+                  ? 'bg-rose-600 text-white shadow-rose-900/50 shadow ring-1 ring-rose-400'
+                  : 'bg-black/40 text-white/60 hover:text-white border border-white/10'
+              }`}
+            >
+              <span>{p.tapeSlow ? '🛑' : '📼'}</span>
+              <span>{p.tapeSlow ? 'VINYL TAPE-STOP ACTIVE' : 'VINYL TAPE-STOP SLOW'}</span>
+            </button>
+          </div>
+          <div className="text-center text-[7.5px] font-mono text-emerald-300/80 tracking-widest uppercase">
+            ⚡ RHYTHMIC SLICE & GLITCH REPEAT
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalAlien': {
+      const p = pedal as VocalAlienPedal;
+      const shapes: Array<VocalAlienPedal['carrierShape']> = ['sine', 'triangle', 'square'];
+      return (
+        <div className="space-y-2">
+          {/* Waveform Selector */}
+          <div className="flex justify-between gap-1 bg-black/40 p-1 rounded border border-white/10">
+            {shapes.map((sh) => (
+              <button
+                key={sh}
+                onClick={() => onUpdate({ ...p, carrierShape: sh })}
+                className={`flex-1 py-0.5 rounded text-[8px] font-mono uppercase transition-colors ${
+                  p.carrierShape === sh
+                    ? 'bg-teal-400 text-black font-bold shadow-sm'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                {sh}
+              </button>
+            ))}
+          </div>
+
+          {/* Knobs */}
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Freq"
+              value={p.frequency}
+              min={50}
+              max={2000}
+              unit="Hz"
+              midiBadge={getKnobBadge('frequency')}
+              onChange={(v) => onUpdate({ ...p, frequency: v })}
+            />
+            <RotaryKnob
+              label="Mod"
+              value={p.modDepth}
+              unit="%"
+              midiBadge={getKnobBadge('modDepth')}
+              onChange={(v) => onUpdate({ ...p, modDepth: v })}
+            />
+            <RotaryKnob
+              label="Flutter"
+              value={p.lfoRate}
+              min={0.1}
+              max={20}
+              unit="Hz"
+              midiBadge={getKnobBadge('lfoRate')}
+              onChange={(v) => onUpdate({ ...p, lfoRate: v })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Speech Track"
+              value={p.tracking}
+              unit="%"
+              midiBadge={getKnobBadge('tracking')}
+              onChange={(v) => onUpdate({ ...p, tracking: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {p.mix >= 99 && (
+            <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
+              ✓ 100% WET • DRY VOICE IS MUTED
+            </div>
+          )}
+          <div className="text-center text-[7.5px] font-mono text-teal-300/80 tracking-widest uppercase">
+            🛸 DALEK & CYBORG RING MODULATOR
           </div>
         </div>
       );

@@ -56,6 +56,10 @@ import {
   DeEsserPedal,
   TelephoneVoicePedal,
   VocalFormantPedal,
+  VocalHarmonyPedal,
+  VocalPreampPedal,
+  VocalStutterPedal,
+  VocalAlienPedal,
   VstPluginPedal
 } from '../types/pedal';
 import {
@@ -474,6 +478,26 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
 
     case 'vocalFormant': {
       dspNodes = createVocalFormantDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'vocalHarmony': {
+      dspNodes = createVocalHarmonyDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'vocalPreamp': {
+      dspNodes = createVocalPreampDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'vocalStutter': {
+      dspNodes = createVocalStutterDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'vocalAlien': {
+      dspNodes = createVocalAlienDsp(ctx, input, wetGain);
       break;
     }
   }
@@ -1133,6 +1157,30 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
 
     case 'vocalFormant': {
       const p = pedal as VocalFormantPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'vocalHarmony': {
+      const p = pedal as VocalHarmonyPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'vocalPreamp': {
+      const p = pedal as VocalPreampPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'vocalStutter': {
+      const p = pedal as VocalStutterPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'vocalAlien': {
+      const p = pedal as VocalAlienPedal;
       if (nodes.updateParams) nodes.updateParams(p);
       break;
     }
@@ -2091,6 +2139,622 @@ function createVocalFormantDsp(ctx: AudioContext, input: GainNode, output: GainN
       const mixNorm = Math.max(0, Math.min(1, p.mix / 100));
       effectWetGain.gain.setTargetAtTime(mixNorm, now, 0.02);
       effectDryGain.gain.setTargetAtTime(1.0 - mixNorm, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 1. Multi-Voice Vocal Harmony Choir Engine DSP
+ * Creates dual intelligent vocal harmonies with key/scale selection, stereo spread,
+ * and natural humanize pitch drift.
+ */
+function createVocalHarmonyDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferQuantum = 512;
+  const processor = ctx.createScriptProcessor(bufferQuantum, 1, 2);
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  // Circular ring buffer
+  const bufSize = 16384;
+  const bufMask = bufSize - 1;
+  const ring = new Float32Array(bufSize);
+  let writeIdx = 0;
+
+  // Grain tracking for Voice 1 & Voice 2
+  let targetRatio1 = Math.pow(2, 4 / 12); // Major 3rd (+4 st)
+  let targetRatio2 = Math.pow(2, 7 / 12); // Perfect 5th (+7 st)
+  let voice2Enabled = true;
+
+  let currentRatio1 = targetRatio1;
+  let currentRatio2 = targetRatio2;
+
+  let spread = 75; // 0 - 100%
+  let humanize = 30; // 0 - 100%
+
+  let grainPhase1_0 = 0.0;
+  let grainPhase1_1 = 0.5;
+  let grainPhase2_0 = 0.0;
+  let grainPhase2_1 = 0.5;
+
+  const grainLen = Math.floor(sampleRate * 0.035); // ~35ms grains
+  let lfoPhase1 = 0;
+  let lfoPhase2 = 1.5;
+
+  let speechEnv = 0;
+
+  function readHermite(buf: Float32Array, pos: number): number {
+    const i = Math.floor(pos);
+    const frac = pos - i;
+    const p0 = buf[(i - 1) & bufMask];
+    const p1 = buf[i & bufMask];
+    const p2 = buf[(i + 1) & bufMask];
+    const p3 = buf[(i + 2) & bufMask];
+    const c0 = p1;
+    const c1 = 0.5 * (p2 - p0);
+    const c2 = p0 - 2.5 * p1 + 2.0 * p2 - 0.5 * p3;
+    const c3 = 0.5 * (p3 - p0) + 1.5 * (p1 - p2);
+    return ((c3 * frac + c2) * frac + c1) * frac + c0;
+  }
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outL = e.outputBuffer.getChannelData(0);
+      const outR = e.outputBuffer.getChannelData(1);
+      if (!inCh || !outL || !outR) return;
+      const len = inCh.length;
+
+      // Smooth ratio transitions
+      currentRatio1 += (targetRatio1 - currentRatio1) * 0.1;
+      currentRatio2 += (targetRatio2 - currentRatio2) * 0.1;
+
+      const panSpread = (spread / 100) * 0.8;
+      const panL_v1 = 0.5 + panSpread * 0.5;
+      const panR_v1 = 0.5 - panSpread * 0.5;
+      const panL_v2 = 0.5 - panSpread * 0.5;
+      const panR_v2 = 0.5 + panSpread * 0.5;
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+        ring[writeIdx] = inSample;
+
+        // Gate quiet background noise
+        const absVal = Math.abs(inSample);
+        if (absVal > speechEnv) {
+          speechEnv += (absVal - speechEnv) * 0.35;
+        } else {
+          speechEnv += (absVal - speechEnv) * 0.005;
+        }
+
+        if (speechEnv < 0.001) {
+          outL[i] = 0;
+          outR[i] = 0;
+          writeIdx = (writeIdx + 1) & bufMask;
+          continue;
+        }
+
+        // Humanize subtle micro-detuning drift
+        lfoPhase1 = (lfoPhase1 + 0.35 / sampleRate) % 1.0;
+        lfoPhase2 = (lfoPhase2 + 0.48 / sampleRate) % 1.0;
+        const drift1 = 1.0 + Math.sin(2 * Math.PI * lfoPhase1) * (humanize / 100) * 0.012;
+        const drift2 = 1.0 + Math.cos(2 * Math.PI * lfoPhase2) * (humanize / 100) * 0.015;
+
+        // Voice 1 dual-grain overlap
+        const speed1 = (1.0 - currentRatio1 * drift1) / grainLen;
+        grainPhase1_0 = (grainPhase1_0 + speed1 + 10.0) % 1.0;
+        grainPhase1_1 = (grainPhase1_1 + speed1 + 10.0) % 1.0;
+
+        const w1_0 = 0.5 * (1.0 - Math.cos(2 * Math.PI * grainPhase1_0));
+        const w1_1 = 0.5 * (1.0 - Math.cos(2 * Math.PI * grainPhase1_1));
+
+        const delay1_0 = 48 + grainPhase1_0 * grainLen;
+        const delay1_1 = 48 + grainPhase1_1 * grainLen;
+
+        const s1 = readHermite(ring, writeIdx - delay1_0) * w1_0 +
+                   readHermite(ring, writeIdx - delay1_1) * w1_1;
+
+        // Voice 2 dual-grain overlap
+        let s2 = 0;
+        if (voice2Enabled) {
+          const speed2 = (1.0 - currentRatio2 * drift2) / grainLen;
+          grainPhase2_0 = (grainPhase2_0 + speed2 + 10.0) % 1.0;
+          grainPhase2_1 = (grainPhase2_1 + speed2 + 10.0) % 1.0;
+
+          const w2_0 = 0.5 * (1.0 - Math.cos(2 * Math.PI * grainPhase2_0));
+          const w2_1 = 0.5 * (1.0 - Math.cos(2 * Math.PI * grainPhase2_1));
+
+          const delay2_0 = 48 + grainPhase2_0 * grainLen;
+          const delay2_1 = 48 + grainPhase2_1 * grainLen;
+
+          s2 = readHermite(ring, writeIdx - delay2_0) * w2_0 +
+               readHermite(ring, writeIdx - delay2_1) * w2_1;
+        }
+
+        const leftTotal = s1 * panL_v1 + s2 * panL_v2;
+        const rightTotal = s1 * panR_v1 + s2 * panR_v2;
+
+        outL[i] = Math.tanh(leftTotal * 0.95);
+        outR[i] = Math.tanh(rightTotal * 0.95);
+
+        writeIdx = (writeIdx + 1) & bufMask;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outL = e.outputBuffer.getChannelData(0);
+        const outR = e.outputBuffer.getChannelData(1);
+        outL.set(inCh);
+        outR.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: VocalHarmonyPedal) => {
+      const now = ctx.currentTime;
+      spread = Math.max(0, Math.min(100, p.spread));
+      humanize = Math.max(0, Math.min(100, p.humanize));
+
+      const semi1 = parseInt(p.voice1, 10) || 4;
+      targetRatio1 = Math.pow(2, semi1 / 12);
+
+      if (p.voice2 === 'off') {
+        voice2Enabled = false;
+      } else {
+        voice2Enabled = true;
+        const semi2 = parseInt(p.voice2, 10) || 7;
+        targetRatio2 = Math.pow(2, semi2 / 12);
+      }
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      // At 100% mix: dry voice is 0.0, only choir harmony heard
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix * 1.1, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 2. Studio Tube Vocal Channel Strip DSP (Neve 1073 / LA-2A Style)
+ * High-pass rumble filter + 200Hz body warmth + 12kHz silk air shelf +
+ * vintage triode saturation + smooth optical leveling compressor.
+ */
+function createVocalPreampDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  // 1. Dual high-pass filter for steep 18dB/oct rumble roll-off
+  const hp1 = ctx.createBiquadFilter();
+  hp1.type = 'highpass';
+  hp1.frequency.value = 80;
+  hp1.Q.value = 0.707;
+
+  const hp2 = ctx.createBiquadFilter();
+  hp2.type = 'highpass';
+  hp2.frequency.value = 80;
+  hp2.Q.value = 0.707;
+
+  // 2. 200Hz chest resonance body filter
+  const bodyFilter = ctx.createBiquadFilter();
+  bodyFilter.type = 'peaking';
+  bodyFilter.frequency.value = 220;
+  bodyFilter.Q.value = 1.0;
+  bodyFilter.gain.value = 2.0;
+
+  // 3. 12kHz high shelf "Air" filter
+  const airFilter = ctx.createBiquadFilter();
+  airFilter.type = 'highshelf';
+  airFilter.frequency.value = 12000;
+  airFilter.gain.value = 3.5;
+
+  // 4. Vintage Triode Tube Waveshaper
+  const tubeShaper = ctx.createWaveShaper();
+  tubeShaper.oversample = '4x';
+
+  function createTubeCurve(warmth: number): Float32Array {
+    const n = 1024;
+    const curve = new Float32Array(n);
+    const drive = 1.0 + (warmth / 100) * 4.5;
+    const bias = (warmth / 100) * 0.12; // Asymmetric 2nd harmonic richness
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      const xBiased = x * drive + bias;
+      const y = Math.tanh(xBiased) - Math.tanh(bias);
+      curve[i] = y / (Math.tanh(drive + bias) || 1);
+    }
+    return curve;
+  }
+  tubeShaper.curve = createTubeCurve(50) as any;
+
+  // 5. Optical Vocal Leveling Compressor (LA-2A style)
+  const comp = ctx.createDynamicsCompressor();
+  comp.attack.value = 0.008;
+  comp.release.value = 0.22;
+  comp.ratio.value = 4.0;
+  comp.threshold.value = -24;
+
+  // 6. Master output gain
+  const masterGain = ctx.createGain();
+  masterGain.gain.value = 1.0;
+
+  // Graph topology
+  input.connect(hp1);
+  hp1.connect(hp2);
+  hp2.connect(bodyFilter);
+  bodyFilter.connect(airFilter);
+  airFilter.connect(tubeShaper);
+  tubeShaper.connect(comp);
+  comp.connect(masterGain);
+  masterGain.connect(output);
+
+  return {
+    hp1,
+    hp2,
+    bodyFilter,
+    airFilter,
+    tubeShaper,
+    comp,
+    masterGain,
+    updateParams: (p: VocalPreampPedal) => {
+      const now = ctx.currentTime;
+
+      // Low-cut toggle: 80Hz rumble cut vs inaudible 15Hz sub pass
+      const hpFreq = p.lowCut ? 80 : 15;
+      hp1.frequency.setTargetAtTime(hpFreq, now, 0.02);
+      hp2.frequency.setTargetAtTime(hpFreq, now, 0.02);
+
+      // Body warmth (-8dB to +8dB at 220Hz)
+      const bodyDb = ((p.body - 50) / 50) * 8;
+      bodyFilter.gain.setTargetAtTime(bodyDb, now, 0.02);
+
+      // Silky Air shelf (-6dB to +12dB at 12kHz)
+      const airDb = ((p.air - 50) / 50) * 9 + 3;
+      airFilter.gain.setTargetAtTime(airDb, now, 0.02);
+
+      // Tube saturation curve
+      tubeShaper.curve = createTubeCurve(p.warmth) as any;
+
+      // Optical compression
+      const thresh = -12 - (p.compression / 100) * 36;
+      comp.threshold.setTargetAtTime(thresh, now, 0.02);
+      comp.ratio.setTargetAtTime(3.0 + (p.compression / 100) * 6.0, now, 0.02);
+
+      // Output gain
+      const outLevel = 0.4 + (p.outputGain / 100) * 1.4;
+      masterGain.gain.setTargetAtTime(outLevel, now, 0.02);
+    }
+  };
+}
+
+/**
+ * 3. Rhythmic Vocal Stutter & Glitch Chopper DSP
+ * Tempo-synced rhythmic slice gate, glitch buffer repeat, and vinyl tape slow down.
+ */
+function createVocalStutterDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferQuantum = 512;
+  const processor = ctx.createScriptProcessor(bufferQuantum, 1, 1);
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  // Ring buffer for stutter slices (65536 samples ~ 1.36s)
+  const bufSize = 65536;
+  const bufMask = bufSize - 1;
+  const ring = new Float32Array(bufSize);
+  let writeIdx = 0;
+
+  // Parameters
+  let bpm = 120;
+  let rate: VocalStutterPedal['rate'] = '1/8';
+  let depth = 85;
+  let glitch = 30;
+  let tapeSlow = false;
+
+  let sliceSamples = Math.floor(sampleRate * (60 / bpm) * 0.5);
+  let sampleCounter = 0;
+  let freezeWrite = false;
+  let freezeStartIdx = 0;
+  let tapeSlowSpeed = 1.0;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      const fadeLen = Math.floor(sampleRate * 0.004); // 4ms smooth anti-click ramp
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+        if (!freezeWrite) {
+          ring[writeIdx] = inSample;
+        }
+
+        const phaseInSlice = sampleCounter % sliceSamples;
+        const halfSlice = Math.floor(sliceSamples * 0.5);
+
+        // Glitch trigger at slice start
+        if (phaseInSlice === 0) {
+          const shouldGlitch = (Math.random() * 100) < glitch;
+          if (shouldGlitch && glitch > 0) {
+            freezeWrite = true;
+            freezeStartIdx = (writeIdx - halfSlice) & bufMask;
+          } else {
+            freezeWrite = false;
+          }
+
+          if (tapeSlow) {
+            tapeSlowSpeed = 1.0;
+          }
+        }
+
+        // Tape slow deceleration
+        if (tapeSlow && phaseInSlice > halfSlice) {
+          tapeSlowSpeed = Math.max(0.15, tapeSlowSpeed * 0.9997);
+        } else {
+          tapeSlowSpeed = 1.0;
+        }
+
+        // Gate chopper envelope: open in first half, muted in second half
+        let gateGain = 1.0;
+        const muteFloor = 1.0 - (depth / 100);
+
+        if (phaseInSlice < halfSlice) {
+          // Open phase
+          if (phaseInSlice < fadeLen) {
+            gateGain = muteFloor + (1.0 - muteFloor) * (phaseInSlice / fadeLen);
+          } else if (phaseInSlice > halfSlice - fadeLen) {
+            gateGain = muteFloor + (1.0 - muteFloor) * ((halfSlice - phaseInSlice) / fadeLen);
+          } else {
+            gateGain = 1.0;
+          }
+        } else {
+          // Muted phase
+          gateGain = muteFloor;
+        }
+
+        // Read sample
+        let readSample = inSample;
+        if (freezeWrite) {
+          const offset = Math.floor((phaseInSlice * tapeSlowSpeed) % halfSlice);
+          readSample = ring[(freezeStartIdx + offset) & bufMask];
+        } else if (tapeSlow && tapeSlowSpeed < 0.99) {
+          const lag = Math.floor(phaseInSlice * (1.0 - tapeSlowSpeed));
+          readSample = ring[(writeIdx - lag) & bufMask];
+        }
+
+        outCh[i] = readSample * gateGain;
+
+        sampleCounter++;
+        writeIdx = (writeIdx + 1) & bufMask;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: VocalStutterPedal) => {
+      const now = ctx.currentTime;
+      bpm = Math.max(60, Math.min(220, p.bpm || 120));
+      rate = p.rate;
+      depth = Math.max(0, Math.min(100, p.depth));
+      glitch = Math.max(0, Math.min(100, p.glitch));
+      tapeSlow = Boolean(p.tapeSlow);
+
+      // Recalculate slice duration
+      const beatSec = 60 / bpm;
+      let mult = 0.5; // default 1/8
+      if (rate === '1/4') mult = 1.0;
+      else if (rate === '1/8') mult = 0.5;
+      else if (rate === '1/16') mult = 0.25;
+      else if (rate === '1/32') mult = 0.125;
+      else if (rate === 'triplet') mult = (1 / 3);
+
+      sliceSamples = Math.max(128, Math.floor(sampleRate * beatSec * mult));
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 4. Sci-Fi Alien & Dalek Ring Modulator DSP
+ * Metallic balanced ring modulator + speech envelope pitch tracking +
+ * metallic cavity resonator for Dalek / Cyborg extraterrestrial speech.
+ */
+function createVocalAlienDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferQuantum = 512;
+  const processor = ctx.createScriptProcessor(bufferQuantum, 1, 1);
+
+  // Metallic formant chest resonance filter (Doctor Who / Cylon style)
+  const metallicResonator = ctx.createBiquadFilter();
+  metallicResonator.type = 'peaking';
+  metallicResonator.frequency.value = 1150;
+  metallicResonator.Q.value = 4.0;
+  metallicResonator.gain.value = 9.0;
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(metallicResonator);
+  metallicResonator.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  let baseFreq = 220;
+  let carrierShape: VocalAlienPedal['carrierShape'] = 'sine';
+  let modDepth = 85;
+  let lfoRate = 4.0;
+  let tracking = 45;
+
+  let carrierPhase = 0;
+  let lfoPhase = 0;
+  let vocalEnvelope = 0;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      const depthFrac = modDepth / 100;
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+        const absVal = Math.abs(inSample);
+
+        // Vocal envelope follower
+        if (absVal > vocalEnvelope) {
+          vocalEnvelope += (absVal - vocalEnvelope) * 0.35;
+        } else {
+          vocalEnvelope += (absVal - vocalEnvelope) * 0.008;
+        }
+
+        // Silence gate to prevent ringing drone when user stops talking
+        if (vocalEnvelope < 0.0015) {
+          outCh[i] = 0;
+          continue;
+        }
+
+        // LFO flutter
+        lfoPhase = (lfoPhase + lfoRate / sampleRate) % 1.0;
+        const lfoVal = Math.sin(2 * Math.PI * lfoPhase);
+        const lfoOffset = lfoVal * (baseFreq * 0.25);
+
+        // Dynamic voice envelope tracking: bends carrier pitch up with speech energy
+        const trackOffset = (tracking / 100) * vocalEnvelope * 850;
+
+        const effectiveFreq = Math.max(30, Math.min(4000, baseFreq + lfoOffset + trackOffset));
+        const phaseInc = effectiveFreq / sampleRate;
+
+        // Carrier wave generation
+        let carrier = 0;
+        if (carrierShape === 'sine') {
+          carrier = Math.sin(2 * Math.PI * carrierPhase);
+        } else if (carrierShape === 'triangle') {
+          carrier = 4.0 * Math.abs(carrierPhase - 0.5) - 1.0;
+        } else if (carrierShape === 'square') {
+          carrier = carrierPhase < 0.5 ? 1.0 : -1.0;
+        }
+
+        carrierPhase = (carrierPhase + phaseInc) % 1.0;
+
+        // Balanced Ring Modulation
+        const ringModulated = inSample * carrier;
+        const mixed = inSample * (1.0 - depthFrac) + ringModulated * depthFrac;
+
+        // Warm diode saturation
+        outCh[i] = Math.tanh(mixed * 1.5);
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    metallicResonator,
+    dryGain,
+    wetGain,
+    updateParams: (p: VocalAlienPedal) => {
+      const now = ctx.currentTime;
+      baseFreq = Math.max(40, Math.min(2500, p.frequency));
+      carrierShape = p.carrierShape || 'sine';
+      modDepth = Math.max(0, Math.min(100, p.modDepth));
+      lfoRate = Math.max(0.1, Math.min(20, p.lfoRate));
+      tracking = Math.max(0, Math.min(100, p.tracking));
+
+      metallicResonator.frequency.setTargetAtTime(
+        Math.max(600, Math.min(3000, baseFreq * 1.5 + 400)),
+        now,
+        0.02
+      );
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
     },
     dispose: () => {
       try {

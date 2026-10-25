@@ -19,6 +19,10 @@ export type PedalType =
   | 'deEsser'
   | 'telephoneVoice'
   | 'vocalFormant'
+  | 'vocalHarmony'
+  | 'vocalPreamp'
+  | 'vocalStutter'
+  | 'vocalAlien'
   | 'vstPlugin';
 
 export interface BasePedalConfig {
@@ -204,6 +208,47 @@ export interface VocalFormantPedal extends BasePedalConfig {
   mix: number; // 0 - 100
 }
 
+export interface VocalHarmonyPedal extends BasePedalConfig {
+  type: 'vocalHarmony';
+  voice1: '-12' | '-7' | '-5' | '-4' | '-3' | '+3' | '+4' | '+5' | '+7' | '+12';
+  voice2: '-12' | '-7' | '-5' | '-4' | '-3' | '+3' | '+4' | '+5' | '+7' | '+12' | 'off';
+  key: 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
+  scale: 'major' | 'minor' | 'chromatic';
+  spread: number; // 0 - 100 (stereo width)
+  humanize: number; // 0 - 100 (micro detune & drift)
+  mix: number; // 0 - 100
+}
+
+export interface VocalPreampPedal extends BasePedalConfig {
+  type: 'vocalPreamp';
+  warmth: number; // 0 - 100 (analog tube drive & harmonic saturation)
+  compression: number; // 0 - 100 (opto-leveler dynamics smoothing)
+  air: number; // 0 - 100 (12kHz silky air shelf boost)
+  body: number; // 0 - 100 (200Hz chest resonance warmth)
+  lowCut: boolean; // 80Hz rumble cut
+  outputGain: number; // 0 - 100
+}
+
+export interface VocalStutterPedal extends BasePedalConfig {
+  type: 'vocalStutter';
+  rate: '1/4' | '1/8' | '1/16' | '1/32' | 'triplet';
+  bpm: number; // 60 - 200
+  depth: number; // 0 - 100 (slice gate depth)
+  glitch: number; // 0 - 100 (stutter repeat / pitch randomization)
+  tapeSlow: boolean; // tape-stop pitch plunge
+  mix: number; // 0 - 100
+}
+
+export interface VocalAlienPedal extends BasePedalConfig {
+  type: 'vocalAlien';
+  frequency: number; // 50 - 2000 Hz (carrier frequency)
+  carrierShape: 'sine' | 'triangle' | 'square';
+  modDepth: number; // 0 - 100 (ring modulation depth)
+  lfoRate: number; // 0.1 - 20 Hz
+  tracking: number; // 0 - 100 (speech amplitude dynamic pitch bend)
+  mix: number; // 0 - 100
+}
+
 export interface VstPluginPedal extends BasePedalConfig {
   type: 'vstPlugin';
   pluginId: string;
@@ -241,6 +286,10 @@ export type AnyPedal =
   | DeEsserPedal
   | TelephoneVoicePedal
   | VocalFormantPedal
+  | VocalHarmonyPedal
+  | VocalPreampPedal
+  | VocalStutterPedal
+  | VocalAlienPedal
   | VstPluginPedal;
 
 export type AmpArchitectureType =
