@@ -28,8 +28,7 @@ import {
   GranularCloudPedal,
   ArcadeSynthPedal,
   SpectralFreezePedal,
-  TapeGlitchPedal,
-  VstPluginPedal
+  TapeGlitchPedal
 } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
 import { RotaryKnob } from './RotaryKnob';
@@ -39,7 +38,6 @@ import {
   ChevronRight,
   Trash2,
   Power,
-  Code,
   Radio
 } from 'lucide-react';
 
@@ -51,7 +49,6 @@ interface PedalCardProps {
   onRemove: (id: string) => void;
   onMoveLeft: (index: number) => void;
   onMoveRight: (index: number) => void;
-  onOpenVstEditor?: (pedal: VstPluginPedal) => void;
   midiMappings?: MidiMapping[];
   onOpenMidiSettings?: () => void;
 }
@@ -64,7 +61,6 @@ export const PedalCard: React.FC<PedalCardProps> = ({
   onRemove,
   onMoveLeft,
   onMoveRight,
-  onOpenVstEditor,
   midiMappings,
   onOpenMidiSettings
 }) => {
@@ -155,15 +151,6 @@ export const PedalCard: React.FC<PedalCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          {pedal.type === 'vstPlugin' && onOpenVstEditor && (
-            <button
-              onClick={() => onOpenVstEditor(pedal as VstPluginPedal)}
-              className="p-1 text-sky-400 hover:text-sky-300 transition-colors"
-              title="Open VST Code Editor"
-            >
-              <Code size={14} />
-            </button>
-          )}
           <button
             onClick={() => onRemove(pedal.id)}
             className="p-1 text-neutral-400 hover:text-red-400 transition-colors"
@@ -945,40 +932,6 @@ function renderPedalControls(
                 <option value="double_octave">2-Octaves (+24)</option>
               </select>
             </div>
-          </div>
-        </div>
-      );
-    }
-
-    case 'vstPlugin': {
-      const p = pedal as VstPluginPedal;
-      return (
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-y-2 gap-x-1">
-            <RotaryKnob
-              label={p.param1Label || 'Param 1'}
-              value={p.param1}
-              unit="%"
-              onChange={(v) => onUpdate({ ...p, param1: v })}
-            />
-            <RotaryKnob
-              label={p.param2Label || 'Param 2'}
-              value={p.param2}
-              unit="%"
-              onChange={(v) => onUpdate({ ...p, param2: v })}
-            />
-            <RotaryKnob
-              label={p.param3Label || 'Param 3'}
-              value={p.param3}
-              unit="%"
-              onChange={(v) => onUpdate({ ...p, param3: v })}
-            />
-            <RotaryKnob
-              label="Dry/Wet"
-              value={p.dryWet}
-              unit="%"
-              onChange={(v) => onUpdate({ ...p, dryWet: v })}
-            />
           </div>
         </div>
       );

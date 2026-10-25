@@ -10,8 +10,7 @@ import {
   IrCabinetConfig,
   LooperState,
   TunerData,
-  Preset,
-  VstPluginPedal
+  Preset
 } from './types/pedal';
 import { audioEngine, AudioLatencySettings } from './audio/audioEngine';
 import {
@@ -28,7 +27,6 @@ import { LooperPedal } from './components/LooperPedal';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { TunerModal } from './components/TunerModal';
 import { AddPedalModal } from './components/AddPedalModal';
-import { VstEditorModal } from './components/VstEditorModal';
 import { SettingsModal, SettingsModalTab } from './components/SettingsModal';
 import { AboutModal } from './components/AboutModal';
 import { midiManager } from './audio/midiManager';
@@ -136,7 +134,6 @@ export default function App() {
   // Modals
   const [isTunerOpen, setIsTunerOpen] = useState<boolean>(false);
   const [isAddPedalOpen, setIsAddPedalOpen] = useState<boolean>(false);
-  const [vstEditorPedal, setVstEditorPedal] = useState<VstPluginPedal | null>(null);
   const [isAboutOpen, setIsAboutOpen] = useState<boolean>(false);
 
   // Keyboard shortcut listener ('?' or F1 opens About & Tone Guide)
@@ -1011,7 +1008,6 @@ export default function App() {
           onRemovePedal={handleRemovePedal}
           onReorderPedals={handleReorderPedals}
           onOpenAddPedal={() => setIsAddPedalOpen(true)}
-          onOpenVstEditor={(pedal) => setVstEditorPedal(pedal)}
           isCollapsed={collapsedSections.pedalboard}
           onToggleCollapse={() => handleToggleSectionCollapse('pedalboard')}
           midiMappings={midiMappings}
@@ -1124,16 +1120,6 @@ export default function App() {
         isOpen={isAddPedalOpen}
         onClose={() => setIsAddPedalOpen(false)}
         onAddPedal={handleAddPedal}
-      />
-
-      <VstEditorModal
-        isOpen={!!vstEditorPedal}
-        pedal={vstEditorPedal}
-        onClose={() => setVstEditorPedal(null)}
-        onSave={(updated) => {
-          handleUpdatePedal(updated);
-          setVstEditorPedal(null);
-        }}
       />
 
       {/* Unified Tabbed Settings Modal: Input & Gate, DSP Engine & Latency, MIDI, and Cloud Presets Hub */}

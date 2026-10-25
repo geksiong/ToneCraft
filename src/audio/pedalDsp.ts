@@ -31,7 +31,6 @@
  * 13. Auto-Wah: 1200Hz bandpass filter modulated by LFO or envelope follower.
  * 14. Pitch Shifter: Dual sawtooth-ramp delay lines with quadrature crossfade for -24 to +24 semitones shift.
  * 15. Harmonizer: Pitch-shifted harmony voice (3rd, 5th, 6th, octave) blended with direct input signal.
- * 16. VST Plugin: Container running custom wave-shaper & filter script with 4 assignable control knobs.
  */
 
 import {
@@ -63,8 +62,7 @@ import {
   GranularCloudPedal,
   ArcadeSynthPedal,
   SpectralFreezePedal,
-  TapeGlitchPedal,
-  VstPluginPedal
+  TapeGlitchPedal
 } from '../types/pedal';
 import {
   createOverdriveCurve,
@@ -439,24 +437,6 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
       input.connect(directGain);
       directGain.connect(wetGain);
       dspNodes = { shifter, directGain };
-      break;
-    }
-
-    case 'vstPlugin': {
-      const waveshaper = ctx.createWaveShaper();
-      const filter = ctx.createBiquadFilter();
-      const dry = ctx.createGain();
-      const wet = ctx.createGain();
-
-      input.connect(dry);
-      input.connect(waveshaper);
-      waveshaper.connect(filter);
-      filter.connect(wet);
-
-      dry.connect(wetGain);
-      wet.connect(wetGain);
-
-      dspNodes = { waveshaper, filter, dry, wet };
       break;
     }
 
@@ -1141,17 +1121,6 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       shifter.dryGain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
       shifter.wetGain.gain.setTargetAtTime((p.harmonyLevel / 100) * 0.75, ctx.currentTime, 0.02);
       nodes.directGain.gain.setTargetAtTime((p.directLevel / 100) * 0.85, ctx.currentTime, 0.02);
-      break;
-    }
-
-    case 'vstPlugin': {
-      const p = pedal as VstPluginPedal;
-      nodes.waveshaper.curve = createOverdriveCurve(p.param1) as any;
-      nodes.filter.frequency.setTargetAtTime(200 + (p.param2 / 100) * 8000, ctx.currentTime, 0.02);
-      nodes.filter.Q.setTargetAtTime(1 + (p.param3 / 100) * 10, ctx.currentTime, 0.02);
-      const mix = p.dryWet / 100;
-      nodes.wet.gain.setTargetAtTime(mix, ctx.currentTime, 0.02);
-      nodes.dry.gain.setTargetAtTime(1 - mix, ctx.currentTime, 0.02);
       break;
     }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnyPedal, VstPluginPedal } from '../types/pedal';
+import { AnyPedal } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
 import { PedalCard } from './PedalCard';
 import {
@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
-  Code,
   Layers,
   Radio
 } from 'lucide-react';
@@ -21,7 +20,6 @@ interface PedalboardProps {
   onRemovePedal: (id: string) => void;
   onReorderPedals: (newPedals: AnyPedal[]) => void;
   onOpenAddPedal: () => void;
-  onOpenVstEditor: (pedal: VstPluginPedal) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   midiMappings?: MidiMapping[];
@@ -34,7 +32,6 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
   onRemovePedal,
   onReorderPedals,
   onOpenAddPedal,
-  onOpenVstEditor,
   isCollapsed: controlledCollapsed,
   onToggleCollapse: controlledToggleCollapse,
   midiMappings,
@@ -215,15 +212,6 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
                         >
                           {pedal.name}
                         </span>
-                        {pedal.type === 'vstPlugin' && (
-                          <button
-                            onClick={() => onOpenVstEditor(pedal as VstPluginPedal)}
-                            className="p-0.5 text-amber-300 hover:text-amber-200 transition-colors shrink-0"
-                            title="Edit VST DSP script"
-                          >
-                            <Code size={11} />
-                          </button>
-                        )}
                       </div>
                       <span className="text-[9px] font-mono uppercase text-white/60 block truncate">
                         {pedal.type}
@@ -347,7 +335,6 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
                   onRemove={onRemovePedal}
                   onMoveLeft={handleMoveLeft}
                   onMoveRight={handleMoveRight}
-                  onOpenVstEditor={onOpenVstEditor}
                   midiMappings={midiMappings}
                   onOpenMidiSettings={onOpenMidiSettings}
                 />
@@ -368,7 +355,7 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
                     Add Stompbox
                   </span>
                   <span className="text-[10px] font-mono text-neutral-400 mt-0.5 block">
-                    Drive, Mod, Pitch, VST...
+                    Drive, Mod, Pitch, Vocal...
                   </span>
                 </div>
               </button>

@@ -26,8 +26,8 @@ export type PedalType =
   | 'granularCloud'
   | 'arcadeSynth'
   | 'spectralFreeze'
-  | 'tapeGlitch'
-  | 'vstPlugin';
+  | 'tapeGlitch';
+
 
 export interface BasePedalConfig {
   id: string;
@@ -298,22 +298,6 @@ export interface TapeGlitchPedal extends BasePedalConfig {
   mix: number; // 0 - 100%
 }
 
-export interface VstPluginPedal extends BasePedalConfig {
-  type: 'vstPlugin';
-  pluginId: string;
-  pluginTitle: string;
-  param1: number; // 0 - 100
-  param1Label: string;
-  param2: number; // 0 - 100
-  param2Label: string;
-  param3: number; // 0 - 100
-  param3Label: string;
-  param4: number; // 0 - 100
-  param4Label: string;
-  dryWet: number; // 0 - 100
-  dspCode: string;
-}
-
 export type AnyPedal =
   | OverdrivePedal
   | DistortionPedal
@@ -342,8 +326,9 @@ export type AnyPedal =
   | GranularCloudPedal
   | ArcadeSynthPedal
   | SpectralFreezePedal
-  | TapeGlitchPedal
-  | VstPluginPedal;
+  | TapeGlitchPedal;
+
+
 
 export type AmpArchitectureType =
   | 'wavenet'

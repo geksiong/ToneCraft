@@ -11,7 +11,6 @@ import {
   Clock,
   Music,
   Mic,
-  Code,
   Search,
   Layers
 } from 'lucide-react';
@@ -26,7 +25,7 @@ interface AddPedalModalProps {
 interface PedalTemplateInfo {
   type: PedalType;
   title: string;
-  category: 'Gain & Dirt' | 'Modulation' | 'Time & Space' | 'Tone & Dynamics' | 'Pitch & Harmony' | 'Vocal & Speech' | 'Experimental & Boutique' | 'Custom VST';
+  category: 'Gain & Dirt' | 'Modulation' | 'Time & Space' | 'Tone & Dynamics' | 'Pitch & Harmony' | 'Vocal & Speech' | 'Experimental & Boutique';
   description: string;
   color: string;
   createDefault: () => AnyPedal;
@@ -583,34 +582,6 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       feedback: 35,
       mix: 65
     })
-  },
-
-  // Custom VST
-  {
-    type: 'vstPlugin',
-    title: 'VST Web Container / Custom DSP',
-    category: 'Custom VST',
-    description: 'Programmable audio plugin module running custom Web Audio script DSP with 4 assignable control knobs.',
-    color: '#0284c7',
-    createDefault: () => ({
-      id: `pedal-vst-${Date.now()}`,
-      type: 'vstPlugin',
-      name: 'Vintage Tape Sat',
-      pluginId: 'tape-sat',
-      pluginTitle: 'Vintage Tape Saturation',
-      enabled: true,
-      color: '#0284c7',
-      param1: 55,
-      param1Label: 'Warmth',
-      param2: 60,
-      param2Label: 'Tape High',
-      param3: 40,
-      param3Label: 'Bias',
-      param4: 50,
-      param4Label: 'Comp',
-      dryWet: 70,
-      dspCode: '// Custom VST Web Plugin DSP\nfunction process(sample, p1, p2, p3) {\n  return Math.tanh(sample * (1 + p1 * 3));\n}'
-    })
   }
 ];
 
@@ -622,7 +593,6 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ size?: number; classN
   'Pitch & Harmony': Music,
   'Vocal & Speech': Mic,
   'Experimental & Boutique': Sparkles,
-  'Custom VST': Code,
 };
 
 export const AddPedalModal: React.FC<AddPedalModalProps> = ({
