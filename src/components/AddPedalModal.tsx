@@ -11,7 +11,7 @@ interface AddPedalModalProps {
 interface PedalTemplateInfo {
   type: PedalType;
   title: string;
-  category: 'Gain & Dirt' | 'Modulation' | 'Time & Space' | 'Tone & Dynamics' | 'Pitch & Harmony' | 'Custom VST';
+  category: 'Gain & Dirt' | 'Modulation' | 'Time & Space' | 'Tone & Dynamics' | 'Pitch & Harmony' | 'Vocal & Speech' | 'Custom VST';
   description: string;
   color: string;
   createDefault: () => AnyPedal;
@@ -301,6 +301,104 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       interval: '5th',
       harmonyLevel: 60,
       directLevel: 90
+    })
+  },
+
+  // Vocal & Speech
+  {
+    type: 'vocalTuner',
+    title: 'AutoTune Vocal Snapper',
+    category: 'Vocal & Speech',
+    description: 'Scale-aware vocal pitch correction with retune speed control (natural transparent glide to hard robotic Cher/T-Pain snap) and humanize vibrato preservation.',
+    color: '#0891b2',
+    createDefault: () => ({
+      id: `pedal-vtune-${Date.now()}`,
+      type: 'vocalTuner',
+      name: 'AutoTune Vocal',
+      enabled: true,
+      color: '#0891b2',
+      key: 'C',
+      scale: 'major',
+      speed: 85,
+      correction: 90,
+      humanize: 25,
+      mix: 100
+    })
+  },
+  {
+    type: 'vocalDoubler',
+    title: 'Studio Vocal Doubler & Widener',
+    category: 'Vocal & Speech',
+    description: 'Abbey Road artificial double tracking (ADT) with dual modulated micro-delays, pitch drift detune, and stereo Haas widening for radio-ready vocals.',
+    color: '#6366f1',
+    createDefault: () => ({
+      id: `pedal-vdbl-${Date.now()}`,
+      type: 'vocalDoubler',
+      name: 'Studio Doubler',
+      enabled: true,
+      color: '#6366f1',
+      detune: 45,
+      spread: 80,
+      delay: 35,
+      depth: 40,
+      mix: 65
+    })
+  },
+  {
+    type: 'deEsser',
+    title: 'Precision Vocal De-Esser',
+    category: 'Vocal & Speech',
+    description: 'Fast dynamic sibilance compressor targeting harsh "S" and "T" transients (3kHz - 9kHz) with dedicated audition Listen mode.',
+    color: '#d97706',
+    createDefault: () => ({
+      id: `pedal-deess-${Date.now()}`,
+      type: 'deEsser',
+      name: 'Vocal De-Esser',
+      enabled: true,
+      color: '#d97706',
+      frequency: 6500,
+      threshold: -36,
+      reduction: 65,
+      listen: false,
+      bandwidth: 'wide'
+    })
+  },
+  {
+    type: 'telephoneVoice',
+    title: 'Megaphone & Radio Voice',
+    category: 'Vocal & Speech',
+    description: 'Band-limited vintage vocal effects with Telephone, Megaphone, AM Radio, and Gramophone modes, speaker cone drive, and analog static crackle.',
+    color: '#a16207',
+    createDefault: () => ({
+      id: `pedal-phone-${Date.now()}`,
+      type: 'telephoneVoice',
+      name: 'Lo-Fi Megaphone',
+      enabled: true,
+      color: '#a16207',
+      mode: 'megaphone',
+      drive: 45,
+      filter: 50,
+      noise: 25,
+      mix: 100
+    })
+  },
+  {
+    type: 'vocalFormant',
+    title: 'Robot Voice & Formant Shifter',
+    category: 'Vocal & Speech',
+    description: 'Vocal tract length transformer (masculine/giant vs anime/chipmunk) with robotic vocoder carrier mode (Daft Punk / Kraftwerk style).',
+    color: '#c026d3',
+    createDefault: () => ({
+      id: `pedal-formant-${Date.now()}`,
+      type: 'vocalFormant',
+      name: 'Robot Formant',
+      enabled: true,
+      color: '#c026d3',
+      formant: 0,
+      robotMode: true,
+      robotPitch: 'A2',
+      brightness: 70,
+      mix: 100
     })
   },
 

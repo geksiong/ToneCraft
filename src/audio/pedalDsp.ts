@@ -51,12 +51,18 @@ import {
   AutoWahPedal,
   PitchShifterPedal,
   HarmonizerPedal,
+  VocalTunerPedal,
+  VocalDoublerPedal,
+  DeEsserPedal,
+  TelephoneVoicePedal,
+  VocalFormantPedal,
   VstPluginPedal
 } from '../types/pedal';
 import {
   createOverdriveCurve,
   createDistortionCurve,
-  createFuzzCurve
+  createFuzzCurve,
+  createTelephoneCurve
 } from './curves';
 
 export interface PitchShifterNodes {
@@ -443,6 +449,31 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
       wet.connect(wetGain);
 
       dspNodes = { waveshaper, filter, dry, wet };
+      break;
+    }
+
+    case 'vocalTuner': {
+      dspNodes = createVocalTunerDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'vocalDoubler': {
+      dspNodes = createVocalDoublerDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'deEsser': {
+      dspNodes = createDeEsserDsp(ctx, input, wetGain, pedal as DeEsserPedal);
+      break;
+    }
+
+    case 'telephoneVoice': {
+      dspNodes = createTelephoneVoiceDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'vocalFormant': {
+      dspNodes = createVocalFormantDsp(ctx, input, wetGain);
       break;
     }
   }
@@ -1075,6 +1106,36 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
       nodes.dry.gain.setTargetAtTime(1 - mix, ctx.currentTime, 0.02);
       break;
     }
+
+    case 'vocalTuner': {
+      const p = pedal as VocalTunerPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'vocalDoubler': {
+      const p = pedal as VocalDoublerPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'deEsser': {
+      const p = pedal as DeEsserPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'telephoneVoice': {
+      const p = pedal as TelephoneVoicePedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'vocalFormant': {
+      const p = pedal as VocalFormantPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
   }
 }
 
@@ -1101,3 +1162,944 @@ function createReverbImpulse(ctx: AudioContext, decay: number, roomType: 'spring
   }
   return buffer;
 }
+
+// ============================================================================
+// VOCAL & VOICE DSP ENGINES
+// ============================================================================
+
+const VOCAL_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const VOCAL_ROOT_MAP: Record<string, number> = {
+  'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
+  'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11
+};
+const VOCAL_SCALE_DEGREES: Record<string, number[]> = {
+  chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  major: [0, 2, 4, 5, 7, 9, 11],
+  minor: [0, 2, 3, 5, 7, 8, 10],
+  pentatonic: [0, 2, 4, 7, 9],
+  blues: [0, 3, 5, 6, 7, 10]
+};
+
+/**
+ * Real-Time Vocal Pitch Correction & Auto-Tune DSP Engine.
+ * Features vocal range (80Hz - 850Hz) fundamental tracking, scale-aware target snapping,
+ * glissando slew rate (0 = transparent glide, 100 = hard robotic Cher/T-Pain snap),
+ * and humanize vibrato preservation.
+ */
+function createVocalTunerDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferQuantum = 512;
+  const processor = ctx.createScriptProcessor(bufferQuantum, 1, 1);
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  dryGain.gain.value = 0.0;
+  wetGain.gain.value = 1.0;
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  // Circular delay line
+  const bufferSize = 32768;
+  const bufferMask = bufferSize - 1;
+  const ringBuffer = new Float32Array(bufferSize);
+  let writeIndex = 0;
+
+  // Analysis decimation buffer (2x decimation, rate ~ 24kHz)
+  const decRingSize = 2048;
+  const decRingMask = decRingSize - 1;
+  const decRingBuffer = new Float32Array(decRingSize);
+  let decWriteIdx = 0;
+  let decToggle = false;
+
+  // Parameter state
+  let currentKey = 'C';
+  let currentScale = 'chromatic';
+  let snapSpeed = 85; // 0 - 100
+  let pitchCorrection = 90; // 0 - 100
+  let humanizeAmount = 25; // 0 - 100
+  let dryWetMix = 100; // 0 - 100
+
+  let targetRatio = 1.0;
+  let currentRatio = 1.0;
+  let grainPhase = 0.0;
+  const grainSweepSize = Math.max(384, Math.min(1024, Math.round(0.018 * sampleRate))); // ~18ms
+
+  function hermiteRead(buf: Float32Array, pos: number): number {
+    const i = Math.floor(pos);
+    const frac = pos - i;
+    const im1 = (i - 1) & bufferMask;
+    const i0 = i & bufferMask;
+    const ip1 = (i + 1) & bufferMask;
+    const ip2 = (i + 2) & bufferMask;
+
+    const p0 = buf[im1];
+    const p1 = buf[i0];
+    const p2 = buf[ip1];
+    const p3 = buf[ip2];
+
+    const c0 = p1;
+    const c1 = 0.5 * (p2 - p0);
+    const c2 = p0 - 2.5 * p1 + 2.0 * p2 - 0.5 * p3;
+    const c3 = 0.5 * (p3 - p0) + 1.5 * (p1 - p2);
+
+    return ((c3 * frac + c2) * frac + c1) * frac + c0;
+  }
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      // 1. RMS level check
+      let sumSq = 0;
+      for (let i = 0; i < len; i += 4) {
+        const s = inCh[i];
+        sumSq += s * s;
+      }
+      const rms = Math.sqrt(sumSq / (len / 4));
+
+      if (rms > 0.0012) {
+        // Run 2x decimated vocal pitch detection
+        // At 24kHz, human vocal fundamental 75Hz - 850Hz maps to tau in [28, 320]
+        const decRate = sampleRate / 2;
+        const minTau = Math.max(28, Math.floor(decRate / 850));
+        const maxTau = Math.min(320, Math.floor(decRate / 75));
+        const winSize = 120;
+
+        let bestTau = -1;
+        let minDiff = Infinity;
+        let sumEnergy = 0;
+
+        const wBase = (decWriteIdx - maxTau - winSize) & decRingMask;
+        for (let j = 0; j < winSize; j += 2) {
+          const v = decRingBuffer[(wBase + j) & decRingMask];
+          sumEnergy += v * v;
+        }
+
+        if (sumEnergy > 0.0001) {
+          for (let tau = minTau; tau < maxTau; tau += 2) {
+            let diff = 0;
+            for (let j = 0; j < winSize; j += 4) {
+              const a = decRingBuffer[(wBase + j) & decRingMask];
+              const b = decRingBuffer[(wBase + j + tau) & decRingMask];
+              const d = a - b;
+              diff += d * d;
+            }
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestTau = tau;
+            }
+          }
+
+          const normDiff = minDiff / (sumEnergy + 1e-6);
+          if (normDiff < 0.38 && bestTau > 0) {
+            // Parabolic refinement
+            const tauM1 = Math.max(minTau, bestTau - 2);
+            const tauP1 = Math.min(maxTau - 1, bestTau + 2);
+            let diffM1 = 0;
+            let diffP1 = 0;
+            for (let j = 0; j < winSize; j += 4) {
+              const a = decRingBuffer[(wBase + j) & decRingMask];
+              const bM = decRingBuffer[(wBase + j + tauM1) & decRingMask];
+              const bP = decRingBuffer[(wBase + j + tauP1) & decRingMask];
+              diffM1 += (a - bM) * (a - bM);
+              diffP1 += (a - bP) * (a - bP);
+            }
+            const denom = 2 * (diffM1 - 2 * minDiff + diffP1);
+            const peakOffset = Math.abs(denom) > 1e-6 ? (diffM1 - diffP1) / denom : 0;
+            const refinedTau = Math.max(minTau, Math.min(maxTau, bestTau + peakOffset));
+            const detectedFreq = decRate / refinedTau;
+
+            if (detectedFreq >= 75 && detectedFreq <= 850) {
+              // Convert to continuous MIDI note number
+              const rawMidi = 69 + 12 * Math.log2(detectedFreq / 440);
+
+              // Scale & Key quantize
+              const root = VOCAL_ROOT_MAP[currentKey] ?? 0;
+              const degrees = VOCAL_SCALE_DEGREES[currentScale] ?? VOCAL_SCALE_DEGREES.chromatic;
+              const allowed = new Set(degrees.map(d => (root + d) % 12));
+
+              // Find closest integer MIDI note in scale
+              const baseMidiRound = Math.round(rawMidi);
+              let closestTargetMidi = baseMidiRound;
+              let minPitchDist = Infinity;
+
+              for (let delta = -6; delta <= 6; delta++) {
+                const cand = baseMidiRound + delta;
+                const semitoneMod = ((cand % 12) + 12) % 12;
+                if (allowed.has(semitoneMod)) {
+                  const dist = Math.abs(cand - rawMidi);
+                  if (dist < minPitchDist) {
+                    minPitchDist = dist;
+                    closestTargetMidi = cand;
+                  }
+                }
+              }
+
+              let deltaSemitones = closestTargetMidi - rawMidi;
+
+              // Humanize: preserve subtle natural singing vibrato if within threshold
+              if (humanizeAmount > 0) {
+                const vibratoThreshold = 0.35 * (humanizeAmount / 100);
+                if (Math.abs(deltaSemitones) < vibratoThreshold) {
+                  deltaSemitones *= (1 - humanizeAmount / 100);
+                }
+              }
+
+              const effShift = deltaSemitones * (pitchCorrection / 100);
+              targetRatio = Math.pow(2, Math.max(-12, Math.min(12, effShift)) / 12);
+            }
+          }
+        }
+      } else {
+        targetRatio = 1.0;
+      }
+
+      // Slew rate controller:
+      // snapSpeed 100 = instant snap (Cher / T-Pain autotune)
+      // snapSpeed 30 = smooth natural glissando
+      const slewCoeff = 0.04 + (snapSpeed / 100) * 0.96;
+      currentRatio += (targetRatio - currentRatio) * slewCoeff;
+
+      const rateDiff = 1.0 - currentRatio;
+      const baseDelay = 48; // ~1ms low margin
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+        ringBuffer[writeIndex] = inSample;
+
+        // Decimate to 24kHz buffer
+        decToggle = !decToggle;
+        if (decToggle) {
+          decRingBuffer[decWriteIdx] = inSample;
+          decWriteIdx = (decWriteIdx + 1) & decRingMask;
+        }
+
+        // Granular readout with 2 crossfading grains
+        grainPhase += rateDiff;
+        if (grainPhase >= grainSweepSize) {
+          grainPhase -= grainSweepSize;
+        } else if (grainPhase < 0) {
+          grainPhase += grainSweepSize;
+        }
+
+        const frac0 = grainPhase / grainSweepSize;
+        const frac1 = (frac0 + 0.5) % 1.0;
+
+        // Hann window weights
+        const w0 = 0.5 * (1 - Math.cos(2 * Math.PI * frac0));
+        const w1 = 0.5 * (1 - Math.cos(2 * Math.PI * frac1));
+
+        const rPos0 = (writeIndex - baseDelay - grainPhase + bufferSize) & bufferMask;
+        const rPos1 = (writeIndex - baseDelay - ((grainPhase + grainSweepSize * 0.5) % grainSweepSize) + bufferSize) & bufferMask;
+
+        const s0 = hermiteRead(ringBuffer, rPos0);
+        const s1 = hermiteRead(ringBuffer, rPos1);
+
+        const shifted = (s0 * w0 + s1 * w1) / (w0 + w1 + 1e-5);
+        outCh[i] = Number.isFinite(shifted) ? shifted : inSample;
+
+        writeIndex = (writeIndex + 1) & bufferMask;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: VocalTunerPedal) => {
+      currentKey = p.key || 'C';
+      currentScale = p.scale || 'chromatic';
+      snapSpeed = Math.max(0, Math.min(100, p.speed));
+      pitchCorrection = Math.max(0, Math.min(100, p.correction));
+      humanizeAmount = Math.max(0, Math.min(100, p.humanize));
+      dryWetMix = Math.max(0, Math.min(100, p.mix));
+
+      const now = ctx.currentTime;
+      const mix = dryWetMix / 100;
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * Studio Vocal Doubler & Widener DSP Engine.
+ * Recreates the lush Abbey Road ADT (Artificial Double Tracking) effect with dual
+ * micro-delayed and micro-modulated channels, stereophonic Haas separation, and vocal air warmth.
+ */
+function createVocalDoublerDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  const warmth = ctx.createBiquadFilter();
+  warmth.type = 'lowpass';
+  warmth.frequency.value = 7500;
+  warmth.Q.value = 0.7;
+
+  const delayL = ctx.createDelay(0.15);
+  const delayR = ctx.createDelay(0.15);
+  delayL.delayTime.value = 0.022;
+  delayR.delayTime.value = 0.034;
+
+  const lfoL = ctx.createOscillator();
+  const lfoR = ctx.createOscillator();
+  lfoL.type = 'sine';
+  lfoR.type = 'sine';
+  lfoL.frequency.value = 0.23;
+  lfoR.frequency.value = 0.31;
+
+  const lfoGainL = ctx.createGain();
+  const lfoGainR = ctx.createGain();
+  lfoGainL.gain.value = 0.0018;
+  lfoGainR.gain.value = 0.0024;
+
+  lfoL.connect(lfoGainL);
+  lfoGainL.connect(delayL.delayTime);
+  lfoR.connect(lfoGainR);
+  lfoGainR.connect(delayR.delayTime);
+
+  try { lfoL.start(); } catch {}
+  try { lfoR.start(); } catch {}
+
+  let pannerL: StereoPannerNode | null = null;
+  let pannerR: StereoPannerNode | null = null;
+  if (typeof ctx.createStereoPanner === 'function') {
+    pannerL = ctx.createStereoPanner();
+    pannerR = ctx.createStereoPanner();
+    pannerL.pan.value = -0.75;
+    pannerR.pan.value = 0.75;
+  }
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(warmth);
+  warmth.connect(delayL);
+  warmth.connect(delayR);
+
+  if (pannerL && pannerR) {
+    delayL.connect(pannerL);
+    delayR.connect(pannerR);
+    pannerL.connect(wetGain);
+    pannerR.connect(wetGain);
+  } else {
+    delayL.connect(wetGain);
+    delayR.connect(wetGain);
+  }
+
+  wetGain.connect(output);
+
+  return {
+    dryGain,
+    wetGain,
+    delayL,
+    delayR,
+    lfoL,
+    lfoR,
+    lfoGainL,
+    lfoGainR,
+    pannerL,
+    pannerR,
+    updateParams: (p: VocalDoublerPedal) => {
+      const now = ctx.currentTime;
+      const baseDelaySec = 0.010 + (p.delay / 100) * 0.045;
+      delayL.delayTime.setTargetAtTime(baseDelaySec, now, 0.02);
+      delayR.delayTime.setTargetAtTime(baseDelaySec * 1.35, now, 0.02);
+
+      const depthSec = 0.0005 + (p.depth / 100) * 0.0035;
+      lfoGainL.gain.setTargetAtTime(depthSec, now, 0.02);
+      lfoGainR.gain.setTargetAtTime(depthSec * 1.25, now, 0.02);
+
+      const detuneRate = 0.15 + (p.detune / 100) * 0.45;
+      lfoL.frequency.setTargetAtTime(detuneRate, now, 0.02);
+      lfoR.frequency.setTargetAtTime(detuneRate * 1.38, now, 0.02);
+
+      const spreadFrac = Math.max(0, Math.min(1, p.spread / 100));
+      if (pannerL && pannerR) {
+        pannerL.pan.setTargetAtTime(-spreadFrac * 0.9, now, 0.02);
+        pannerR.pan.setTargetAtTime(spreadFrac * 0.9, now, 0.02);
+      }
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      wetGain.gain.setTargetAtTime(mix * 0.85, now, 0.02);
+      dryGain.gain.setTargetAtTime(1.0 - mix * 0.25, now, 0.02);
+    },
+    dispose: () => {
+      try { lfoL.stop(); } catch {}
+      try { lfoR.stop(); } catch {}
+      try { lfoL.disconnect(); } catch {}
+      try { lfoR.disconnect(); } catch {}
+    }
+  };
+}
+
+/**
+ * Precision Vocal De-Esser DSP Engine.
+ * Dynamically attenuates sibilance frequencies (3kHz - 9kHz) with high-speed sidechain
+ * envelope detection and an audition Listen mode.
+ */
+function createDeEsserDsp(ctx: AudioContext, input: GainNode, output: GainNode, initialPedal?: DeEsserPedal) {
+  const notchFilter = ctx.createBiquadFilter();
+  notchFilter.type = 'peaking';
+  notchFilter.frequency.value = initialPedal?.frequency || 6500;
+  notchFilter.Q.value = initialPedal?.bandwidth === 'narrow' ? 4.0 : 2.0;
+  notchFilter.gain.value = 0;
+
+  const mainGain = ctx.createGain();
+  input.connect(notchFilter);
+  notchFilter.connect(mainGain);
+  mainGain.connect(output);
+
+  const detectorFilter = ctx.createBiquadFilter();
+  detectorFilter.type = 'bandpass';
+  detectorFilter.frequency.value = initialPedal?.frequency || 6500;
+  detectorFilter.Q.value = 3.5;
+
+  const listenGain = ctx.createGain();
+  listenGain.gain.value = 0;
+  input.connect(detectorFilter);
+  detectorFilter.connect(listenGain);
+  listenGain.connect(output);
+
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  detectorFilter.connect(analyser);
+
+  let thresholdDb = initialPedal?.threshold ?? -38;
+  let reductionPercent = initialPedal?.reduction ?? 65;
+
+  const timeBuf = new Float32Array(256);
+  const timer = setInterval(() => {
+    if (!ctx || ctx.state !== 'running') return;
+    analyser.getFloatTimeDomainData(timeBuf);
+    let sumSq = 0;
+    for (let i = 0; i < timeBuf.length; i++) {
+      sumSq += timeBuf[i] * timeBuf[i];
+    }
+    const rms = Math.sqrt(sumSq / timeBuf.length);
+    const db = 20 * Math.log10(Math.max(1e-5, rms));
+    const now = ctx.currentTime;
+
+    if (db > thresholdDb) {
+      const excess = db - thresholdDb;
+      const maxDip = -(reductionPercent / 100) * 20; // up to -20 dB cut on harsh sibilance
+      const dip = Math.max(maxDip, -excess * 1.4);
+      notchFilter.gain.setTargetAtTime(dip, now, 0.003); // ultra-fast 3ms attack
+    } else {
+      notchFilter.gain.setTargetAtTime(0, now, 0.035); // 35ms smooth release
+    }
+  }, 16);
+
+  return {
+    notchFilter,
+    detectorFilter,
+    mainGain,
+    listenGain,
+    updateParams: (p: DeEsserPedal) => {
+      const now = ctx.currentTime;
+      thresholdDb = p.threshold;
+      reductionPercent = p.reduction;
+
+      const freq = Math.max(2500, Math.min(10000, p.frequency));
+      notchFilter.frequency.setTargetAtTime(freq, now, 0.02);
+      detectorFilter.frequency.setTargetAtTime(freq, now, 0.02);
+
+      const q = p.bandwidth === 'narrow' ? 4.5 : 2.0;
+      notchFilter.Q.setTargetAtTime(q, now, 0.02);
+      detectorFilter.Q.setTargetAtTime(q * 1.2, now, 0.02);
+
+      if (p.listen) {
+        mainGain.gain.setTargetAtTime(0, now, 0.015);
+        listenGain.gain.setTargetAtTime(1.4, now, 0.015);
+      } else {
+        mainGain.gain.setTargetAtTime(1.0, now, 0.015);
+        listenGain.gain.setTargetAtTime(0, now, 0.015);
+      }
+    },
+    dispose: () => {
+      clearInterval(timer);
+      try { analyser.disconnect(); } catch {}
+    }
+  };
+}
+
+/**
+ * Lo-Fi Megaphone & Vintage Radio Voice DSP Engine.
+ * Produces band-limited frequency shaping with diaphragm saturation and analog crackle.
+ */
+function createTelephoneVoiceDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const hpFilter = ctx.createBiquadFilter();
+  hpFilter.type = 'highpass';
+  hpFilter.frequency.value = 450;
+  hpFilter.Q.value = 1.0;
+
+  const shaper = ctx.createWaveShaper();
+  shaper.oversample = '4x';
+  shaper.curve = createTelephoneCurve(50) as any;
+
+  const lpFilter = ctx.createBiquadFilter();
+  lpFilter.type = 'lowpass';
+  lpFilter.frequency.value = 3200;
+  lpFilter.Q.value = 1.2;
+
+  const peakFilter = ctx.createBiquadFilter();
+  peakFilter.type = 'peaking';
+  peakFilter.frequency.value = 1800;
+  peakFilter.Q.value = 2.0;
+  peakFilter.gain.value = 6;
+
+  const wetVoiceGain = ctx.createGain();
+  const dryGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(hpFilter);
+  hpFilter.connect(shaper);
+  shaper.connect(lpFilter);
+  lpFilter.connect(peakFilter);
+  peakFilter.connect(wetVoiceGain);
+  wetVoiceGain.connect(output);
+
+  // Generate 2-second looped radio static/crackle buffer
+  const sampleRate = ctx.sampleRate || 48000;
+  const noiseLen = Math.floor(sampleRate * 2.0);
+  const noiseBuffer = ctx.createBuffer(1, noiseLen, sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  let lastNoise = 0;
+  for (let i = 0; i < noiseLen; i++) {
+    const white = Math.random() * 2 - 1;
+    lastNoise = lastNoise * 0.92 + white * 0.08;
+    const click = Math.random() < 0.0008 ? (Math.random() * 2 - 1) * 0.8 : 0;
+    noiseData[i] = (lastNoise * 0.6 + click) * 0.4;
+  }
+
+  const noiseSource = ctx.createBufferSource();
+  noiseSource.buffer = noiseBuffer;
+  noiseSource.loop = true;
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = 'bandpass';
+  noiseFilter.frequency.value = 1600;
+  noiseFilter.Q.value = 1.8;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.value = 0.015;
+
+  noiseSource.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(output);
+  try { noiseSource.start(); } catch {}
+
+  return {
+    hpFilter,
+    lpFilter,
+    peakFilter,
+    shaper,
+    wetVoiceGain,
+    dryGain,
+    noiseGain,
+    noiseFilter,
+    updateParams: (p: TelephoneVoicePedal) => {
+      const now = ctx.currentTime;
+      let hpFreq = 450;
+      let lpFreq = 3200;
+      let peakFreq = 1800;
+      let peakGainVal = 6;
+      let peakQVal = 2.0;
+
+      const fMod = (p.filter - 50) / 50; // -1 to +1
+
+      if (p.mode === 'megaphone') {
+        hpFreq = 620 + fMod * 120;
+        lpFreq = 2600 + fMod * 400;
+        peakFreq = 2200;
+        peakGainVal = 9.5;
+        peakQVal = 3.4;
+      } else if (p.mode === 'radio') {
+        hpFreq = 340 + fMod * 80;
+        lpFreq = 4200 + fMod * 600;
+        peakFreq = 1350;
+        peakGainVal = 4.0;
+        peakQVal = 1.6;
+      } else if (p.mode === 'gramophone') {
+        hpFreq = 220 + fMod * 60;
+        lpFreq = 2200 + fMod * 350;
+        peakFreq = 950;
+        peakGainVal = 4.5;
+        peakQVal = 1.4;
+      } else {
+        // telephone
+        hpFreq = 450 + fMod * 100;
+        lpFreq = 3200 + fMod * 450;
+        peakFreq = 1750;
+        peakGainVal = 6.0;
+        peakQVal = 2.0;
+      }
+
+      hpFilter.frequency.setTargetAtTime(Math.max(100, hpFreq), now, 0.02);
+      lpFilter.frequency.setTargetAtTime(Math.min(10000, lpFreq), now, 0.02);
+      peakFilter.frequency.setTargetAtTime(peakFreq, now, 0.02);
+      peakFilter.gain.setTargetAtTime(peakGainVal, now, 0.02);
+      peakFilter.Q.setTargetAtTime(peakQVal, now, 0.02);
+
+      shaper.curve = createTelephoneCurve(p.drive) as any;
+
+      const noiseAmt = Math.max(0, Math.min(1, p.noise / 100));
+      noiseGain.gain.setTargetAtTime(noiseAmt * 0.12, now, 0.02);
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      wetVoiceGain.gain.setTargetAtTime(mix * 1.15, now, 0.02);
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+    },
+    dispose: () => {
+      try { noiseSource.stop(); } catch {}
+      try { noiseSource.disconnect(); } catch {}
+    }
+  };
+}
+
+/**
+ * Fast 2nd-order IIR Biquad Filter for real-time sample-by-sample vocoder filterbanks.
+ */
+class FastVocoderBiquad {
+  public b0: number = 0;
+  public b1: number = 0;
+  public b2: number = 0;
+  public a1: number = 0;
+  public a2: number = 0;
+  private x1: number = 0;
+  private x2: number = 0;
+  private y1: number = 0;
+  private y2: number = 0;
+
+  public setBandpass(freq: number, Q: number, sampleRate: number): void {
+    const clampedFreq = Math.max(40, Math.min(sampleRate * 0.45, freq));
+    const w0 = (2 * Math.PI * clampedFreq) / sampleRate;
+    const alpha = Math.sin(w0) / (2 * Q);
+    const cosw0 = Math.cos(w0);
+
+    const b0_raw = Math.sin(w0) / 2;
+    const b2_raw = -b0_raw;
+    const a0_raw = 1 + alpha;
+    const a1_raw = -2 * cosw0;
+    const a2_raw = 1 - alpha;
+
+    this.b0 = b0_raw / a0_raw;
+    this.b1 = 0;
+    this.b2 = b2_raw / a0_raw;
+    this.a1 = a1_raw / a0_raw;
+    this.a2 = a2_raw / a0_raw;
+  }
+
+  public process(x: number): number {
+    const y = this.b0 * x + this.b1 * this.x1 + this.b2 * this.x2 - this.a1 * this.y1 - this.a2 * this.y2;
+    this.x2 = this.x1;
+    this.x1 = x;
+    this.y2 = this.y1;
+    this.y1 = y;
+    return Number.isFinite(y) ? y : 0;
+  }
+
+  public reset(): void {
+    this.x1 = 0;
+    this.x2 = 0;
+    this.y1 = 0;
+    this.y2 = 0;
+  }
+}
+
+/**
+ * Vocal Transformer / Robot & Formant Shifter DSP Engine.
+ *
+ * - In Robot Mode: True 8-Band Analysis/Synthesis Channel Vocoder.
+ *   The user's voice is analyzed across an 8-band filterbank (220Hz - 7.2kHz).
+ *   The extracted vowel & consonant spectral envelopes modulate a synthetic
+ *   anti-aliased multi-harmonic pulse/saw/sub carrier oscillator with high-band noise exciter.
+ *   CRITICAL: The natural speech waveform is NEVER mixed or added into the output stream!
+ *   At 100% Mix, 0.0% of the raw voice passes through, leaving only the pure Kraftwerk/Daft Punk
+ *   robotic speech. Silence threshold gating guarantees dead silence with 0 buzzing when not speaking.
+ *
+ * - In Natural Mode: Shifting formant resonances F1, F2, F3 transforms vocal tract length
+ *   (deep monster vs bright anime/chipmunk) without altering musical pitch.
+ */
+function createVocalFormantDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferQuantum = 512;
+  const processor = ctx.createScriptProcessor(bufferQuantum, 1, 1);
+
+  // Formant filtering resonators (for Natural Formant Shift mode)
+  const f1 = ctx.createBiquadFilter();
+  f1.type = 'peaking';
+  f1.frequency.value = 720;
+  f1.Q.value = 2.8;
+  f1.gain.value = 8;
+
+  const f2 = ctx.createBiquadFilter();
+  f2.type = 'peaking';
+  f2.frequency.value = 1550;
+  f2.Q.value = 3.2;
+  f2.gain.value = 9;
+
+  const f3 = ctx.createBiquadFilter();
+  f3.type = 'peaking';
+  f3.frequency.value = 2750;
+  f3.Q.value = 3.8;
+  f3.gain.value = 6;
+
+  const brightness = ctx.createBiquadFilter();
+  brightness.type = 'highshelf';
+  brightness.frequency.value = 4200;
+  brightness.gain.value = 0;
+
+  const effectWetGain = ctx.createGain();
+  const effectDryGain = ctx.createGain();
+
+  effectDryGain.gain.value = 0.0;
+  effectWetGain.gain.value = 1.0;
+
+  // Dry path directly from input to output (strictly 0.0 gain at 100% mix)
+  input.connect(effectDryGain);
+  effectDryGain.connect(output);
+
+  // Wet processed path
+  input.connect(processor);
+  processor.connect(f1);
+  f1.connect(f2);
+  f2.connect(f3);
+  f3.connect(brightness);
+  brightness.connect(effectWetGain);
+  effectWetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  // 8-Band Vocoder Frequency Grid (covering vocal chest resonance up to sibilance)
+  const VOCODER_BANDS = [220, 420, 740, 1200, 1900, 3000, 4600, 7200];
+  const NUM_BANDS = VOCODER_BANDS.length;
+
+  const analysisFilters: FastVocoderBiquad[] = [];
+  const synthesisFilters: FastVocoderBiquad[] = [];
+  const bandEnvelopes = new Float32Array(NUM_BANDS);
+
+  for (let k = 0; k < NUM_BANDS; k++) {
+    const af = new FastVocoderBiquad();
+    af.setBandpass(VOCODER_BANDS[k], 2.8, sampleRate);
+    analysisFilters.push(af);
+
+    const sf = new FastVocoderBiquad();
+    sf.setBandpass(VOCODER_BANDS[k], 2.8, sampleRate);
+    synthesisFilters.push(sf);
+  }
+
+  // DSP state
+  let isRobotMode = true;
+  let targetRobotFreq = 110.0; // A2
+  let currentRobotFreq = 110.0;
+  let carrierPhase = 0.0;
+  let subCarrierPhase = 0.0;
+  let formantShiftSemitones = 0; // -12 to +12
+  let speechEnvelope = 0.0;
+
+  const ROBOT_PITCH_MAP: Record<string, number> = {
+    'C2': 65.41,
+    'E2': 82.41,
+    'G2': 97.99,
+    'A2': 110.00,
+    'C3': 130.81,
+    'E3': 164.81,
+    'G3': 196.00
+  };
+
+  function updateSynthesisFilterFrequencies() {
+    const formantMult = Math.pow(2, formantShiftSemitones / 12);
+    for (let k = 0; k < NUM_BANDS; k++) {
+      const shifted = VOCODER_BANDS[k] * formantMult;
+      synthesisFilters[k].setBandpass(shifted, 2.8, sampleRate);
+    }
+  }
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      currentRobotFreq += (targetRobotFreq - currentRobotFreq) * 0.15;
+      const phaseInc = currentRobotFreq / sampleRate;
+      const subPhaseInc = (currentRobotFreq * 0.5) / sampleRate;
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+        const absVal = Math.abs(inSample);
+
+        // Fast peak envelope follower on raw vocal input
+        if (absVal > speechEnvelope) {
+          speechEnvelope += (absVal - speechEnvelope) * 0.45;
+        } else {
+          speechEnvelope += (absVal - speechEnvelope) * 0.005;
+        }
+
+        if (!isRobotMode) {
+          // Natural Formant Mode: Voice passes through physical formant resonators F1, F2, F3
+          outCh[i] = inSample;
+        } else {
+          // =========================================================================
+          // ROBOT MODE: TRUE 8-BAND CHANNEL VOCODER
+          // =========================================================================
+
+          // SILENCE NOISE GATE:
+          // When user pauses, breathes, or stops speaking, gate the output to absolute 0.0.
+          // Eliminates any idle oscillator buzz, hum, or background drone!
+          if (speechEnvelope < 0.0018) {
+            outCh[i] = 0.0;
+            carrierPhase = (carrierPhase + phaseInc) % 1.0;
+            subCarrierPhase = (subCarrierPhase + subPhaseInc) % 1.0;
+            for (let k = 0; k < NUM_BANDS; k++) {
+              bandEnvelopes[k] *= 0.94;
+            }
+            continue;
+          }
+
+          // Advance anti-aliased synthetic robot carrier
+          const saw = 2.0 * carrierPhase - 1.0;
+          const pulse = carrierPhase < 0.32 ? 1.0 : -1.0;
+          const sub = Math.sin(2 * Math.PI * subCarrierPhase);
+          const toneCarrier = 0.52 * saw + 0.30 * pulse + 0.18 * sub;
+
+          carrierPhase = (carrierPhase + phaseInc) % 1.0;
+          subCarrierPhase = (subCarrierPhase + subPhaseInc) % 1.0;
+
+          let vocodedSum = 0.0;
+
+          // Process each vocoder frequency band
+          for (let k = 0; k < NUM_BANDS; k++) {
+            // 1. Voice Analysis: Bandpass filter human speech into band level
+            const speechBand = analysisFilters[k].process(inSample);
+            const absBand = Math.abs(speechBand);
+
+            // Fast attack (~2ms) & smooth decay (~20ms) envelope detection
+            if (absBand > bandEnvelopes[k]) {
+              bandEnvelopes[k] += (absBand - bandEnvelopes[k]) * 0.35;
+            } else {
+              bandEnvelopes[k] += (absBand - bandEnvelopes[k]) * 0.015;
+            }
+
+            // 2. Carrier Preparation:
+            // For bands 6 & 7 (high sibilance/plosives), blend noise for crisp "S", "T", "Ch" diction
+            let carrierIn = toneCarrier;
+            if (k >= 6) {
+              const noise = (Math.random() * 2 - 1) * 0.75;
+              carrierIn = toneCarrier * 0.25 + noise * 0.75;
+            } else if (k === 5) {
+              const noise = (Math.random() * 2 - 1) * 0.35;
+              carrierIn = toneCarrier * 0.70 + noise * 0.30;
+            }
+
+            // 3. Synthesis: Filter the synth carrier through the corresponding synthesis band
+            const synthBand = synthesisFilters[k].process(carrierIn);
+
+            // 4. Vocoding: Multiply synthesis carrier by the vocal band envelope
+            vocodedSum += synthBand * bandEnvelopes[k];
+          }
+
+          // Analog warmth saturation with calibrated output headroom
+          // CRITICAL: inSample is NEVER added! Output is 100% pure robotic vocoder speech!
+          const saturated = Math.tanh(vocodedSum * 3.2) * 0.95;
+          outCh[i] = Number.isFinite(saturated) ? saturated : 0.0;
+        }
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    f1,
+    f2,
+    f3,
+    brightness,
+    effectWetGain,
+    effectDryGain,
+    updateParams: (p: VocalFormantPedal) => {
+      const now = ctx.currentTime;
+      isRobotMode = Boolean(p.robotMode);
+      formantShiftSemitones = Math.max(-12, Math.min(12, p.formant));
+
+      if (p.robotPitch && ROBOT_PITCH_MAP[p.robotPitch]) {
+        targetRobotFreq = ROBOT_PITCH_MAP[p.robotPitch];
+      }
+
+      updateSynthesisFilterFrequencies();
+
+      // Calculate formant resonance shift (mult = 2^(formant/12))
+      const mult = Math.pow(2, formantShiftSemitones / 12);
+      f1.frequency.setTargetAtTime(Math.max(180, Math.min(2200, 720 * mult)), now, 0.02);
+      f2.frequency.setTargetAtTime(Math.max(350, Math.min(4200, 1550 * mult)), now, 0.02);
+      f3.frequency.setTargetAtTime(Math.max(700, Math.min(7000, 2750 * mult)), now, 0.02);
+
+      // In robot mode, emphasize formants for classic robotic resonant bite
+      const formantBoost = isRobotMode ? 8.0 : 6.0;
+      f1.gain.setTargetAtTime(formantBoost, now, 0.02);
+      f2.gain.setTargetAtTime(formantBoost + 1.0, now, 0.02);
+      f3.gain.setTargetAtTime(formantBoost - 1.0, now, 0.02);
+
+      // Brightness / air control (-12dB to +12dB)
+      const brightDb = ((p.brightness - 50) / 50) * 12;
+      brightness.gain.setTargetAtTime(brightDb, now, 0.02);
+
+      // True dry/wet isolation:
+      // At 100% mix, effectDryGain is strictly 0.0 (no dry voice bypass), effectWetGain is 1.0
+      const mixNorm = Math.max(0, Math.min(1, p.mix / 100));
+      effectWetGain.gain.setTargetAtTime(mixNorm, now, 0.02);
+      effectDryGain.gain.setTargetAtTime(1.0 - mixNorm, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+

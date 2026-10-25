@@ -39,7 +39,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'browse' | 'publish' | 'share'>('browse');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedInstrument, setSelectedInstrument] = useState<'all' | 'guitar' | 'bass'>('all');
+  const [selectedInstrument, setSelectedInstrument] = useState<'all' | 'guitar' | 'bass' | 'vocal'>('all');
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [copiedShareUrl, setCopiedShareUrl] = useState(false);
   const [statusNotification, setStatusNotification] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
   // Publish Form State
   const [publishName, setPublishName] = useState(currentPreset.name);
   const [publishAuthor, setPublishAuthor] = useState('');
-  const [publishInstrument, setPublishInstrument] = useState<'guitar' | 'bass'>(currentPreset.instrument);
+  const [publishInstrument, setPublishInstrument] = useState<'guitar' | 'bass' | 'vocal'>(currentPreset.instrument);
   const [publishGenre, setPublishGenre] = useState<Preset['genre']>(currentPreset.genre || 'Rock');
   const [publishDesc, setPublishDesc] = useState(currentPreset.description || '');
   const [publishTags, setPublishTags] = useState(currentPreset.tags?.join(', ') || 'Lead, Modern');
@@ -272,11 +272,11 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
 
             {/* Instrument filter buttons */}
             <div className="flex items-center gap-1 p-1 bg-neutral-950 rounded-lg border border-neutral-800">
-              {(['all', 'guitar', 'bass'] as const).map(inst => (
+              {(['all', 'guitar', 'bass', 'vocal'] as const).map(inst => (
                 <button
                   key={inst}
                   onClick={() => setSelectedInstrument(inst)}
-                  className={`w-16 justify-center text-center px-3 py-1 text-xs font-medium rounded-md capitalize transition-colors ${
+                  className={`w-14 justify-center text-center px-2 py-1 text-xs font-medium rounded-md capitalize transition-colors ${
                     selectedInstrument === inst
                       ? 'bg-amber-500 text-black font-semibold'
                       : 'text-neutral-400 hover:text-white'
@@ -445,6 +445,7 @@ export const CloudHubTab: React.FC<CloudHubTabProps> = ({
               >
                 <option value="guitar">Guitar</option>
                 <option value="bass">Bass</option>
+                <option value="vocal">Vocal / Voice</option>
               </select>
             </div>
 

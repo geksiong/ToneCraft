@@ -296,6 +296,23 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   </p>
                 </div>
 
+                {/* Stage 7 */}
+                <div className="p-4 rounded-xl bg-neutral-900/70 border border-cyan-800/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 font-mono text-xs flex items-center justify-center font-bold">7</span>
+                    <h4 className="font-bold text-white flex items-center gap-2">
+                      <span>Vocal &amp; Voice Signal Chain</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">NEW</span>
+                    </h4>
+                  </div>
+                  <p className="text-xs text-neutral-300 leading-normal">
+                    For studio vocals or voiceover processing, place <strong>Vocal De-Esser</strong> first to tame harsh sibilance, followed by <strong>AutoTune Vocal Snapper</strong> for scale-quantized pitch correction, then <strong>Studio Vocal Doubler</strong> for stereophonic width, and finish with <strong>Celestial Reverb</strong>. Bypass guitar amp and cab models when processing direct vocal microphone inputs.
+                  </p>
+                  <div className="mt-2 text-[11px] font-mono text-cyan-300/80 bg-neutral-950/60 p-2 rounded border border-neutral-800">
+                    💡 <strong>Pro Tip:</strong> Test immediately using the built-in <em>Studio Lead Vocal Acapella</em> or <em>Broadcast Voiceover</em> audio tracks in the top input selector!
+                  </div>
+                </div>
+
               </div>
             </div>
           )}

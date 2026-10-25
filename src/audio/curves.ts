@@ -163,3 +163,23 @@ export function createNamSaturationCurve(
   }
   return curve;
 }
+
+/**
+ * Models vintage telephone carbon microphone and megaphone speaker diaphragm saturation.
+ *
+ * @param drive Drive amount (0 - 100)
+ * @returns Float32Array transfer curve of 4096 points
+ */
+export function createTelephoneCurve(drive: number): Float32Array {
+  const k = 1.2 + (drive / 100) * 22;
+  const n = 4096;
+  const curve = new Float32Array(n);
+
+  for (let i = 0; i < n; ++i) {
+    const x = (i * 2) / n - 1;
+    // Asymmetric carbon mic / horn driver saturation
+    const raw = Math.tanh(x * k) + 0.12 * Math.sin(x * Math.PI) * (drive / 100);
+    curve[i] = Math.max(-0.95, Math.min(0.95, raw * 0.88));
+  }
+  return curve;
+}

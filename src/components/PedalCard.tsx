@@ -16,6 +16,11 @@ import {
   AutoWahPedal,
   PitchShifterPedal,
   HarmonizerPedal,
+  VocalTunerPedal,
+  VocalDoublerPedal,
+  DeEsserPedal,
+  TelephoneVoicePedal,
+  VocalFormantPedal,
   VstPluginPedal
 } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
@@ -85,6 +90,9 @@ export const PedalCard: React.FC<PedalCardProps> = ({
     if (pedal.type === 'fuzz' || pedal.type === 'distortion') return 'bg-red-500 led-glow-red border-red-300';
     if (pedal.type === 'overdrive') return 'bg-emerald-400 led-glow-emerald border-emerald-200';
     if (pedal.type === 'chorus' || pedal.type === 'flanger') return 'bg-blue-400 led-glow-blue border-blue-200';
+    if (pedal.type === 'vocalTuner') return 'bg-cyan-400 led-glow-cyan border-cyan-200';
+    if (pedal.type === 'vocalDoubler') return 'bg-indigo-400 led-glow-indigo border-indigo-200';
+    if (pedal.type === 'vocalFormant') return 'bg-fuchsia-400 led-glow-fuchsia border-fuchsia-200';
     if (pedal.type === 'pitchShifter' || pedal.type === 'harmonizer' || pedal.type === 'reverb') {
       return 'bg-purple-400 led-glow-purple border-purple-200';
     }
@@ -963,6 +971,320 @@ function renderPedalControls(
               unit="%"
               onChange={(v) => onUpdate({ ...p, dryWet: v })}
             />
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalTuner': {
+      const p = pedal as VocalTunerPedal;
+      const keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-y-2 gap-x-1">
+            <RotaryKnob
+              label="Speed"
+              value={p.speed}
+              unit="%"
+              midiBadge={getKnobBadge('speed')}
+              onChange={(v) => onUpdate({ ...p, speed: v })}
+            />
+            <RotaryKnob
+              label="Correct"
+              value={p.correction}
+              unit="%"
+              midiBadge={getKnobBadge('correction')}
+              onChange={(v) => onUpdate({ ...p, correction: v })}
+            />
+            <RotaryKnob
+              label="Human"
+              value={p.humanize}
+              unit="%"
+              midiBadge={getKnobBadge('humanize')}
+              onChange={(v) => onUpdate({ ...p, humanize: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+          <div className="space-y-1.5 pt-1 border-t border-white/10">
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-white/60">KEY:</span>
+              <select
+                value={p.key}
+                onChange={(e) => onUpdate({ ...p, key: e.target.value as any })}
+                className="bg-black/50 border border-white/20 rounded px-1.5 py-0.5 text-cyan-300 font-bold text-[9px]"
+              >
+                {keys.map((k) => (
+                  <option key={k} value={k}>
+                    Key {k}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-white/60">SCALE:</span>
+              <select
+                value={p.scale}
+                onChange={(e) => onUpdate({ ...p, scale: e.target.value as any })}
+                className="bg-black/50 border border-white/20 rounded px-1.5 py-0.5 text-white text-[9px]"
+              >
+                <option value="chromatic">Chromatic</option>
+                <option value="major">Major (Ionian)</option>
+                <option value="minor">Natural Minor</option>
+                <option value="pentatonic">Pentatonic</option>
+                <option value="blues">Blues Scale</option>
+              </select>
+            </div>
+            <div className="text-center text-[8px] font-mono font-bold tracking-wider text-cyan-300/90 uppercase">
+              {p.speed >= 80 ? '⚡ ROBOT HARD SNAP' : p.speed <= 35 ? '🍃 NATURAL GLIDE' : '✨ STUDIO RETUNE'}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalDoubler': {
+      const p = pedal as VocalDoublerPedal;
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Spread"
+              value={p.spread}
+              unit="%"
+              midiBadge={getKnobBadge('spread')}
+              onChange={(v) => onUpdate({ ...p, spread: v })}
+            />
+            <RotaryKnob
+              label="Delay"
+              value={p.delay}
+              unit="ms"
+              midiBadge={getKnobBadge('delay')}
+              onChange={(v) => onUpdate({ ...p, delay: v })}
+            />
+            <RotaryKnob
+              label="Detune"
+              value={p.detune}
+              unit="%"
+              midiBadge={getKnobBadge('detune')}
+              onChange={(v) => onUpdate({ ...p, detune: v })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Depth"
+              value={p.depth}
+              unit="%"
+              midiBadge={getKnobBadge('depth')}
+              onChange={(v) => onUpdate({ ...p, depth: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+          <div className="text-center text-[8px] font-mono text-indigo-200/80 tracking-wider">
+            WIDE STEREO ADT VOICE
+          </div>
+        </div>
+      );
+    }
+
+    case 'deEsser': {
+      const p = pedal as DeEsserPedal;
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Thresh"
+              value={p.threshold}
+              min={-60}
+              max={0}
+              unit="dB"
+              midiBadge={getKnobBadge('threshold')}
+              onChange={(v) => onUpdate({ ...p, threshold: v })}
+            />
+            <RotaryKnob
+              label="Reduce"
+              value={p.reduction}
+              unit="%"
+              midiBadge={getKnobBadge('reduction')}
+              onChange={(v) => onUpdate({ ...p, reduction: v })}
+            />
+            <RotaryKnob
+              label="Freq"
+              value={p.frequency}
+              min={3000}
+              max={9000}
+              unit="Hz"
+              midiBadge={getKnobBadge('frequency')}
+              onChange={(v) => onUpdate({ ...p, frequency: v })}
+            />
+          </div>
+          <div className="space-y-1.5 pt-1 border-t border-white/10">
+            <div className="flex items-center justify-between text-[9px] font-mono">
+              <span className="text-white/60">BANDWIDTH:</span>
+              <div className="flex gap-1">
+                {(['narrow', 'wide'] as const).map((bw) => (
+                  <button
+                    key={bw}
+                    onClick={() => onUpdate({ ...p, bandwidth: bw })}
+                    className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase ${
+                      p.bandwidth === bw ? 'bg-amber-500 text-black font-bold' : 'bg-black/40 text-white/70'
+                    }`}
+                  >
+                    {bw}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => onUpdate({ ...p, listen: !p.listen })}
+              className={`w-full py-1 rounded text-[9px] font-mono font-bold tracking-wider uppercase transition-colors ${
+                p.listen
+                  ? 'bg-amber-400 text-black animate-pulse shadow-sm'
+                  : 'bg-black/50 text-white/70 hover:text-white border border-white/20'
+              }`}
+            >
+              {p.listen ? '🎧 SIBILANCE LISTEN ACTIVE' : 'MONITOR LISTEN MODE'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    case 'telephoneVoice': {
+      const p = pedal as TelephoneVoicePedal;
+      const modes: Array<TelephoneVoicePedal['mode']> = ['telephone', 'megaphone', 'radio', 'gramophone'];
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-1 mb-1">
+            {modes.map((m) => (
+              <button
+                key={m}
+                onClick={() => onUpdate({ ...p, mode: m })}
+                className={`py-0.5 rounded text-[8px] font-mono uppercase transition-colors ${
+                  p.mode === m
+                    ? 'bg-amber-400 text-black font-bold shadow-sm'
+                    : 'bg-black/40 text-white/60 hover:text-white border border-white/10'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-y-2 gap-x-1">
+            <RotaryKnob
+              label="Drive"
+              value={p.drive}
+              unit="%"
+              midiBadge={getKnobBadge('drive')}
+              onChange={(v) => onUpdate({ ...p, drive: v })}
+            />
+            <RotaryKnob
+              label="Filter"
+              value={p.filter}
+              unit="%"
+              midiBadge={getKnobBadge('filter')}
+              onChange={(v) => onUpdate({ ...p, filter: v })}
+            />
+            <RotaryKnob
+              label="Noise"
+              value={p.noise}
+              unit="%"
+              midiBadge={getKnobBadge('noise')}
+              onChange={(v) => onUpdate({ ...p, noise: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    case 'vocalFormant': {
+      const p = pedal as VocalFormantPedal;
+      const pitches: Array<VocalFormantPedal['robotPitch']> = ['C2', 'E2', 'G2', 'A2', 'C3', 'E3', 'G3'];
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Formant"
+              value={p.formant}
+              min={-12}
+              max={12}
+              unit="st"
+              midiBadge={getKnobBadge('formant')}
+              onChange={(v) => onUpdate({ ...p, formant: v })}
+            />
+            <RotaryKnob
+              label="Bright"
+              value={p.brightness}
+              unit="%"
+              midiBadge={getKnobBadge('brightness')}
+              onChange={(v) => onUpdate({ ...p, brightness: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+          <div className="space-y-1.5 pt-1 border-t border-white/10">
+            <button
+              onClick={() => onUpdate({ ...p, robotMode: !p.robotMode })}
+              className={`w-full py-1.5 rounded text-[9.5px] font-mono font-bold tracking-wider uppercase transition-colors shadow-sm flex items-center justify-center gap-1.5 ${
+                p.robotMode
+                  ? 'bg-fuchsia-600 text-white shadow-fuchsia-900/50 ring-1 ring-fuchsia-400/60'
+                  : 'bg-black/50 text-white/70 hover:text-white border border-white/20'
+              }`}
+            >
+              <span>{p.robotMode ? '🤖' : '🎙️'}</span>
+              <span>{p.robotMode ? 'ROBOT VOCODER (ACTIVE)' : 'NATURAL FORMANT SHIFT'}</span>
+            </button>
+            {p.robotMode && (
+              <div className="flex items-center justify-between text-[9px] font-mono pt-0.5">
+                <span className="text-white/60">PITCH:</span>
+                <div className="flex gap-0.5">
+                  {pitches.map((pt) => (
+                    <button
+                      key={pt}
+                      onClick={() => onUpdate({ ...p, robotPitch: pt })}
+                      className={`px-1 py-0.5 rounded text-[7.5px] font-mono transition-colors ${
+                        p.robotPitch === pt
+                          ? 'bg-fuchsia-400 text-black font-bold shadow-sm'
+                          : 'bg-black/40 text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {pt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {p.mix >= 99 && (
+              <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
+                ✓ 100% WET • DRY VOICE IS MUTED
+              </div>
+            )}
+            <div className="text-center text-[7.5px] font-mono text-fuchsia-300/80 tracking-widest uppercase">
+              {p.formant < -2 ? '👹 DEEP MECH TRACT' : p.formant > 2 ? '✨ CYBORG / ANDROID' : 'BALANCED TRACT'}
+            </div>
           </div>
         </div>
       );

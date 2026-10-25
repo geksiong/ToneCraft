@@ -231,6 +231,14 @@ export const Header: React.FC<HeaderProps> = ({
                       </option>
                     ))}
                   </optgroup>
+
+                  <optgroup label="🎤 Vocal & Voice Tracks" className="bg-neutral-900 text-neutral-300 font-semibold">
+                    {SAMPLE_RIFFS.filter((r) => r.category === 'Vocal & Voice').map((riff) => (
+                      <option key={riff.id} value={riff.id} className="bg-neutral-900 text-white">
+                        🎤 {riff.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 

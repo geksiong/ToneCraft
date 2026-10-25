@@ -4,6 +4,195 @@ import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 
 export const INITIAL_PRESETS: Preset[] = [
   {
+    id: 'vocal-studio-pop',
+    name: 'Studio Modern Lead Vocal',
+    author: 'ToneCraft Vocal Lab',
+    instrument: 'vocal',
+    genre: 'Pop',
+    description: 'Pristine radio-ready vocal chain: Precision De-Esser -> AutoTune Vocal Snapper -> Studio Vocal Doubler -> Celestial Plate Reverb.',
+    tags: ['Vocal', 'AutoTune', 'De-Esser', 'Doubler', 'Studio', 'Pop'],
+    bpm: 104,
+    likes: 954,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vocal-deess-1',
+        type: 'deEsser',
+        name: 'Vocal De-Esser',
+        enabled: true,
+        color: '#d97706',
+        frequency: 6500,
+        threshold: -36,
+        reduction: 65,
+        listen: false,
+        bandwidth: 'wide'
+      },
+      {
+        id: 'pedal-vocal-tuner-1',
+        type: 'vocalTuner',
+        name: 'AutoTune Vocal',
+        enabled: true,
+        color: '#0891b2',
+        key: 'C',
+        scale: 'major',
+        speed: 85,
+        correction: 90,
+        humanize: 25,
+        mix: 100
+      },
+      {
+        id: 'pedal-vocal-doubler-1',
+        type: 'vocalDoubler',
+        name: 'Studio Doubler',
+        enabled: true,
+        color: '#6366f1',
+        detune: 40,
+        spread: 80,
+        delay: 32,
+        depth: 35,
+        mix: 65
+      },
+      {
+        id: 'pedal-vocal-reverb-1',
+        type: 'reverb',
+        name: 'Vocal Plate Reverb',
+        enabled: true,
+        color: '#4338ca',
+        decay: 55,
+        preDelay: 20,
+        mix: 28,
+        damping: 30,
+        shimmer: false,
+        roomType: 'plate'
+      }
+    ]
+  },
+  {
+    id: 'vocal-cyberpunk-robot',
+    name: 'Cyberpunk Robot & Vocoder Vocal',
+    author: 'Daft Kraft',
+    instrument: 'vocal',
+    genre: 'Pop',
+    description: 'Classic robotic speech and vocoder processing with pitch-locked carrier, formant resonance, tape delay, and hall shimmer.',
+    tags: ['Vocal', 'Robot Voice', 'Vocoder', 'Formant', 'Cyberpunk', 'Electronic'],
+    bpm: 120,
+    likes: 672,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vocal-formant-1',
+        type: 'vocalFormant',
+        name: 'Robot Formant',
+        enabled: true,
+        color: '#c026d3',
+        formant: -2,
+        robotMode: true,
+        robotPitch: 'A2',
+        brightness: 75,
+        mix: 100
+      },
+      {
+        id: 'pedal-vocal-delay-1',
+        type: 'delay',
+        name: 'Space Tape Echo',
+        enabled: true,
+        color: '#047857',
+        time: 340,
+        feedback: 42,
+        mix: 35,
+        flutter: 25,
+        pingPong: false
+      },
+      {
+        id: 'pedal-vocal-reverb-2',
+        type: 'reverb',
+        name: 'Celestial Shimmer',
+        enabled: true,
+        color: '#4338ca',
+        decay: 70,
+        preDelay: 25,
+        mix: 35,
+        damping: 25,
+        shimmer: true,
+        roomType: 'hall'
+      }
+    ]
+  },
+  {
+    id: 'vocal-vintage-megaphone',
+    name: 'Vintage Megaphone & Radio Voice',
+    author: 'Strokes & Floyd',
+    instrument: 'vocal',
+    genre: 'Rock',
+    description: 'Iconic band-limited rock vocal effect with horn resonance, crunchy carbon diode drive, analog static crackle, and optical compression.',
+    tags: ['Vocal', 'Megaphone', 'Telephone', 'Lo-Fi', 'Vintage Radio', 'Rock'],
+    bpm: 115,
+    likes: 519,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vocal-phone-1',
+        type: 'telephoneVoice',
+        name: 'Lo-Fi Megaphone',
+        enabled: true,
+        color: '#a16207',
+        mode: 'megaphone',
+        drive: 48,
+        filter: 55,
+        noise: 30,
+        mix: 100
+      },
+      {
+        id: 'pedal-vocal-comp-1',
+        type: 'compressor',
+        name: 'Vocal Leveler Comp',
+        enabled: true,
+        color: '#b45309',
+        sustain: 70,
+        attack: 15,
+        level: 75,
+        blend: 85
+      },
+      {
+        id: 'pedal-vocal-reverb-3',
+        type: 'reverb',
+        name: 'Vintage Spring Tank',
+        enabled: true,
+        color: '#475569',
+        decay: 40,
+        preDelay: 10,
+        mix: 25,
+        damping: 45,
+        shimmer: false,
+        roomType: 'spring'
+      }
+    ]
+  },
+  {
     id: 'vox-ac10-real-nam',
     name: 'Vox AC10 Real NAM Studio',
     author: 'ToneCraft Studio',

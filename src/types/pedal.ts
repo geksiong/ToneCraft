@@ -14,6 +14,11 @@ export type PedalType =
   | 'autoWah'
   | 'pitchShifter'
   | 'harmonizer'
+  | 'vocalTuner'
+  | 'vocalDoubler'
+  | 'deEsser'
+  | 'telephoneVoice'
+  | 'vocalFormant'
   | 'vstPlugin';
 
 export interface BasePedalConfig {
@@ -153,6 +158,52 @@ export interface HarmonizerPedal extends BasePedalConfig {
   directLevel: number; // 0 - 100
 }
 
+export interface VocalTunerPedal extends BasePedalConfig {
+  type: 'vocalTuner';
+  key: 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
+  scale: 'chromatic' | 'major' | 'minor' | 'pentatonic' | 'blues';
+  speed: number; // 0 - 100 (0 = natural slow glide, 100 = hard robotic auto-tune snap)
+  correction: number; // 0 - 100
+  humanize: number; // 0 - 100
+  mix: number; // 0 - 100
+}
+
+export interface VocalDoublerPedal extends BasePedalConfig {
+  type: 'vocalDoubler';
+  detune: number; // 0 - 100 (micro-pitch detune cents)
+  spread: number; // 0 - 100 (stereo width)
+  delay: number; // 10 - 60 ms
+  depth: number; // 0 - 100 (human pitch/time drift)
+  mix: number; // 0 - 100
+}
+
+export interface DeEsserPedal extends BasePedalConfig {
+  type: 'deEsser';
+  frequency: number; // 3000 - 9000 Hz
+  threshold: number; // -60 to 0 dB
+  reduction: number; // 0 - 100%
+  listen: boolean; // audition sibilance band
+  bandwidth: 'narrow' | 'wide';
+}
+
+export interface TelephoneVoicePedal extends BasePedalConfig {
+  type: 'telephoneVoice';
+  mode: 'telephone' | 'megaphone' | 'radio' | 'gramophone';
+  drive: number; // 0 - 100
+  filter: number; // 0 - 100
+  noise: number; // 0 - 100
+  mix: number; // 0 - 100
+}
+
+export interface VocalFormantPedal extends BasePedalConfig {
+  type: 'vocalFormant';
+  formant: number; // -12 to +12 semitones
+  robotMode: boolean;
+  robotPitch: 'C2' | 'E2' | 'G2' | 'A2' | 'C3' | 'E3' | 'G3';
+  brightness: number; // 0 - 100
+  mix: number; // 0 - 100
+}
+
 export interface VstPluginPedal extends BasePedalConfig {
   type: 'vstPlugin';
   pluginId: string;
@@ -185,6 +236,11 @@ export type AnyPedal =
   | AutoWahPedal
   | PitchShifterPedal
   | HarmonizerPedal
+  | VocalTunerPedal
+  | VocalDoublerPedal
+  | DeEsserPedal
+  | TelephoneVoicePedal
+  | VocalFormantPedal
   | VstPluginPedal;
 
 export type AmpArchitectureType =
@@ -253,8 +309,8 @@ export interface Preset {
   id: string;
   name: string;
   author: string;
-  instrument: 'guitar' | 'bass';
-  genre: 'Rock' | 'Metal' | 'Blues' | 'Ambient' | 'Funk' | 'Jazz' | 'Shoegaze' | 'Pop';
+  instrument: 'guitar' | 'bass' | 'vocal';
+  genre: 'Rock' | 'Metal' | 'Blues' | 'Ambient' | 'Funk' | 'Jazz' | 'Shoegaze' | 'Pop' | 'Vocal' | 'R&B';
   description: string;
   tags: string[];
   pedals: AnyPedal[];

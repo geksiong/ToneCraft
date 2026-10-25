@@ -2,8 +2,8 @@ export interface SampleRiffInfo {
   id: string;
   name: string;
   genre: string;
-  category: 'Clean' | 'Edge of Breakup' | 'Rock & Metal' | 'Bass';
-  instrument: 'guitar' | 'bass';
+  category: 'Clean' | 'Edge of Breakup' | 'Rock & Metal' | 'Bass' | 'Vocal & Voice';
+  instrument: 'guitar' | 'bass' | 'vocal';
   tempo: number;
   description: string;
 }
@@ -125,6 +125,24 @@ export const SAMPLE_RIFFS: SampleRiffInfo[] = [
     instrument: 'bass',
     tempo: 130,
     description: 'Driving 16th-note bass attack with tight low foundation and articulate bite.'
+  },
+  {
+    id: 'riff-vocal-pop',
+    name: 'Studio Lead Vocal Acapella (Pop / R&B)',
+    genre: 'Pop / R&B',
+    category: 'Vocal & Voice',
+    instrument: 'vocal',
+    tempo: 104,
+    description: 'Melodic singing vocal line with expressive vibrato and vowel inflections, perfect for testing Auto-Tune, Vocal Doubler, and Celestial Reverb.'
+  },
+  {
+    id: 'riff-vocal-spoken',
+    name: 'Broadcast Voiceover & Sibilance Test',
+    genre: 'Podcast / Spoken',
+    category: 'Vocal & Voice',
+    instrument: 'vocal',
+    tempo: 96,
+    description: 'Rhythmic spoken phrase with sibilant "S" and "T" consonants, ideal for testing Vocal De-Esser, Lo-Fi Megaphone, and Robot Formant.'
   }
 ];
 
@@ -133,7 +151,7 @@ export interface NoteEvent {
   duration: number; // in beats
   frequency: number;
   velocity: number;
-  pickupStyle?: 'clean-neck' | 'clean-quack' | 'acoustic' | 'twang' | 'rock' | 'bass';
+  pickupStyle?: 'clean-neck' | 'clean-quack' | 'acoustic' | 'twang' | 'rock' | 'bass' | 'vocal-lead' | 'vocal-spoken';
 }
 
 // Convert MIDI note number to frequency
@@ -357,6 +375,34 @@ export function getScoreForRiff(riffId: string): NoteEvent[] {
       return notes;
     }
 
+    case 'riff-vocal-pop': {
+      // Singing vocal melody with vowel sustains in Key of A minor / C:
+      // A3 (57) -> C4 (60) -> D4 (62) -> E4 (64) -> G4 (67) -> E4 (64) -> D4 (62) -> C4 (60)
+      return [
+        { time: 0.0, duration: 0.65, frequency: m2f(57), velocity: 0.85, pickupStyle: 'vocal-lead' },
+        { time: 0.75, duration: 0.60, frequency: m2f(60), velocity: 0.82, pickupStyle: 'vocal-lead' },
+        { time: 1.5, duration: 0.45, frequency: m2f(62), velocity: 0.88, pickupStyle: 'vocal-lead' },
+        { time: 2.0, duration: 0.85, frequency: m2f(64), velocity: 0.92, pickupStyle: 'vocal-lead' },
+        { time: 3.0, duration: 0.50, frequency: m2f(67), velocity: 0.86, pickupStyle: 'vocal-lead' },
+        { time: 3.6, duration: 0.70, frequency: m2f(64), velocity: 0.90, pickupStyle: 'vocal-lead' },
+        { time: 4.4, duration: 0.45, frequency: m2f(62), velocity: 0.80, pickupStyle: 'vocal-lead' },
+        { time: 5.0, duration: 1.20, frequency: m2f(60), velocity: 0.94, pickupStyle: 'vocal-lead' }
+      ];
+    }
+
+    case 'riff-vocal-spoken': {
+      // Spoken rhythmic cadence with sibilant transients for testing De-Esser & Megaphone:
+      return [
+        { time: 0.0, duration: 0.35, frequency: m2f(48), velocity: 0.88, pickupStyle: 'vocal-spoken' }, // "Check"
+        { time: 0.5, duration: 0.35, frequency: m2f(50), velocity: 0.82, pickupStyle: 'vocal-spoken' }, // "one"
+        { time: 1.0, duration: 0.40, frequency: m2f(52), velocity: 0.92, pickupStyle: 'vocal-spoken' }, // "two"
+        { time: 1.75, duration: 0.55, frequency: m2f(55), velocity: 0.95, pickupStyle: 'vocal-spoken' }, // "sibilance"
+        { time: 2.5, duration: 0.35, frequency: m2f(53), velocity: 0.84, pickupStyle: 'vocal-spoken' }, // "testing"
+        { time: 3.0, duration: 0.45, frequency: m2f(50), velocity: 0.80, pickupStyle: 'vocal-spoken' }, // "sound"
+        { time: 3.6, duration: 0.80, frequency: m2f(48), velocity: 0.90, pickupStyle: 'vocal-spoken' }  // "check"
+      ];
+    }
+
     case 'riff-rock':
     default: {
       return [
@@ -492,6 +538,29 @@ export function synthesizeRiffBuffer(
           Math.sin(2 * Math.PI * 2 * f * t) * 0.20 +
           Math.sin(2 * Math.PI * 3 * f * t) * 0.05
         ) * env * note.velocity;
+      } else if (style === 'vocal-lead') {
+        // Singing voice with natural 5.4Hz vibrato and warm vocal formants
+        const vibrato = 1 + 0.018 * Math.sin(2 * Math.PI * 5.4 * t);
+        const fVib = f * vibrato;
+        // Glottal harmonic series + vowel resonance
+        const glottal = (
+          Math.sin(2 * Math.PI * fVib * t) * 0.68 +
+          Math.sin(2 * Math.PI * 2 * fVib * t) * 0.36 +
+          Math.sin(2 * Math.PI * 3 * fVib * t) * 0.20 +
+          Math.sin(2 * Math.PI * 4 * fVib * t) * 0.10
+        );
+        const breath = (t < 0.04) ? (Math.random() * 2 - 1) * 0.15 : 0;
+        pickupHarmonics = (glottal + breath) * env * note.velocity * 1.1;
+      } else if (style === 'vocal-spoken') {
+        // Spoken voice with pronounced sibilance transients for testing De-Esser
+        const glottal = (
+          Math.sin(2 * Math.PI * f * t) * 0.62 +
+          Math.sin(2 * Math.PI * 2 * f * t) * 0.30 +
+          Math.sin(2 * Math.PI * 3 * f * t) * 0.16
+        );
+        // Sibilant consonant burst ("s" / "t" / "ch" noise burst around 6.5kHz)
+        const sibilance = (t < 0.07) ? (Math.random() * 2 - 1) * Math.sin(2 * Math.PI * 6500 * t) * 0.45 : 0;
+        pickupHarmonics = (glottal + sibilance) * env * note.velocity * 1.15;
       } else {
         // Bridge rock pickup: richer harmonics
         pickupHarmonics = (

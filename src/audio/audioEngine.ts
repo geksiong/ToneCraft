@@ -1047,6 +1047,9 @@ export class ToneCraftEngine {
     try { nodeWrap.bypassGain.disconnect(); } catch {}
     try { nodeWrap.wetGain.disconnect(); } catch {}
     if (nodeWrap.dspNodes) {
+      if (typeof nodeWrap.dspNodes.dispose === 'function') {
+        try { nodeWrap.dspNodes.dispose(); } catch {}
+      }
       if (nodeWrap.dspNodes.lfo) {
         try { nodeWrap.dspNodes.lfo.stop(); } catch {}
         try { nodeWrap.dspNodes.lfo.disconnect(); } catch {}
