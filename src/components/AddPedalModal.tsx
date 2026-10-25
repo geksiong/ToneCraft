@@ -11,7 +11,7 @@ interface AddPedalModalProps {
 interface PedalTemplateInfo {
   type: PedalType;
   title: string;
-  category: 'Gain & Dirt' | 'Modulation' | 'Time & Space' | 'Tone & Dynamics' | 'Pitch & Harmony' | 'Vocal & Speech' | 'Custom VST';
+  category: 'Gain & Dirt' | 'Modulation' | 'Time & Space' | 'Tone & Dynamics' | 'Pitch & Harmony' | 'Vocal & Speech' | 'Experimental & Boutique' | 'Custom VST';
   description: string;
   color: string;
   createDefault: () => AnyPedal;
@@ -480,6 +480,92 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       lfoRate: 3.5,
       tracking: 45,
       mix: 100
+    })
+  },
+
+  // Experimental & Boutique Unconventional Guitar Effects
+  {
+    type: 'granularCloud',
+    title: 'Granular Dream Cloud',
+    category: 'Experimental & Boutique',
+    description: 'Chase Bliss & Microcosm inspired micro-loop granular cloud with pitch shifting, spray position jitter, and regenerative octave shimmer.',
+    color: '#7c3aed',
+    createDefault: () => ({
+      id: `pedal-cloud-${Date.now()}`,
+      type: 'granularCloud',
+      name: 'Granular Cloud',
+      enabled: true,
+      color: '#7c3aed',
+      grainSize: 120,
+      density: 16,
+      pitch: 0,
+      spray: 40,
+      feedback: 45,
+      shimmer: true,
+      mix: 60
+    })
+  },
+  {
+    type: 'arcadeSynth',
+    title: '8-Bit Arcade PLL Synth',
+    category: 'Experimental & Boutique',
+    description: 'EQD Data Corrupter & Ottobit style sub/octave PLL guitar synth with bitcrusher, sample decimation, and stepped interval arpeggiator.',
+    color: '#e11d48',
+    createDefault: () => ({
+      id: `pedal-arcade-${Date.now()}`,
+      type: 'arcadeSynth',
+      name: 'Arcade PLL Synth',
+      enabled: true,
+      color: '#e11d48',
+      subOctave: '-1',
+      crushBits: 8,
+      sampleRateDec: 8000,
+      arpeggiator: 'octave',
+      arpRate: 6,
+      glide: 35,
+      mix: 75
+    })
+  },
+  {
+    type: 'spectralFreeze',
+    title: 'Spectral Infinite Freeze',
+    category: 'Experimental & Boutique',
+    description: 'EHX Freeze & PLUS pedal style infinite sustain drone with interactive momentary/latch footswitch, analog damping, and shimmer octave layer.',
+    color: '#0891b2',
+    createDefault: () => ({
+      id: `pedal-freeze-${Date.now()}`,
+      type: 'spectralFreeze',
+      name: 'Spectral Freeze',
+      enabled: true,
+      color: '#0891b2',
+      mode: 'latch',
+      frozen: false,
+      riseTime: 80,
+      decayTime: 1400,
+      shimmer: 40,
+      damping: 45,
+      mix: 70
+    })
+  },
+  {
+    type: 'tapeGlitch',
+    title: 'Tape Glitch & Reverse Swell',
+    category: 'Experimental & Boutique',
+    description: 'Red Panda Tensor & Count to 5 style micro-slice tape time-warper with forward/reverse/alternating slices, random jumps, and wow/flutter.',
+    color: '#d97706',
+    createDefault: () => ({
+      id: `pedal-glitch-${Date.now()}`,
+      type: 'tapeGlitch',
+      name: 'Tape Glitch / Rev',
+      enabled: true,
+      color: '#d97706',
+      direction: 'reverse',
+      sliceLength: 350,
+      pitch: 0,
+      randomGlitch: 40,
+      wowFlutter: 35,
+      feedback: 35,
+      mix: 65
     })
   },
 

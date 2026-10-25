@@ -23,6 +23,10 @@ export type PedalType =
   | 'vocalPreamp'
   | 'vocalStutter'
   | 'vocalAlien'
+  | 'granularCloud'
+  | 'arcadeSynth'
+  | 'spectralFreeze'
+  | 'tapeGlitch'
   | 'vstPlugin';
 
 export interface BasePedalConfig {
@@ -249,6 +253,50 @@ export interface VocalAlienPedal extends BasePedalConfig {
   mix: number; // 0 - 100
 }
 
+export interface GranularCloudPedal extends BasePedalConfig {
+  type: 'granularCloud';
+  grainSize: number; // 20 - 400 ms
+  density: number; // 2 - 40 grains/sec
+  pitch: number; // -12 to +12 semitones
+  spray: number; // 0 - 100% (random position jitter)
+  feedback: number; // 0 - 95%
+  shimmer: boolean; // Octave-up shimmer in cloud feedback
+  mix: number; // 0 - 100%
+}
+
+export interface ArcadeSynthPedal extends BasePedalConfig {
+  type: 'arcadeSynth';
+  subOctave: '-2' | '-1' | 'off' | '+1' | '+2';
+  crushBits: number; // 2 - 16 bits
+  sampleRateDec: number; // 800 - 22050 Hz
+  arpeggiator: 'off' | 'major3rd' | 'octave' | 'fifth' | 'cyberpunk';
+  arpRate: number; // 1 - 16 Hz
+  glide: number; // 0 - 100% portamento slew
+  mix: number; // 0 - 100%
+}
+
+export interface SpectralFreezePedal extends BasePedalConfig {
+  type: 'spectralFreeze';
+  mode: 'latch' | 'momentary';
+  frozen: boolean; // freeze capture active
+  riseTime: number; // 20 - 1500 ms swell
+  decayTime: number; // 100 - 4000 ms tail
+  shimmer: number; // 0 - 100% shimmer octave layer
+  damping: number; // 0 - 100% warm analog damping
+  mix: number; // 0 - 100%
+}
+
+export interface TapeGlitchPedal extends BasePedalConfig {
+  type: 'tapeGlitch';
+  direction: 'forward' | 'reverse' | 'alternating';
+  sliceLength: number; // 60 - 1200 ms
+  pitch: number; // -12 to +12 semitones
+  randomGlitch: number; // 0 - 100% jump/repeat probability
+  wowFlutter: number; // 0 - 100% tape wobble
+  feedback: number; // 0 - 90%
+  mix: number; // 0 - 100%
+}
+
 export interface VstPluginPedal extends BasePedalConfig {
   type: 'vstPlugin';
   pluginId: string;
@@ -290,6 +338,10 @@ export type AnyPedal =
   | VocalPreampPedal
   | VocalStutterPedal
   | VocalAlienPedal
+  | GranularCloudPedal
+  | ArcadeSynthPedal
+  | SpectralFreezePedal
+  | TapeGlitchPedal
   | VstPluginPedal;
 
 export type AmpArchitectureType =

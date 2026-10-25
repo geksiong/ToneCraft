@@ -25,6 +25,10 @@ import {
   VocalPreampPedal,
   VocalStutterPedal,
   VocalAlienPedal,
+  GranularCloudPedal,
+  ArcadeSynthPedal,
+  SpectralFreezePedal,
+  TapeGlitchPedal,
   VstPluginPedal
 } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
@@ -1585,6 +1589,390 @@ function renderPedalControls(
           )}
           <div className="text-center text-[7.5px] font-mono text-teal-300/80 tracking-widest uppercase">
             🛸 DALEK & CYBORG RING MODULATOR
+          </div>
+        </div>
+      );
+    }
+
+    case 'granularCloud': {
+      const p = pedal as GranularCloudPedal;
+      return (
+        <div className="space-y-2">
+          {/* Top Knobs: Pitch, Size, Density */}
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Pitch"
+              value={p.pitch}
+              min={-12}
+              max={12}
+              unit="st"
+              midiBadge={getKnobBadge('pitch')}
+              onChange={(v) => onUpdate({ ...p, pitch: v })}
+            />
+            <RotaryKnob
+              label="Grain Size"
+              value={p.grainSize}
+              min={20}
+              max={400}
+              unit="ms"
+              midiBadge={getKnobBadge('grainSize')}
+              onChange={(v) => onUpdate({ ...p, grainSize: v })}
+            />
+            <RotaryKnob
+              label="Density"
+              value={p.density}
+              min={2}
+              max={40}
+              unit="gr/s"
+              midiBadge={getKnobBadge('density')}
+              onChange={(v) => onUpdate({ ...p, density: v })}
+            />
+          </div>
+
+          {/* Middle Knobs: Spray, Feedback, Mix */}
+          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Spray"
+              value={p.spray}
+              unit="%"
+              midiBadge={getKnobBadge('spray')}
+              onChange={(v) => onUpdate({ ...p, spray: v })}
+            />
+            <RotaryKnob
+              label="Feedback"
+              value={p.feedback}
+              max={95}
+              unit="%"
+              midiBadge={getKnobBadge('feedback')}
+              onChange={(v) => onUpdate({ ...p, feedback: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {/* Shimmer Toggle Button */}
+          <div className="pt-1 border-t border-white/10">
+            <button
+              onClick={() => onUpdate({ ...p, shimmer: !p.shimmer })}
+              className={`w-full py-1 rounded text-[8.5px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 ${
+                p.shimmer
+                  ? 'bg-amber-500 text-black shadow-amber-900/50 shadow ring-1 ring-amber-300'
+                  : 'bg-black/40 text-white/60 hover:text-white border border-white/10'
+              }`}
+            >
+              <span>{p.shimmer ? '✨' : '☁️'}</span>
+              <span>{p.shimmer ? 'OCTAVE SHIMMER BLOOM ACTIVE' : 'OCTAVE SHIMMER (OFF)'}</span>
+            </button>
+          </div>
+
+          {p.mix >= 99 && (
+            <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
+              ✓ 100% WET • DRY GUITAR IS MUTED
+            </div>
+          )}
+          <div className="text-center text-[7.5px] font-mono text-purple-300/80 tracking-widest uppercase">
+            🌌 MICRO-LOOP GRANULAR CLOUD
+          </div>
+        </div>
+      );
+    }
+
+    case 'arcadeSynth': {
+      const p = pedal as ArcadeSynthPedal;
+      const subOctaves: Array<ArcadeSynthPedal['subOctave']> = ['-2', '-1', 'off', '+1', '+2'];
+      const arpModes: Array<ArcadeSynthPedal['arpeggiator']> = ['off', 'major3rd', 'octave', 'fifth', 'cyberpunk'];
+
+      return (
+        <div className="space-y-2">
+          {/* Sub Octave Selector */}
+          <div>
+            <div className="text-[7.5px] font-mono uppercase text-white/60 mb-0.5 text-center">
+              PLL Sub-Octave Divider
+            </div>
+            <div className="flex justify-between gap-1 bg-black/40 p-1 rounded border border-white/10">
+              {subOctaves.map((oct) => (
+                <button
+                  key={oct}
+                  onClick={() => onUpdate({ ...p, subOctave: oct })}
+                  className={`flex-1 py-0.5 rounded text-[8px] font-mono uppercase transition-colors ${
+                    p.subOctave === oct
+                      ? 'bg-yellow-400 text-black font-bold shadow-sm'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  {oct === 'off' ? 'DIR' : `${oct} OCT`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Arp Pattern Selector */}
+          <div>
+            <div className="text-[7.5px] font-mono uppercase text-white/60 mb-0.5 text-center">
+              Interval Arpeggiator
+            </div>
+            <div className="flex justify-between gap-1 bg-black/40 p-1 rounded border border-white/10">
+              {arpModes.map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => onUpdate({ ...p, arpeggiator: mode })}
+                  className={`flex-1 py-0.5 rounded text-[7.5px] font-mono uppercase transition-colors ${
+                    p.arpeggiator === mode
+                      ? 'bg-rose-500 text-white font-bold shadow-sm'
+                      : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  {mode === 'off' ? 'OFF' : mode === 'major3rd' ? '3RD' : mode === 'fifth' ? '5TH' : mode === 'octave' ? 'OCT' : 'CYBER'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Bitcrush & Decimation Knobs */}
+          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Bit Depth"
+              value={p.crushBits}
+              min={2}
+              max={16}
+              unit="bit"
+              midiBadge={getKnobBadge('crushBits')}
+              onChange={(v) => onUpdate({ ...p, crushBits: v })}
+            />
+            <RotaryKnob
+              label="Sample Rate"
+              value={p.sampleRateDec}
+              min={800}
+              max={22050}
+              unit="Hz"
+              midiBadge={getKnobBadge('sampleRateDec')}
+              onChange={(v) => onUpdate({ ...p, sampleRateDec: v })}
+            />
+            <RotaryKnob
+              label="Arp Rate"
+              value={p.arpRate}
+              min={1}
+              max={16}
+              unit="Hz"
+              midiBadge={getKnobBadge('arpRate')}
+              onChange={(v) => onUpdate({ ...p, arpRate: v })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Portamento Glide"
+              value={p.glide}
+              unit="%"
+              midiBadge={getKnobBadge('glide')}
+              onChange={(v) => onUpdate({ ...p, glide: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {p.mix >= 99 && (
+            <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
+              ✓ 100% WET • DRY GUITAR IS MUTED
+            </div>
+          )}
+          <div className="text-center text-[7.5px] font-mono text-amber-300/80 tracking-widest uppercase">
+            🕹️ 8-BIT PLL ARCADE SYNTH
+          </div>
+        </div>
+      );
+    }
+
+    case 'spectralFreeze': {
+      const p = pedal as SpectralFreezePedal;
+      return (
+        <div className="space-y-2">
+          {/* Mode Switch & Footswitch Trigger */}
+          <div className="flex items-center justify-between gap-1">
+            <button
+              onClick={() => onUpdate({ ...p, mode: p.mode === 'latch' ? 'momentary' : 'latch' })}
+              className="flex-1 py-1 rounded bg-black/40 text-[8px] font-mono uppercase border border-white/10 text-white/70 hover:text-white"
+            >
+              MODE: <span className="text-cyan-400 font-bold">{p.mode.toUpperCase()}</span>
+            </button>
+          </div>
+
+          {/* Interactive Freeze Footswitch Button */}
+          <button
+            onMouseDown={() => {
+              if (p.mode === 'momentary') {
+                onUpdate({ ...p, frozen: true });
+              } else {
+                onUpdate({ ...p, frozen: !p.frozen });
+              }
+            }}
+            onMouseUp={() => {
+              if (p.mode === 'momentary') {
+                onUpdate({ ...p, frozen: false });
+              }
+            }}
+            onMouseLeave={() => {
+              if (p.mode === 'momentary' && p.frozen) {
+                onUpdate({ ...p, frozen: false });
+              }
+            }}
+            className={`w-full py-2.5 rounded-xl font-mono text-[10px] font-bold tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 border ${
+              p.frozen
+                ? 'bg-cyan-500 text-black border-cyan-300 shadow-cyan-500/40 ring-2 ring-cyan-400/80 animate-pulse'
+                : 'bg-neutral-800/80 text-cyan-300 hover:bg-neutral-800 border-cyan-800/50 hover:border-cyan-600'
+            }`}
+          >
+            <div className={`w-2.5 h-2.5 rounded-full ${p.frozen ? 'bg-black' : 'bg-cyan-400 animate-ping'}`} />
+            <span>{p.frozen ? '❄️ SUSTAIN DRONE FROZEN' : 'TAP / HOLD TO FREEZE'}</span>
+          </button>
+
+          {/* Knobs */}
+          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Rise Swell"
+              value={p.riseTime}
+              min={20}
+              max={1500}
+              unit="ms"
+              midiBadge={getKnobBadge('riseTime')}
+              onChange={(v) => onUpdate({ ...p, riseTime: v })}
+            />
+            <RotaryKnob
+              label="Decay Tail"
+              value={p.decayTime}
+              min={100}
+              max={4000}
+              unit="ms"
+              midiBadge={getKnobBadge('decayTime')}
+              onChange={(v) => onUpdate({ ...p, decayTime: v })}
+            />
+            <RotaryKnob
+              label="Shimmer"
+              value={p.shimmer}
+              unit="%"
+              midiBadge={getKnobBadge('shimmer')}
+              onChange={(v) => onUpdate({ ...p, shimmer: v })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Analog Damping"
+              value={p.damping}
+              unit="%"
+              midiBadge={getKnobBadge('damping')}
+              onChange={(v) => onUpdate({ ...p, damping: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-cyan-300/80 tracking-widest uppercase">
+            ❄️ INFINITE DRONE SUSTAINER & FREEZE
+          </div>
+        </div>
+      );
+    }
+
+    case 'tapeGlitch': {
+      const p = pedal as TapeGlitchPedal;
+      const dirs: Array<TapeGlitchPedal['direction']> = ['reverse', 'forward', 'alternating'];
+
+      return (
+        <div className="space-y-2">
+          {/* Direction Selector */}
+          <div className="flex justify-between gap-1 bg-black/40 p-1 rounded border border-white/10">
+            {dirs.map((dir) => (
+              <button
+                key={dir}
+                onClick={() => onUpdate({ ...p, direction: dir })}
+                className={`flex-1 py-0.5 rounded text-[8px] font-mono uppercase transition-colors ${
+                  p.direction === dir
+                    ? 'bg-amber-400 text-black font-bold shadow-sm'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                {dir === 'reverse' ? '⏪ REV' : dir === 'forward' ? '⏩ FWD' : '🔀 ALT'}
+              </button>
+            ))}
+          </div>
+
+          {/* Knobs: Pitch, Slice, Glitch */}
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Tape Pitch"
+              value={p.pitch}
+              min={-12}
+              max={12}
+              unit="st"
+              midiBadge={getKnobBadge('pitch')}
+              onChange={(v) => onUpdate({ ...p, pitch: v })}
+            />
+            <RotaryKnob
+              label="Slice Size"
+              value={p.sliceLength}
+              min={60}
+              max={1200}
+              unit="ms"
+              midiBadge={getKnobBadge('sliceLength')}
+              onChange={(v) => onUpdate({ ...p, sliceLength: v })}
+            />
+            <RotaryKnob
+              label="Glitch Jump"
+              value={p.randomGlitch}
+              unit="%"
+              midiBadge={getKnobBadge('randomGlitch')}
+              onChange={(v) => onUpdate({ ...p, randomGlitch: v })}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Wow/Flutter"
+              value={p.wowFlutter}
+              unit="%"
+              midiBadge={getKnobBadge('wowFlutter')}
+              onChange={(v) => onUpdate({ ...p, wowFlutter: v })}
+            />
+            <RotaryKnob
+              label="Feedback"
+              value={p.feedback}
+              max={90}
+              unit="%"
+              midiBadge={getKnobBadge('feedback')}
+              onChange={(v) => onUpdate({ ...p, feedback: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {p.mix >= 99 && (
+            <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
+              ✓ 100% WET • DRY GUITAR IS MUTED
+            </div>
+          )}
+          <div className="text-center text-[7.5px] font-mono text-amber-300/80 tracking-widest uppercase">
+            📼 TAPE GLITCH & REVERSE SWELL
           </div>
         </div>
       );

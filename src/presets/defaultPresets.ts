@@ -4,6 +4,198 @@ import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 
 export const INITIAL_PRESETS: Preset[] = [
   {
+    id: 'guitar-shoegaze-granular-cloud',
+    name: 'Shoegaze Granular Dreamscape',
+    author: 'ToneCraft Ambient Labs',
+    instrument: 'guitar',
+    genre: 'Shoegaze',
+    description: 'Lush atmospheric dreamscape: Reverse Tape Glitch -> Granular Dream Cloud Shimmer -> Celestial Hall Reverb.',
+    tags: ['Granular', 'Shoegaze', 'Ambient', 'Tape', 'Boutique'],
+    bpm: 96,
+    likes: 820,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      gain: 3.5,
+      bass: 6.0,
+      mid: 5.5,
+      treble: 7.0,
+      presence: 6.5
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-tape-glitch-1',
+        type: 'tapeGlitch',
+        name: 'Tape Glitch / Rev',
+        enabled: true,
+        color: '#d97706',
+        direction: 'reverse',
+        sliceLength: 420,
+        pitch: 0,
+        randomGlitch: 25,
+        wowFlutter: 45,
+        feedback: 35,
+        mix: 55
+      },
+      {
+        id: 'pedal-granular-cloud-1',
+        type: 'granularCloud',
+        name: 'Granular Dream Cloud',
+        enabled: true,
+        color: '#7c3aed',
+        grainSize: 160,
+        density: 18,
+        pitch: 0,
+        spray: 45,
+        feedback: 55,
+        shimmer: true,
+        mix: 65
+      },
+      {
+        id: 'pedal-reverb-shoegaze-1',
+        type: 'reverb',
+        name: 'Celestial Reverb',
+        enabled: true,
+        color: '#4338ca',
+        decay: 75,
+        preDelay: 25,
+        damping: 30,
+        shimmer: false,
+        roomType: 'hall',
+        mix: 45
+      }
+    ]
+  },
+  {
+    id: 'guitar-cyberpunk-arcade-synth',
+    name: 'Cyberpunk 8-Bit PLL Synth',
+    author: 'ToneCraft Glitch Works',
+    instrument: 'guitar',
+    genre: 'Rock',
+    description: 'Boutique glitch PLL guitar synth: 8-Bit Arcade PLL Synth with octave arpeggiation -> Rodent Hard Clipping -> Glitch Tape Warper.',
+    tags: ['Synth', '8-Bit', 'PLL', 'Arpeggiator', 'Cyberpunk', 'Fuzz'],
+    bpm: 128,
+    likes: 672,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[1] || BUILT_IN_AMP_MODELS[0],
+      gain: 5.0,
+      bass: 7.0,
+      mid: 6.0,
+      treble: 6.5
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-arcade-synth-1',
+        type: 'arcadeSynth',
+        name: '8-Bit Arcade PLL',
+        enabled: true,
+        color: '#e11d48',
+        subOctave: '-1',
+        crushBits: 8,
+        sampleRateDec: 7200,
+        arpeggiator: 'octave',
+        arpRate: 8,
+        glide: 30,
+        mix: 80
+      },
+      {
+        id: 'pedal-dist-arcade-1',
+        type: 'distortion',
+        name: 'Rodent Distortion',
+        enabled: true,
+        color: '#ea580c',
+        gain: 60,
+        filter: 40,
+        volume: 70
+      },
+      {
+        id: 'pedal-tape-arcade-1',
+        type: 'tapeGlitch',
+        name: 'Glitch Warper',
+        enabled: true,
+        color: '#d97706',
+        direction: 'alternating',
+        sliceLength: 220,
+        pitch: 0,
+        randomGlitch: 50,
+        wowFlutter: 25,
+        feedback: 20,
+        mix: 40
+      }
+    ]
+  },
+  {
+    id: 'guitar-infinite-spectral-drone',
+    name: 'Ambient Infinite Spectral Drone',
+    author: 'ToneCraft Soundscape',
+    instrument: 'guitar',
+    genre: 'Ambient',
+    description: 'Infinite drone sustainer: Spectral Freeze with shimmer bloom -> Granular Cloud -> Modulated Tape Echo.',
+    tags: ['Freeze', 'Drone', 'Sustain', 'Ambient', 'Shimmer', 'Pad'],
+    bpm: 80,
+    likes: 915,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      gain: 2.0,
+      bass: 6.5,
+      mid: 5.0,
+      treble: 7.0
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-freeze-drone-1',
+        type: 'spectralFreeze',
+        name: 'Spectral Infinite Freeze',
+        enabled: true,
+        color: '#0891b2',
+        mode: 'latch',
+        frozen: false,
+        riseTime: 120,
+        decayTime: 2200,
+        shimmer: 50,
+        damping: 40,
+        mix: 75
+      },
+      {
+        id: 'pedal-cloud-drone-1',
+        type: 'granularCloud',
+        name: 'Granular Shimmer',
+        enabled: true,
+        color: '#7c3aed',
+        grainSize: 220,
+        density: 12,
+        pitch: 12,
+        spray: 50,
+        feedback: 50,
+        shimmer: true,
+        mix: 50
+      },
+      {
+        id: 'pedal-delay-drone-1',
+        type: 'delay',
+        name: 'Tape Echo',
+        enabled: true,
+        color: '#0284c7',
+        time: 480,
+        feedback: 55,
+        flutter: 30,
+        pingPong: false,
+        mix: 40
+      }
+    ]
+  },
+  {
     id: 'vocal-studio-pop',
     name: 'Studio Modern Lead Vocal',
     author: 'ToneCraft Vocal Lab',

@@ -60,6 +60,10 @@ import {
   VocalPreampPedal,
   VocalStutterPedal,
   VocalAlienPedal,
+  GranularCloudPedal,
+  ArcadeSynthPedal,
+  SpectralFreezePedal,
+  TapeGlitchPedal,
   VstPluginPedal
 } from '../types/pedal';
 import {
@@ -498,6 +502,26 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
 
     case 'vocalAlien': {
       dspNodes = createVocalAlienDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'granularCloud': {
+      dspNodes = createGranularCloudDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'arcadeSynth': {
+      dspNodes = createArcadeSynthDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'spectralFreeze': {
+      dspNodes = createSpectralFreezeDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'tapeGlitch': {
+      dspNodes = createTapeGlitchDsp(ctx, input, wetGain);
       break;
     }
   }
@@ -1181,6 +1205,30 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
 
     case 'vocalAlien': {
       const p = pedal as VocalAlienPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'granularCloud': {
+      const p = pedal as GranularCloudPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'arcadeSynth': {
+      const p = pedal as ArcadeSynthPedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'spectralFreeze': {
+      const p = pedal as SpectralFreezePedal;
+      if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'tapeGlitch': {
+      const p = pedal as TapeGlitchPedal;
       if (nodes.updateParams) nodes.updateParams(p);
       break;
     }
@@ -2751,6 +2799,641 @@ function createVocalAlienDsp(ctx: AudioContext, input: GainNode, output: GainNod
         now,
         0.02
       );
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * Boutique Granular Cloud Generator & Pitch Shimmer DSP Engine.
+ * Inspired by Chase Bliss MOOD & Hologram Microcosm.
+ * Generates continuous micro-grains with Hann-windowed overlap-add,
+ * position spray jitter, pitch transpositions (-12 to +12 semitones),
+ * and regenerative octave-up shimmer feedback.
+ */
+function createGranularCloudDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferSize = 512;
+  const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  // Circular delay ring buffer (65536 samples ~1.36s at 48kHz)
+  const ringSize = 65536;
+  const ringMask = ringSize - 1;
+  const ring = new Float32Array(ringSize);
+  let writeIdx = 0;
+
+  // Granular synthesis parameters
+  let grainSizeMs = 120;
+  let density = 15; // grains / sec
+  let pitchSemitones = 0;
+  let sprayPercent = 35;
+  let feedback = 40; // 0 - 95%
+  let shimmer = false;
+
+  interface Grain {
+    active: boolean;
+    readPos: number;
+    speed: number;
+    length: number;
+    age: number;
+    amplitude: number;
+  }
+
+  const MAX_GRAINS = 12;
+  const grains: Grain[] = [];
+  for (let i = 0; i < MAX_GRAINS; i++) {
+    grains.push({
+      active: false,
+      readPos: 0,
+      speed: 1.0,
+      length: 1000,
+      age: 0,
+      amplitude: 1.0
+    });
+  }
+
+  let samplesUntilNextGrain = 0;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      const fbFrac = Math.min(0.92, feedback / 100);
+      const grainLenSamples = Math.max(128, Math.floor((grainSizeMs / 1000) * sampleRate));
+      const grainIntervalSamples = Math.max(64, Math.floor(sampleRate / Math.max(1, density)));
+      const baseSpeed = Math.pow(2, pitchSemitones / 12);
+      const spraySamples = Math.floor((sprayPercent / 100) * ringSize * 0.7);
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+
+        // Grain spawning scheduler
+        samplesUntilNextGrain--;
+        if (samplesUntilNextGrain <= 0) {
+          samplesUntilNextGrain = grainIntervalSamples + Math.floor((Math.random() - 0.5) * grainIntervalSamples * 0.4);
+
+          // Find inactive grain slot
+          let slot = grains.find(g => !g.active);
+          if (!slot) {
+            slot = grains.reduce((oldest, g) => (g.age > oldest.age ? g : oldest), grains[0]);
+          }
+
+          if (slot) {
+            slot.active = true;
+            slot.age = 0;
+            slot.length = grainLenSamples;
+            const randomOffset = Math.floor(Math.random() * Math.max(1, spraySamples));
+            slot.readPos = (writeIdx - randomOffset - 128 + ringSize) & ringMask;
+            const isShimmerGrain = shimmer && Math.random() > 0.4;
+            slot.speed = isShimmerGrain ? baseSpeed * 2.0 : baseSpeed;
+            slot.amplitude = 1.0 / Math.sqrt(Math.max(1, density * 0.35));
+          }
+        }
+
+        // Accumulate active grains
+        let grainSum = 0;
+        for (let g = 0; g < MAX_GRAINS; g++) {
+          const grain = grains[g];
+          if (!grain.active) continue;
+
+          // Hann window calculation for click-free grain crossfade
+          const winFrac = grain.age / grain.length;
+          const windowVal = 0.5 * (1.0 - Math.cos(2.0 * Math.PI * winFrac));
+
+          // Linear interpolated read from circular buffer
+          const i0 = Math.floor(grain.readPos) & ringMask;
+          const i1 = (i0 + 1) & ringMask;
+          const frac = grain.readPos - Math.floor(grain.readPos);
+          const s0 = ring[i0];
+          const s1 = ring[i1];
+          const interpSample = s0 + frac * (s1 - s0);
+
+          grainSum += interpSample * windowVal * grain.amplitude;
+
+          grain.readPos = (grain.readPos + grain.speed + ringSize) % ringSize;
+          grain.age++;
+          if (grain.age >= grain.length) {
+            grain.active = false;
+          }
+        }
+
+        const wetOut = Math.tanh(grainSum * 1.2);
+        outCh[i] = wetOut;
+
+        ring[writeIdx] = inSample + wetOut * fbFrac;
+        writeIdx = (writeIdx + 1) & ringMask;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: GranularCloudPedal) => {
+      const now = ctx.currentTime;
+      grainSizeMs = Math.max(20, Math.min(400, p.grainSize));
+      density = Math.max(2, Math.min(40, p.density));
+      pitchSemitones = Math.max(-12, Math.min(12, p.pitch));
+      sprayPercent = Math.max(0, Math.min(100, p.spray));
+      feedback = Math.max(0, Math.min(95, p.feedback));
+      shimmer = !!p.shimmer;
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 8-Bit Arcade Synth & PLL Sub-Harmonic Arpeggiator DSP Engine.
+ * Inspired by EarthQuaker Devices Data Corrupter & Meris Ottobit Jr.
+ * Features fast zero-crossing pitch tracking, PLL square/saw oscillator,
+ * sub-octave divider/multiplier, stepped interval arpeggiation, bitcrushing,
+ * and sample-rate decimation.
+ */
+function createArcadeSynthDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferSize = 512;
+  const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  let subOctave: ArcadeSynthPedal['subOctave'] = 'off';
+  let crushBits = 8;
+  let sampleRateDec = 8000;
+  let arpeggiator: ArcadeSynthPedal['arpeggiator'] = 'off';
+  let arpRate = 6.0;
+  let glide = 30;
+
+  let lastInSample = 0;
+  let periodCounter = 0;
+  let trackedPeriod = 440;
+  let smoothedPeriod = 440;
+  let synthPhase = 0;
+  let arpStep = 0;
+  let arpTimer = 0;
+
+  let decimateCounter = 0;
+  let heldSample = 0;
+  let inputEnvelope = 0;
+
+  const arpPatterns: Record<string, number[]> = {
+    off: [1.0],
+    major3rd: [1.0, 1.2599, 1.4983],
+    octave: [1.0, 2.0, 4.0, 2.0],
+    fifth: [1.0, 1.4983, 2.0],
+    cyberpunk: [1.0, 1.1892, 1.4142, 1.6818, 2.0]
+  };
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      const decFactor = Math.max(1, Math.floor(sampleRate / Math.max(500, sampleRateDec)));
+      const steps = Math.pow(2, Math.max(2, Math.min(16, crushBits)));
+      const stepInterval = Math.max(32, Math.floor(sampleRate / Math.max(0.5, arpRate)));
+      const pattern = arpPatterns[arpeggiator] || arpPatterns.off;
+      const glideFactor = 0.05 + ((100 - glide) / 100) * 0.45;
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+        const absVal = Math.abs(inSample);
+
+        if (absVal > inputEnvelope) {
+          inputEnvelope += (absVal - inputEnvelope) * 0.3;
+        } else {
+          inputEnvelope += (absVal - inputEnvelope) * 0.005;
+        }
+
+        periodCounter++;
+        if (lastInSample <= 0 && inSample > 0.015 && periodCounter > 20) {
+          trackedPeriod = periodCounter;
+          periodCounter = 0;
+        }
+        lastInSample = inSample;
+
+        smoothedPeriod += (trackedPeriod - smoothedPeriod) * glideFactor;
+
+        if (inputEnvelope < 0.003) {
+          outCh[i] = 0;
+          continue;
+        }
+
+        arpTimer++;
+        if (arpTimer >= stepInterval) {
+          arpTimer = 0;
+          arpStep = (arpStep + 1) % pattern.length;
+        }
+        const arpMultiplier = pattern[arpStep] || 1.0;
+
+        let octaveRatio = 1.0;
+        if (subOctave === '-2') octaveRatio = 0.25;
+        else if (subOctave === '-1') octaveRatio = 0.5;
+        else if (subOctave === '+1') octaveRatio = 2.0;
+        else if (subOctave === '+2') octaveRatio = 4.0;
+
+        const fundamentalFreq = sampleRate / Math.max(30, Math.min(4000, smoothedPeriod));
+        const effectiveFreq = fundamentalFreq * octaveRatio * arpMultiplier;
+        const phaseInc = Math.min(0.48, effectiveFreq / sampleRate);
+
+        synthPhase = (synthPhase + phaseInc) % 1.0;
+
+        const rawPulse = synthPhase < 0.35 ? 0.8 : -0.8;
+        const subPulse = (synthPhase * 2.0) % 1.0 < 0.5 ? 0.4 : -0.4;
+        const synthSignal = rawPulse * 0.7 + subPulse * 0.3;
+
+        decimateCounter++;
+        if (decimateCounter >= decFactor) {
+          decimateCounter = 0;
+          heldSample = Math.round(synthSignal * steps) / steps;
+        }
+
+        const shaped = Math.tanh(heldSample * 1.5) * Math.min(1.2, inputEnvelope * 3.5);
+        outCh[i] = shaped;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: ArcadeSynthPedal) => {
+      const now = ctx.currentTime;
+      subOctave = p.subOctave || 'off';
+      crushBits = Math.max(2, Math.min(16, p.crushBits));
+      sampleRateDec = Math.max(800, Math.min(22050, p.sampleRateDec));
+      arpeggiator = p.arpeggiator || 'off';
+      arpRate = Math.max(1, Math.min(16, p.arpRate));
+      glide = Math.max(0, Math.min(100, p.glide));
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * Spectral Freeze & Infinite Drone Sustainer DSP Engine.
+ * Inspired by Electro-Harmonix Freeze & PLUS Pedal.
+ * Captures guitar sustain into a seamless dual-overlapping circular buffer
+ * with anti-click raised cosine crossfades, warm analog damping,
+ * and ethereal octave shimmer layer.
+ */
+function createSpectralFreezeDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferSize = 512;
+  const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  const freezeSize = 16384;
+  const freezeMask = freezeSize - 1;
+  const freezeBuffer = new Float32Array(freezeSize);
+  let writeIdx = 0;
+
+  let isFrozen = false;
+  let riseTimeMs = 80;
+  let decayTimeMs = 1200;
+  let shimmerPercent = 30;
+  let dampingPercent = 40;
+
+  let headA = 0;
+  let headB = freezeSize / 2;
+  let shimmerHead = 0;
+  let currentDroneLevel = 0.0;
+  let targetDroneLevel = 0.0;
+  let dampedSample = 0.0;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      targetDroneLevel = isFrozen ? 1.0 : 0.0;
+      const riseStep = 1.0 / Math.max(16, (riseTimeMs / 1000) * sampleRate);
+      const decayStep = 1.0 / Math.max(32, (decayTimeMs / 1000) * sampleRate);
+      const shimmerFrac = (shimmerPercent / 100) * 0.65;
+      const dampingAlpha = 0.15 + ((100 - dampingPercent) / 100) * 0.75;
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+
+        if (!isFrozen) {
+          freezeBuffer[writeIdx] = inSample;
+          writeIdx = (writeIdx + 1) & freezeMask;
+        }
+
+        if (currentDroneLevel < targetDroneLevel) {
+          currentDroneLevel = Math.min(targetDroneLevel, currentDroneLevel + riseStep);
+        } else if (currentDroneLevel > targetDroneLevel) {
+          currentDroneLevel = Math.max(targetDroneLevel, currentDroneLevel - decayStep);
+        }
+
+        if (currentDroneLevel < 0.0001) {
+          outCh[i] = 0;
+          continue;
+        }
+
+        const posA = Math.floor(headA) & freezeMask;
+        const posB = Math.floor(headB) & freezeMask;
+
+        const cycleFracA = (headA % freezeSize) / freezeSize;
+        const winA = 0.5 * (1.0 - Math.cos(2.0 * Math.PI * cycleFracA));
+        const winB = 1.0 - winA;
+
+        const sampleA = freezeBuffer[posA];
+        const sampleB = freezeBuffer[posB];
+        let droneSample = sampleA * winA + sampleB * winB;
+
+        if (shimmerFrac > 0.01) {
+          const shimPos = Math.floor(shimmerHead) & freezeMask;
+          const shimVal = freezeBuffer[shimPos];
+          droneSample = droneSample * (1.0 - shimmerFrac * 0.4) + shimVal * shimmerFrac;
+          shimmerHead = (shimmerHead + 2.003) % freezeSize;
+        }
+
+        dampedSample += dampingAlpha * (droneSample - dampedSample);
+
+        headA = (headA + 1.0) % freezeSize;
+        headB = (headB + 1.0) % freezeSize;
+
+        outCh[i] = Math.tanh(dampedSample * 1.3) * currentDroneLevel;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: SpectralFreezePedal) => {
+      const now = ctx.currentTime;
+      isFrozen = !!p.frozen;
+      riseTimeMs = Math.max(20, Math.min(1500, p.riseTime));
+      decayTimeMs = Math.max(100, Math.min(4000, p.decayTime));
+      shimmerPercent = Math.max(0, Math.min(100, p.shimmer));
+      dampingPercent = Math.max(0, Math.min(100, p.damping));
+
+      const mix = Math.max(0, Math.min(1, p.mix / 100));
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+          (window as any).__activeAudioProcessors.delete(processor);
+        }
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * Tape Glitch, Reverse Swell & Time-Warp DSP Engine.
+ * Inspired by Red Panda Tensor & Montreal Assembly Count to 5.
+ * Features rolling tape delay buffer, forward/reverse/alternating playback slice,
+ * varispeed pitch transpositions (-12 to +12 semitones), random tape jumps/repeats,
+ * and vintage wow & flutter motor fluctuations.
+ */
+function createTapeGlitchDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const sampleRate = ctx.sampleRate || 48000;
+  const bufferSize = 512;
+  const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(processor);
+  processor.connect(wetGain);
+  wetGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  const tapeSize = 65536;
+  const tapeMask = tapeSize - 1;
+  const tape = new Float32Array(tapeSize);
+  let writeIdx = 0;
+
+  let direction: TapeGlitchPedal['direction'] = 'reverse';
+  let sliceLengthMs = 350;
+  let pitchSemitones = 0;
+  let randomGlitch = 35;
+  let wowFlutter = 30;
+  let feedback = 35;
+
+  let readPos = 0;
+  let sliceAge = 0;
+  let currentSliceSamples = 16000;
+  let currentDirectionSign = -1.0;
+  let stutterRepeatRemaining = 0;
+  let stutterStartReadPos = 0;
+
+  let wowPhase = 0;
+  let flutterPhase = 0;
+
+  processor.onaudioprocess = (e: AudioProcessingEvent) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      const len = inCh.length;
+
+      const fbFrac = Math.min(0.90, feedback / 100);
+      const basePitchSpeed = Math.pow(2, pitchSemitones / 12);
+      const baseSliceSamples = Math.max(512, Math.floor((sliceLengthMs / 1000) * sampleRate));
+      const glitchChance = randomGlitch / 100;
+      const wowDepth = (wowFlutter / 100) * 0.035;
+
+      for (let i = 0; i < len; i++) {
+        const inSample = inCh[i];
+
+        wowPhase = (wowPhase + 0.8 / sampleRate) % 1.0;
+        flutterPhase = (flutterPhase + 6.2 / sampleRate) % 1.0;
+        const wowMod = 1.0 + Math.sin(2 * Math.PI * wowPhase) * wowDepth + Math.sin(2 * Math.PI * flutterPhase) * (wowDepth * 0.35);
+
+        sliceAge++;
+        if (sliceAge >= currentSliceSamples) {
+          sliceAge = 0;
+          currentSliceSamples = baseSliceSamples;
+
+          if (Math.random() < glitchChance && stutterRepeatRemaining === 0) {
+            stutterRepeatRemaining = Math.floor(Math.random() * 3) + 1;
+            readPos = stutterStartReadPos;
+          } else if (stutterRepeatRemaining > 0) {
+            stutterRepeatRemaining--;
+            readPos = stutterStartReadPos;
+          } else {
+            if (direction === 'forward') {
+              currentDirectionSign = 1.0;
+            } else if (direction === 'reverse') {
+              currentDirectionSign = -1.0;
+            } else {
+              currentDirectionSign = currentDirectionSign > 0 ? -1.0 : 1.0;
+            }
+
+            const jumpOffset = Math.random() < glitchChance * 0.7
+              ? Math.floor(Math.random() * (tapeSize * 0.6))
+              : Math.floor(baseSliceSamples * 0.8);
+
+            readPos = (writeIdx - jumpOffset - 256 + tapeSize) & tapeMask;
+            stutterStartReadPos = readPos;
+          }
+        }
+
+        const fadeLen = Math.min(64, Math.floor(currentSliceSamples * 0.15));
+        let envelope = 1.0;
+        if (sliceAge < fadeLen) {
+          envelope = 0.5 * (1.0 - Math.cos(Math.PI * (sliceAge / fadeLen)));
+        } else if (sliceAge > currentSliceSamples - fadeLen) {
+          const remaining = currentSliceSamples - sliceAge;
+          envelope = 0.5 * (1.0 - Math.cos(Math.PI * (remaining / fadeLen)));
+        }
+
+        const r0 = Math.floor(readPos) & tapeMask;
+        const r1 = (r0 + 1) & tapeMask;
+        const frac = readPos - Math.floor(readPos);
+        const tapeSample = tape[r0] + frac * (tape[r1] - tape[r0]);
+
+        const wetSample = tapeSample * envelope;
+        const saturated = Math.tanh(wetSample * 1.25);
+        outCh[i] = saturated;
+
+        tape[writeIdx] = inSample + saturated * fbFrac;
+        writeIdx = (writeIdx + 1) & tapeMask;
+
+        const step = currentDirectionSign * basePitchSpeed * wowMod;
+        readPos = (readPos + step + tapeSize) % tapeSize;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    processor,
+    dryGain,
+    wetGain,
+    updateParams: (p: TapeGlitchPedal) => {
+      const now = ctx.currentTime;
+      direction = p.direction || 'reverse';
+      sliceLengthMs = Math.max(60, Math.min(1200, p.sliceLength));
+      pitchSemitones = Math.max(-12, Math.min(12, p.pitch));
+      randomGlitch = Math.max(0, Math.min(100, p.randomGlitch));
+      wowFlutter = Math.max(0, Math.min(100, p.wowFlutter));
+      feedback = Math.max(0, Math.min(90, p.feedback));
 
       const mix = Math.max(0, Math.min(1, p.mix / 100));
       dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
