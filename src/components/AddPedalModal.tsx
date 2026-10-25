@@ -1,6 +1,21 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PedalType, AnyPedal } from '../types/pedal';
-import { X, Plus, Sparkles, Sliders, Zap } from 'lucide-react';
+import {
+  X,
+  Plus,
+  Sparkles,
+  Sliders,
+  Zap,
+  Flame,
+  Waves,
+  Clock,
+  Music,
+  Mic,
+  Code,
+  Search,
+  Layers
+} from 'lucide-react';
+
 
 interface AddPedalModalProps {
   isOpen: boolean;
@@ -599,20 +614,131 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
   }
 ];
 
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  'Gain & Dirt': Flame,
+  'Tone & Dynamics': Sliders,
+  'Modulation': Waves,
+  'Time & Space': Clock,
+  'Pitch & Harmony': Music,
+  'Vocal & Speech': Mic,
+  'Experimental & Boutique': Sparkles,
+  'Custom VST': Code,
+};
+
 export const AddPedalModal: React.FC<AddPedalModalProps> = ({
   isOpen,
   onClose,
   onAddPedal
 }) => {
-  if (!isOpen) return null;
+  const [activeCategory, setActiveCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const isProgrammaticScrollRef = useRef<boolean>(false);
 
-  const categories = Array.from(new Set(PEDAL_TEMPLATES.map(p => p.category)));
+  const categories = useMemo(
+    () => Array.from(new Set(PEDAL_TEMPLATES.map(p => p.category))),
+    []
+  );
+
+  const getCategorySlug = (cat: string) => `pedal-cat-${cat.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchQuery('');
+      setActiveCategory('All');
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
+    }
+  }, [isOpen]);
+
+  const filteredPedals = useMemo(() => {
+    if (!searchQuery.trim()) return PEDAL_TEMPLATES;
+    const q = searchQuery.toLowerCase().trim();
+    return PEDAL_TEMPLATES.filter(
+      p =>
+        p.title.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.type.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
+
+  const visibleCategories = useMemo(() => {
+    return categories.filter(cat => filteredPedals.some(p => p.category === cat));
+  }, [categories, filteredPedals]);
+
+  const scrollToCategory = (cat: string) => {
+    setActiveCategory(cat);
+    isProgrammaticScrollRef.current = true;
+
+    if (cat === 'All') {
+      scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      const slug = getCategorySlug(cat);
+      const el = document.getElementById(slug);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 600);
+  };
+
+  // Scroll listener to update active tab based on visible category section
+  useEffect(() => {
+    if (!isOpen) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) return;
+      const containerTop = container.getBoundingClientRect().top;
+
+      if (container.scrollTop < 60) {
+        setActiveCategory('All');
+        return;
+      }
+
+      let currentCat = 'All';
+      for (const cat of visibleCategories) {
+        const slug = getCategorySlug(cat);
+        const el = document.getElementById(slug);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top - containerTop <= 110) {
+            currentCat = cat;
+          }
+        }
+      }
+      setActiveCategory(currentCat);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [isOpen, visibleCategories]);
+
+  // Keep active tab visible in the horizontal tab bar
+  useEffect(() => {
+    if (tabRefs.current[activeCategory]) {
+      tabRefs.current[activeCategory]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest'
+      });
+    }
+  }, [activeCategory]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150">
       <div className="relative w-full max-w-4xl max-h-[88vh] bg-neutral-900 border border-neutral-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 shrink-0">
           <div>
             <h3 className="text-base font-bold tracking-wider uppercase text-neutral-100 flex items-center gap-2">
               <Zap size={18} className="text-amber-400" />
@@ -624,66 +750,177 @@ export const AddPedalModal: React.FC<AddPedalModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+            title="Close modal"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
-          {categories.map(cat => {
-            const pedalsInCat = PEDAL_TEMPLATES.filter(p => p.category === cat);
-            return (
-              <div key={cat}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs font-bold tracking-wider font-mono uppercase text-amber-400">
-                    {cat}
+        {/* Pinned Category Tabs & Quick Search Navigation Bar */}
+        <div className="bg-neutral-950/80 border-b border-neutral-800 px-6 py-2.5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 shrink-0">
+          {/* Quick Search */}
+          <div className="relative w-full md:w-56 shrink-0">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search effects..."
+              className="w-full bg-neutral-900 border border-neutral-700/80 rounded-lg pl-8 pr-7 py-1.5 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/50 transition-all font-mono"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white p-0.5 rounded transition-colors cursor-pointer"
+                title="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Horizontal Category Navigation Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 scroll-smooth flex-1 min-w-0">
+            {/* All Categories Tab */}
+            <button
+              ref={(el) => { tabRefs.current['All'] = el; }}
+              onClick={() => scrollToCategory('All')}
+              className={`px-2.5 py-1.2 rounded-lg text-xs font-mono font-medium whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                activeCategory === 'All'
+                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-sm shadow-amber-400/20 ring-1 ring-amber-300'
+                  : 'bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700/40 hover:border-neutral-600'
+              }`}
+              title="View all pedal categories"
+            >
+              <Layers size={13} className={activeCategory === 'All' ? 'text-neutral-950' : 'text-amber-400/80'} />
+              <span>All</span>
+              <span
+                className={`px-1 py-0.2 rounded-full text-[10px] tabular-nums font-mono ${
+                  activeCategory === 'All'
+                    ? 'bg-neutral-950/20 text-neutral-900 font-bold'
+                    : 'bg-black/40 text-neutral-400'
+                }`}
+              >
+                {filteredPedals.length}
+              </span>
+            </button>
+
+            {/* Individual Category Tabs */}
+            {categories.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat] || Sliders;
+              const count = filteredPedals.filter(p => p.category === cat).length;
+              const isActive = activeCategory === cat;
+              const hasMatches = count > 0;
+
+              return (
+                <button
+                  key={cat}
+                  ref={(el) => { tabRefs.current[cat] = el; }}
+                  onClick={() => scrollToCategory(cat)}
+                  disabled={!hasMatches}
+                  className={`px-2.5 py-1.2 rounded-lg text-xs font-mono font-medium whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                    !hasMatches
+                      ? 'opacity-40 cursor-not-allowed bg-neutral-900 text-neutral-500 border border-neutral-800'
+                      : isActive
+                      ? 'bg-amber-400 text-neutral-950 font-bold shadow-sm shadow-amber-400/20 ring-1 ring-amber-300 cursor-pointer'
+                      : 'bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700/40 hover:border-neutral-600 cursor-pointer'
+                  }`}
+                  title={hasMatches ? `Jump to ${cat}` : `No pedals matching search in ${cat}`}
+                >
+                  <Icon size={13} className={isActive ? 'text-neutral-950' : 'text-amber-400/80'} />
+                  <span>{cat}</span>
+                  <span
+                    className={`px-1 py-0.2 rounded-full text-[10px] tabular-nums font-mono ${
+                      isActive
+                        ? 'bg-neutral-950/20 text-neutral-900 font-bold'
+                        : 'bg-black/40 text-neutral-400'
+                    }`}
+                  >
+                    {count}
                   </span>
-                  <div className="flex-1 h-px bg-neutral-800" />
-                </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {pedalsInCat.map(item => (
-                    <div
-                      key={item.title}
-                      className="group bg-neutral-950/70 hover:bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl p-3.5 transition-all flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3.5 h-3.5 rounded-full border border-white/30 shadow-sm"
-                              style={{ backgroundColor: item.color }}
-                            />
-                            <h4 className="text-sm font-bold text-neutral-200 group-hover:text-white">
-                              {item.title}
-                            </h4>
-                          </div>
-                        </div>
-                        <p className="text-xs text-neutral-400 leading-relaxed">
-                          {item.description}
-                        </p>
-                      </div>
+        {/* Modal Scrollable Body */}
+        <div ref={scrollContainerRef} className="p-6 overflow-y-auto space-y-8 scroll-smooth flex-1">
+          {filteredPedals.length === 0 ? (
+            <div className="text-center py-16 px-4 space-y-3">
+              <p className="text-neutral-400 text-sm font-mono">
+                No stompboxes found matching &ldquo;<span className="text-amber-400">{searchQuery}</span>&rdquo;
+              </p>
+              <button
+                onClick={() => setSearchQuery('')}
+                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs rounded-lg font-mono transition-colors cursor-pointer"
+              >
+                Clear Search Filter
+              </button>
+            </div>
+          ) : (
+            visibleCategories.map(cat => {
+              const pedalsInCat = filteredPedals.filter(p => p.category === cat);
+              if (pedalsInCat.length === 0) return null;
+              const Icon = CATEGORY_ICONS[cat] || Sliders;
+              const slug = getCategorySlug(cat);
 
-                      <div className="mt-4 pt-3 border-t border-neutral-800/80 flex items-center justify-end">
-                        <button
-                          onClick={() => {
-                            onAddPedal(item.createDefault());
-                            onClose();
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-colors shadow-sm"
-                        >
-                          <Plus size={14} />
-                          <span>Add Pedal</span>
-                        </button>
-                      </div>
+              return (
+                <div key={cat} id={slug} className="scroll-mt-4">
+                  <div className="flex items-center gap-2 mb-3.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold tracking-wider font-mono uppercase text-amber-400">
+                      <Icon size={15} className="text-amber-400" />
+                      <span>{cat}</span>
+                      <span className="text-[10px] text-neutral-500 font-normal">
+                        ({pedalsInCat.length})
+                      </span>
                     </div>
-                  ))}
+                    <div className="flex-1 h-px bg-neutral-800" />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pedalsInCat.map(item => (
+                      <div
+                        key={item.title}
+                        className="group bg-neutral-950/70 hover:bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-xl p-3.5 transition-all flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3.5 h-3.5 rounded-full border border-white/30 shadow-sm shrink-0"
+                                style={{ backgroundColor: item.color }}
+                              />
+                              <h4 className="text-sm font-bold text-neutral-200 group-hover:text-white">
+                                {item.title}
+                              </h4>
+                            </div>
+                          </div>
+                          <p className="text-xs text-neutral-400 leading-relaxed">
+                            {item.description}
+                          </p>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-neutral-800/80 flex items-center justify-end">
+                          <button
+                            onClick={() => {
+                              onAddPedal(item.createDefault());
+                              onClose();
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-colors shadow-sm cursor-pointer"
+                          >
+                            <Plus size={14} />
+                            <span>Add Pedal</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
     </div>
