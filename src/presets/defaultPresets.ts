@@ -293,6 +293,7 @@ export const INITIAL_PRESETS: Preset[] = [
         name: 'Robot Formant',
         enabled: true,
         color: '#c026d3',
+        pitch: 0,
         formant: -2,
         robotMode: true,
         robotPitch: 'A2',

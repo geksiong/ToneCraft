@@ -2027,7 +2027,16 @@ function createVocalFormantDsp(ctx: AudioContext, input: GainNode, output: GainN
   let carrierPhase = 0.0;
   let subCarrierPhase = 0.0;
   let formantShiftSemitones = 0; // -12 to +12
+  let pitchShiftSemitones = 0; // -12 to +12 semitones
   let speechEnvelope = 0.0;
+
+  // Natural mode pitch shifting buffer (dual-grain crossfade)
+  const naturalRingSize = 16384;
+  const naturalRingMask = naturalRingSize - 1;
+  const naturalRing = new Float32Array(naturalRingSize);
+  let naturalWriteIdx = 0;
+  let naturalGrainPhase = 0.0;
+  const naturalGrainSize = Math.max(256, Math.min(2048, Math.round(0.028 * sampleRate))); // ~28ms
 
   const ROBOT_PITCH_MAP: Record<string, number> = {
     'C2': 65.41,
@@ -2071,7 +2080,26 @@ function createVocalFormantDsp(ctx: AudioContext, input: GainNode, output: GainN
 
         if (!isRobotMode) {
           // Natural Formant Mode: Voice passes through physical formant resonators F1, F2, F3
-          outCh[i] = inSample;
+          if (Math.abs(pitchShiftSemitones) < 0.05) {
+            outCh[i] = inSample;
+            naturalRing[naturalWriteIdx] = inSample;
+            naturalWriteIdx = (naturalWriteIdx + 1) & naturalRingMask;
+          } else {
+            naturalRing[naturalWriteIdx] = inSample;
+            const ratio = Math.pow(2, pitchShiftSemitones / 12);
+            const phase1 = naturalGrainPhase;
+            const phase2 = (naturalGrainPhase + 0.5) % 1.0;
+            const d1 = phase1 * naturalGrainSize;
+            const d2 = phase2 * naturalGrainSize;
+            const r1 = (naturalWriteIdx - 64 - d1) & naturalRingMask;
+            const r2 = (naturalWriteIdx - 64 - d2) & naturalRingMask;
+            const w1 = 0.5 * (1 - Math.cos(2 * Math.PI * phase1));
+            const w2 = 0.5 * (1 - Math.cos(2 * Math.PI * phase2));
+            outCh[i] = naturalRing[r1] * w1 + naturalRing[r2] * w2;
+            naturalWriteIdx = (naturalWriteIdx + 1) & naturalRingMask;
+            naturalGrainPhase = (naturalGrainPhase + (1 - ratio) / naturalGrainSize) % 1.0;
+            if (naturalGrainPhase < 0) naturalGrainPhase += 1.0;
+          }
         } else {
           // =========================================================================
           // ROBOT MODE: TRUE 8-BAND CHANNEL VOCODER
@@ -2159,10 +2187,14 @@ function createVocalFormantDsp(ctx: AudioContext, input: GainNode, output: GainN
       const now = ctx.currentTime;
       isRobotMode = Boolean(p.robotMode);
       formantShiftSemitones = Math.max(-12, Math.min(12, p.formant));
+      pitchShiftSemitones = typeof p.pitch === 'number' ? Math.max(-12, Math.min(12, p.pitch)) : 0;
 
+      let baseFreq = 110.0;
       if (p.robotPitch && ROBOT_PITCH_MAP[p.robotPitch]) {
-        targetRobotFreq = ROBOT_PITCH_MAP[p.robotPitch];
+        baseFreq = ROBOT_PITCH_MAP[p.robotPitch];
       }
+      // Modulate the robot carrier frequency by the pitch knob transposition
+      targetRobotFreq = baseFreq * Math.pow(2, pitchShiftSemitones / 12);
 
       updateSynthesisFilterFrequencies();
 

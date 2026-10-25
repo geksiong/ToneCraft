@@ -1226,22 +1226,49 @@ function renderPedalControls(
     case 'vocalFormant': {
       const p = pedal as VocalFormantPedal;
       const pitches: Array<VocalFormantPedal['robotPitch']> = ['C2', 'E2', 'G2', 'A2', 'C3', 'E3', 'G3'];
+      const currentPitch = p.pitch ?? 0;
+      const robotNoteMap: Record<string, number> = {
+        'C2': 36, 'E2': 40, 'G2': 43, 'A2': 45, 'C3': 48, 'E3': 52, 'G3': 55
+      };
+      const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const baseMidi = robotNoteMap[p.robotPitch || 'A2'] ?? 45;
+      const targetMidi = Math.round(baseMidi + currentPitch);
+      const noteName = chromaticNotes[((targetMidi % 12) + 12) % 12];
+      const octave = Math.floor(targetMidi / 12) - 1;
+      const effectiveNote = `${noteName}${octave}`;
+
       return (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-1">
+        <div className="space-y-1.5">
+          {/* 4 Knobs in a single compact horizontal row */}
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Pitch"
+              value={currentPitch}
+              min={-12}
+              max={12}
+              step={1}
+              size="sm"
+              unit="st"
+              midiBadge={getKnobBadge('pitch')}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}st`}
+              onChange={(v) => onUpdate({ ...p, pitch: v })}
+            />
             <RotaryKnob
               label="Formant"
               value={p.formant}
               min={-12}
               max={12}
+              size="sm"
               unit="st"
               midiBadge={getKnobBadge('formant')}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}st`}
               onChange={(v) => onUpdate({ ...p, formant: v })}
             />
             <RotaryKnob
               label="Bright"
               value={p.brightness}
               unit="%"
+              size="sm"
               midiBadge={getKnobBadge('brightness')}
               onChange={(v) => onUpdate({ ...p, brightness: v })}
             />
@@ -1249,50 +1276,74 @@ function renderPedalControls(
               label="Mix"
               value={p.mix}
               unit="%"
+              size="sm"
               midiBadge={getKnobBadge('mix')}
               onChange={(v) => onUpdate({ ...p, mix: v })}
             />
           </div>
-          <div className="space-y-1.5 pt-1 border-t border-white/10">
-            <button
-              onClick={() => onUpdate({ ...p, robotMode: !p.robotMode })}
-              className={`w-full py-1.5 rounded text-[9.5px] font-mono font-bold tracking-wider uppercase transition-colors shadow-sm flex items-center justify-center gap-1.5 ${
-                p.robotMode
-                  ? 'bg-fuchsia-600 text-white shadow-fuchsia-900/50 ring-1 ring-fuchsia-400/60'
-                  : 'bg-black/50 text-white/70 hover:text-white border border-white/20'
-              }`}
-            >
-              <span>{p.robotMode ? '🤖' : '🎙️'}</span>
-              <span>{p.robotMode ? 'ROBOT VOCODER (ACTIVE)' : 'NATURAL FORMANT SHIFT'}</span>
-            </button>
-            {p.robotMode && (
-              <div className="flex items-center justify-between text-[9px] font-mono pt-0.5">
-                <span className="text-white/60">PITCH:</span>
-                <div className="flex gap-0.5">
-                  {pitches.map((pt) => (
-                    <button
-                      key={pt}
-                      onClick={() => onUpdate({ ...p, robotPitch: pt })}
-                      className={`px-1 py-0.5 rounded text-[7.5px] font-mono transition-colors ${
-                        p.robotPitch === pt
-                          ? 'bg-fuchsia-400 text-black font-bold shadow-sm'
-                          : 'bg-black/40 text-white/70 hover:text-white'
-                      }`}
-                    >
-                      {pt}
-                    </button>
-                  ))}
-                </div>
+
+          {/* Compact Control Deck */}
+          <div className="space-y-1 pt-1 border-t border-white/10">
+            {/* Mode switch & Tract/Wet badge in 1 row */}
+            <div className="flex items-center justify-between gap-1">
+              <button
+                onClick={() => onUpdate({ ...p, robotMode: !p.robotMode })}
+                className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold tracking-wider uppercase transition-colors flex items-center gap-1 border shrink-0 ${
+                  p.robotMode
+                    ? 'bg-fuchsia-600/90 text-white border-fuchsia-400 shadow-xs'
+                    : 'bg-black/50 text-white/70 hover:text-white border-white/20'
+                }`}
+                title={p.robotMode ? 'Robot Vocoder mode active. Click for Natural mode.' : 'Natural Formant mode active. Click for Robot mode.'}
+              >
+                <span>{p.robotMode ? '🤖 ROBOT' : '🎙️ NATURAL'}</span>
+              </button>
+
+              <div className="flex items-center gap-1 text-[7.5px] font-mono truncate text-right">
+                {p.mix >= 99 ? (
+                  <span className="text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded px-1 py-0.2">
+                    100% WET
+                  </span>
+                ) : (
+                  <span className="text-fuchsia-300/80 uppercase">
+                    {p.formant < -2 ? '👹 DEEP MECH' : p.formant > 2 ? '✨ CYBORG' : 'BALANCED'}
+                  </span>
+                )}
               </div>
-            )}
-            {p.mix >= 99 && (
-              <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 rounded py-0.5 tracking-wider">
-                ✓ 100% WET • DRY VOICE IS MUTED
-              </div>
-            )}
-            <div className="text-center text-[7.5px] font-mono text-fuchsia-300/80 tracking-widest uppercase">
-              {p.formant < -2 ? '👹 DEEP MECH TRACT' : p.formant > 2 ? '✨ CYBORG / ANDROID' : 'BALANCED TRACT'}
             </div>
+
+            {/* Root Note Selector + Effective Carrier Note (or Natural Mode readout) */}
+            {p.robotMode ? (
+              <div className="flex items-center justify-between bg-black/40 rounded px-1.5 py-0.5 border border-white/10 text-[7.5px] font-mono">
+                <div className="flex items-center gap-1">
+                  <span className="text-white/40 text-[7px]">ROOT:</span>
+                  <div className="flex gap-0.5">
+                    {pitches.map((pt) => (
+                      <button
+                        key={pt}
+                        onClick={() => onUpdate({ ...p, robotPitch: pt })}
+                        className={`px-1 py-0.2 rounded text-[7px] font-mono transition-colors ${
+                          p.robotPitch === pt
+                            ? 'bg-fuchsia-400 text-black font-bold shadow-xs'
+                            : 'bg-black/50 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        {pt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <span
+                  className="font-bold text-fuchsia-200 bg-fuchsia-950/70 px-1 py-0.2 rounded border border-fuchsia-500/30 text-[7px] shrink-0"
+                  title={`Carrier: ${p.robotPitch} ${currentPitch !== 0 ? `(${currentPitch > 0 ? '+' : ''}${currentPitch}st)` : ''} → ${effectiveNote}`}
+                >
+                  {effectiveNote}
+                </span>
+              </div>
+            ) : (
+              <div className="text-center text-[7px] font-mono text-cyan-300/80 bg-cyan-950/30 rounded py-0.5 border border-cyan-500/20 tracking-wider">
+                NATURAL VOICE • {currentPitch !== 0 ? `${currentPitch > 0 ? '+' : ''}${currentPitch}st PITCH` : '0st PITCH'}
+              </div>
+            )}
           </div>
         </div>
       );

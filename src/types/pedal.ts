@@ -205,6 +205,7 @@ export interface TelephoneVoicePedal extends BasePedalConfig {
 
 export interface VocalFormantPedal extends BasePedalConfig {
   type: 'vocalFormant';
+  pitch: number; // -12 to +12 semitones
   formant: number; // -12 to +12 semitones
   robotMode: boolean;
   robotPitch: 'C2' | 'E2' | 'G2' | 'A2' | 'C3' | 'E3' | 'G3';

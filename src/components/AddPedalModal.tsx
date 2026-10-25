@@ -394,6 +394,7 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       name: 'Robot Formant',
       enabled: true,
       color: '#c026d3',
+      pitch: 0,
       formant: 0,
       robotMode: true,
       robotPitch: 'A2',

@@ -81,6 +81,8 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
   // Dimensions
   const dim = size === 'sm' ? 'w-9 h-9' : size === 'lg' ? 'w-14 h-14' : 'w-11 h-11';
   const indicatorDim = size === 'sm' ? 'h-2 w-0.5' : size === 'lg' ? 'h-3.5 w-1' : 'h-2.5 w-0.5';
+  const labelClass = size === 'sm' ? 'w-11 text-[8.5px]' : size === 'lg' ? 'w-20 text-xs' : 'w-16 text-[10px]';
+  const valClass = size === 'sm' ? 'w-11 text-[8px]' : size === 'lg' ? 'w-20 text-[10px]' : 'w-16 text-[9px]';
 
   const displayVal = formatValue ? formatValue(value) : `${Math.round(value * 10) / 10}${unit}`;
 
@@ -138,12 +140,13 @@ export const RotaryKnob: React.FC<RotaryKnobProps> = ({
       </div>
 
       {/* Label and live readout with constant width */}
-      <span className="mt-1 text-[10px] font-semibold tracking-wider uppercase text-neutral-300 truncate w-16 text-center inline-block">
+      <span className={`mt-1 font-semibold tracking-wider uppercase text-neutral-300 truncate text-center inline-block ${labelClass}`}>
         {label}
       </span>
-      <span className="text-[9px] font-mono tabular-nums text-neutral-400 group-hover:text-amber-400 transition-colors w-16 text-center truncate inline-block">
+      <span className={`font-mono tabular-nums text-neutral-400 group-hover:text-amber-400 transition-colors text-center truncate inline-block ${valClass}`}>
         {displayVal}
       </span>
     </div>
   );
 };
+
