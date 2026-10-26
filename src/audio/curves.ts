@@ -183,3 +183,48 @@ export function createTelephoneCurve(drive: number): Float32Array {
   }
   return curve;
 }
+
+/**
+ * Models Klon Centaur germanium diode clipping (1N34A).
+ * Highly touch-sensitive soft-knee saturation with sweet upper-mid harmonic generation.
+ *
+ * @param gain Overdrive gain (0 - 100)
+ * @returns Float32Array transfer curve of 4096 points
+ */
+export function createKlonCurve(gain: number): Float32Array {
+  const k = 1.0 + (gain / 100) * 36;
+  const n = 4096;
+  const curve = new Float32Array(n);
+
+  for (let i = 0; i < n; ++i) {
+    const x = (i * 2) / n - 1;
+    // Germanium soft-knee threshold with subtle even-order asymmetry
+    const driven = x * k * 0.8;
+    const saturated = Math.tanh(driven) + 0.05 * Math.sin(x * Math.PI) * Math.min(1, gain / 60);
+    curve[i] = Math.max(-0.92, Math.min(0.92, saturated * 0.86));
+  }
+  return curve;
+}
+
+/**
+ * Models vintage analog magnetic tape saturation with tape compression.
+ *
+ * @param drive Tape saturation amount (0 - 100)
+ * @returns Float32Array transfer curve of 4096 points
+ */
+export function createTapeSaturationCurve(drive: number): Float32Array {
+  const d = Math.max(0, Math.min(100, drive)) / 100;
+  const k = 1.0 + d * 8.0;
+  const n = 4096;
+  const curve = new Float32Array(n);
+  const norm = Math.atan(k);
+
+  for (let i = 0; i < n; ++i) {
+    const x = (i * 2) / n - 1;
+    // Normalized magnetic tape saturation curve with unity scaling
+    const raw = Math.atan(x * k) / (norm || 1.0);
+    curve[i] = Math.max(-0.95, Math.min(0.95, raw * 0.96));
+  }
+  return curve;
+}
+

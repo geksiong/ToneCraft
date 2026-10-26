@@ -28,7 +28,17 @@ import {
   GranularCloudPedal,
   ArcadeSynthPedal,
   SpectralFreezePedal,
-  TapeGlitchPedal
+  TapeGlitchPedal,
+  UniVibePedal,
+  HarmonicTremoloPedal,
+  SlowGearPedal,
+  KlonOverdrivePedal,
+  MultiOctavePedal,
+  TalkingWahPedal,
+  ReverseReverbPedal,
+  CrystalDelayPedal,
+  HardTunePedal,
+  LofiVinylPedal
 } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
 import { RotaryKnob } from './RotaryKnob';
@@ -1981,5 +1991,631 @@ function renderPedalControls(
         </div>
       );
     }
+
+    case 'uniVibe': {
+      const p = pedal as UniVibePedal;
+      return (
+        <div className="space-y-2">
+          {/* Mode switch */}
+          <div className="flex justify-center gap-1">
+            {(['chorus', 'vibrato'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => onUpdate({ ...p, mode: m })}
+                className={`flex-1 py-0.5 rounded text-[8px] font-mono uppercase font-bold tracking-wider transition-colors ${
+                  p.mode === m
+                    ? 'bg-amber-400 text-black shadow-xs'
+                    : 'bg-black/50 text-white/60 hover:text-white border border-white/10'
+                }`}
+              >
+                {m === 'chorus' ? 'CHORUS (PHASE)' : 'VIBRATO (PITCH)'}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Speed"
+              value={p.speed}
+              min={0.5}
+              max={10.0}
+              step={0.1}
+              size="sm"
+              unit="Hz"
+              midiBadge={getKnobBadge('speed')}
+              onChange={(v) => onUpdate({ ...p, speed: v })}
+            />
+            <RotaryKnob
+              label="Intens"
+              value={p.intensity}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('intensity')}
+              onChange={(v) => onUpdate({ ...p, intensity: v })}
+            />
+            <RotaryKnob
+              label="Lamp"
+              value={p.lampBias}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('lampBias')}
+              onChange={(v) => onUpdate({ ...p, lampBias: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-purple-300/80 tracking-widest uppercase">
+            💡 OPTICAL 4-STAGE BULB VIBE
+          </div>
+        </div>
+      );
+    }
+
+    case 'harmonicTremolo': {
+      const p = pedal as HarmonicTremoloPedal;
+      const waves: Array<HarmonicTremoloPedal['waveform']> = ['sine', 'triangle', 'pulse'];
+      return (
+        <div className="space-y-2">
+          {/* Waveform Selector */}
+          <div className="flex justify-center gap-1">
+            {waves.map((w) => (
+              <button
+                key={w}
+                onClick={() => onUpdate({ ...p, waveform: w })}
+                className={`flex-1 py-0.5 rounded text-[8px] font-mono uppercase transition-colors ${
+                  p.waveform === w
+                    ? 'bg-amber-400 text-black font-bold shadow-xs'
+                    : 'bg-black/50 text-white/60 hover:text-white border border-white/10'
+                }`}
+              >
+                {w}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Rate"
+              value={p.rate}
+              min={0.5}
+              max={12.0}
+              step={0.1}
+              size="sm"
+              unit="Hz"
+              midiBadge={getKnobBadge('rate')}
+              onChange={(v) => onUpdate({ ...p, rate: v })}
+            />
+            <RotaryKnob
+              label="Depth"
+              value={p.depth}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('depth')}
+              onChange={(v) => onUpdate({ ...p, depth: v })}
+            />
+            <RotaryKnob
+              label="X-Over"
+              value={p.crossover || 700}
+              min={300}
+              max={1600}
+              size="sm"
+              unit="Hz"
+              midiBadge={getKnobBadge('crossover')}
+              onChange={(v) => onUpdate({ ...p, crossover: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-amber-300/80 tracking-widest uppercase">
+            🌊 1962 BROWNFACE SPLIT-PHASE
+          </div>
+        </div>
+      );
+    }
+
+    case 'slowGear': {
+      const p = pedal as SlowGearPedal;
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Attack"
+              value={p.attack}
+              min={40}
+              max={1500}
+              unit="ms"
+              size="sm"
+              midiBadge={getKnobBadge('attack')}
+              onChange={(v) => onUpdate({ ...p, attack: v })}
+            />
+            <RotaryKnob
+              label="Sens"
+              value={p.sensitivity}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('sensitivity')}
+              onChange={(v) => onUpdate({ ...p, sensitivity: v })}
+            />
+            <RotaryKnob
+              label="Release"
+              value={p.release}
+              min={40}
+              max={600}
+              unit="ms"
+              size="sm"
+              midiBadge={getKnobBadge('release')}
+              onChange={(v) => onUpdate({ ...p, release: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-sky-300/80 tracking-widest uppercase">
+            🎻 BOWED VIOLIN & AUTO-VOLUME SWELL
+          </div>
+        </div>
+      );
+    }
+
+    case 'klonOverdrive': {
+      const p = pedal as KlonOverdrivePedal;
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Gain"
+              value={p.gain}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('gain')}
+              onChange={(v) => onUpdate({ ...p, gain: v })}
+            />
+            <RotaryKnob
+              label="Treble"
+              value={p.treble}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('treble')}
+              onChange={(v) => onUpdate({ ...p, treble: v })}
+            />
+            <RotaryKnob
+              label="Output"
+              value={p.output}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('output')}
+              onChange={(v) => onUpdate({ ...p, output: v })}
+            />
+            <RotaryKnob
+              label="Clean"
+              value={p.cleanBlend}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('cleanBlend')}
+              onChange={(v) => onUpdate({ ...p, cleanBlend: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-amber-400 font-bold tracking-widest uppercase">
+            🐎 GOLD CENTAUR TRANSPARENT DRIVE
+          </div>
+        </div>
+      );
+    }
+
+    case 'multiOctave': {
+      const p = pedal as MultiOctavePedal;
+      return (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="-2 Oct"
+              value={p.sub2}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('sub2')}
+              onChange={(v) => onUpdate({ ...p, sub2: v })}
+            />
+            <RotaryKnob
+              label="-1 Oct"
+              value={p.sub1}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('sub1')}
+              onChange={(v) => onUpdate({ ...p, sub1: v })}
+            />
+            <RotaryKnob
+              label="Dry"
+              value={p.dry}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('dry')}
+              onChange={(v) => onUpdate({ ...p, dry: v })}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="+1 Oct"
+              value={p.oct1}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('oct1')}
+              onChange={(v) => onUpdate({ ...p, oct1: v })}
+            />
+            <RotaryKnob
+              label="+2 Oct"
+              value={p.oct2}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('oct2')}
+              onChange={(v) => onUpdate({ ...p, oct2: v })}
+            />
+            <RotaryKnob
+              label="Tone"
+              value={p.tone}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('tone')}
+              onChange={(v) => onUpdate({ ...p, tone: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-red-400 font-bold tracking-widest uppercase">
+            🎹 POLYPHONIC ORGAN GENERATOR
+          </div>
+        </div>
+      );
+    }
+
+    case 'talkingWah': {
+      const p = pedal as TalkingWahPedal;
+      const vowels: Array<TalkingWahPedal['vowel']> = ['ya-ya', 'ow-ow', 'ee-ah', 'oo-ee'];
+      return (
+        <div className="space-y-2">
+          {/* Vowel & Direction Controls */}
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex gap-0.5">
+              {vowels.map((v) => (
+                <button
+                  key={v}
+                  onClick={() => onUpdate({ ...p, vowel: v })}
+                  className={`px-1.5 py-0.5 rounded text-[7.5px] font-mono uppercase font-bold transition-colors ${
+                    p.vowel === v
+                      ? 'bg-purple-500 text-white shadow-xs'
+                      : 'bg-black/50 text-white/60 hover:text-white'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => onUpdate({ ...p, direction: p.direction === 'up' ? 'down' : 'up' })}
+              className="px-2 py-0.5 rounded text-[7.5px] font-mono font-bold bg-neutral-800 text-amber-400 border border-neutral-700"
+            >
+              {p.direction === 'up' ? 'SWEEP ↑' : 'SWEEP ↓'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Sens"
+              value={p.sensitivity}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('sensitivity')}
+              onChange={(v) => onUpdate({ ...p, sensitivity: v })}
+            />
+            <RotaryKnob
+              label="Peak Q"
+              value={p.resonance}
+              min={1}
+              max={15}
+              size="sm"
+              midiBadge={getKnobBadge('resonance')}
+              onChange={(v) => onUpdate({ ...p, resonance: v })}
+            />
+            <RotaryKnob
+              label="Drive"
+              value={p.drive}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('drive')}
+              onChange={(v) => onUpdate({ ...p, drive: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-purple-300 tracking-widest uppercase">
+            🗣️ DUAL FORMANT VOCAL WAH
+          </div>
+        </div>
+      );
+    }
+
+    case 'reverseReverb': {
+      const p = pedal as ReverseReverbPedal;
+      return (
+        <div className="space-y-2">
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Time"
+              value={p.time}
+              min={200}
+              max={1600}
+              unit="ms"
+              size="sm"
+              midiBadge={getKnobBadge('time')}
+              onChange={(v) => onUpdate({ ...p, time: v })}
+            />
+            <RotaryKnob
+              label="Pre-Dly"
+              value={p.preDelay}
+              min={0}
+              max={200}
+              unit="ms"
+              size="sm"
+              midiBadge={getKnobBadge('preDelay')}
+              onChange={(v) => onUpdate({ ...p, preDelay: v })}
+            />
+            <RotaryKnob
+              label="Bloom"
+              value={p.feedback}
+              max={85}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('feedback')}
+              onChange={(v) => onUpdate({ ...p, feedback: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          {p.mix >= 99 && (
+            <div className="text-center text-[7.5px] font-mono text-pink-400 font-bold bg-pink-950/60 border border-pink-500/30 rounded py-0.5 tracking-wider">
+              🌸 100% WET SHOEGAZE WALL OF SOUND
+            </div>
+          )}
+          <div className="text-center text-[7.5px] font-mono text-pink-300/80 tracking-widest uppercase">
+            🌊 REVERSE BLOOM (MBV / SPX90)
+          </div>
+        </div>
+      );
+    }
+
+    case 'crystalDelay': {
+      const p = pedal as CrystalDelayPedal;
+      const intervals: Array<CrystalDelayPedal['interval']> = ['+5th', '+7th', '+12th', '+24th', '-12th'];
+      return (
+        <div className="space-y-2">
+          {/* Pitch Interval Selector */}
+          <div className="flex justify-center gap-1">
+            {intervals.map((iv) => (
+              <button
+                key={iv}
+                onClick={() => onUpdate({ ...p, interval: iv })}
+                className={`flex-1 py-0.5 rounded text-[8px] font-mono font-bold transition-colors ${
+                  p.interval === iv
+                    ? 'bg-cyan-400 text-black shadow-xs'
+                    : 'bg-black/50 text-white/60 hover:text-white border border-white/10'
+                }`}
+              >
+                {iv}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-4 gap-0.5">
+            <RotaryKnob
+              label="Time"
+              value={p.time}
+              min={60}
+              max={1200}
+              unit="ms"
+              size="sm"
+              midiBadge={getKnobBadge('time')}
+              onChange={(v) => onUpdate({ ...p, time: v })}
+            />
+            <RotaryKnob
+              label="Repeats"
+              value={p.feedback}
+              max={90}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('feedback')}
+              onChange={(v) => onUpdate({ ...p, feedback: v })}
+            />
+            <RotaryKnob
+              label="Shimmer"
+              value={p.shimmer}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('shimmer')}
+              onChange={(v) => onUpdate({ ...p, shimmer: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-cyan-300/80 tracking-widest uppercase">
+            ✨ CASCADING CRYSTAL HARMONY ECHO
+          </div>
+        </div>
+      );
+    }
+
+    case 'hardTune': {
+      const p = pedal as HardTunePedal;
+      const keys: Array<HardTunePedal['key']> = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+      const scales: Array<HardTunePedal['scale']> = ['major', 'minor', 'pentatonic', 'arabic'];
+      return (
+        <div className="space-y-1.5">
+          {/* Key & Scale selector strip */}
+          <div className="flex items-center justify-between gap-1 text-[8px] font-mono">
+            <div className="flex gap-0.5">
+              {keys.map((k) => (
+                <button
+                  key={k}
+                  onClick={() => onUpdate({ ...p, key: k })}
+                  className={`px-1 py-0.5 rounded text-[7.5px] font-mono transition-colors ${
+                    p.key === k ? 'bg-amber-400 text-black font-bold' : 'bg-black/50 text-white/60'
+                  }`}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-0.5">
+              {scales.map((sc) => (
+                <button
+                  key={sc}
+                  onClick={() => onUpdate({ ...p, scale: sc })}
+                  className={`px-1 py-0.5 rounded text-[7.5px] font-mono uppercase transition-colors ${
+                    p.scale === sc ? 'bg-amber-400 text-black font-bold' : 'bg-black/50 text-white/60'
+                  }`}
+                >
+                  {sc.slice(0, 3)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Retune"
+              value={p.retuneSpeed}
+              min={0}
+              max={50}
+              unit="ms"
+              size="sm"
+              midiBadge={getKnobBadge('retuneSpeed')}
+              formatValue={(v) => v === 0 ? '0ms (SNAP)' : `${Math.round(v)}ms`}
+              onChange={(v) => onUpdate({ ...p, retuneSpeed: v })}
+            />
+            <RotaryKnob
+              label="Warp"
+              value={p.formantWarp}
+              min={-12}
+              max={12}
+              unit="st"
+              size="sm"
+              midiBadge={getKnobBadge('formantWarp')}
+              formatValue={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}st`}
+              onChange={(v) => onUpdate({ ...p, formantWarp: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-emerald-400 font-bold tracking-widest uppercase">
+            ⚡ 0MS TRAP & VOCAL HARD-TUNE
+          </div>
+        </div>
+      );
+    }
+
+    case 'lofiVinyl': {
+      const p = pedal as LofiVinylPedal;
+      return (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-3 gap-1">
+            <RotaryKnob
+              label="Crackle"
+              value={p.dustCrackle}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('dustCrackle')}
+              onChange={(v) => onUpdate({ ...p, dustCrackle: v })}
+            />
+            <RotaryKnob
+              label="Flutter"
+              value={p.flutter}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('flutter')}
+              onChange={(v) => onUpdate({ ...p, flutter: v })}
+            />
+            <RotaryKnob
+              label="Sat"
+              value={p.saturation}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('saturation')}
+              onChange={(v) => onUpdate({ ...p, saturation: v })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t border-white/10">
+            <RotaryKnob
+              label="Head Filter"
+              value={p.filter}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('filter')}
+              onChange={(v) => onUpdate({ ...p, filter: v })}
+            />
+            <RotaryKnob
+              label="Mix"
+              value={p.mix}
+              unit="%"
+              size="sm"
+              midiBadge={getKnobBadge('mix')}
+              onChange={(v) => onUpdate({ ...p, mix: v })}
+            />
+          </div>
+
+          <div className="text-center text-[7.5px] font-mono text-amber-300 font-bold tracking-widest uppercase">
+            📻 VINYL DUST & CASSETTE WARP
+          </div>
+        </div>
+      );
+    }
   }
 }
+

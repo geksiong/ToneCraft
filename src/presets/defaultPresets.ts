@@ -4,6 +4,594 @@ import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 
 export const INITIAL_PRESETS: Preset[] = [
   {
+    id: 'guitar-hendrix-univibe-woodstock',
+    name: '1969 Woodstock Psychedelic Vibe',
+    author: 'ToneCraft Vintage Labs',
+    instrument: 'guitar',
+    genre: 'Rock',
+    description: 'Jimi Hendrix Woodstock tone: Swirling 4-stage optical Uni-Vibe bulb -> Klon Centaur boosting into Germanium Silicon Fuzz -> Tape Echo -> Marshall JCM800.',
+    tags: ['UniVibe', 'Psychedelic', 'Hendrix', 'Fuzz', 'Klon', 'Vintage'],
+    bpm: 104,
+    likes: 940,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[3] || BUILT_IN_AMP_MODELS[0],
+      gain: 5.5,
+      bass: 6.2,
+      mid: 7.0,
+      treble: 6.5,
+      presence: 6.8
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-vibe-woodstock-1',
+        type: 'uniVibe',
+        name: 'Rotary Uni-Vibe',
+        enabled: true,
+        color: '#7e22ce',
+        speed: 3.2,
+        intensity: 85,
+        mode: 'chorus',
+        lampBias: 60,
+        mix: 85
+      },
+      {
+        id: 'pedal-klon-woodstock-1',
+        type: 'klonOverdrive',
+        name: 'Centaur Gold OD',
+        enabled: true,
+        color: '#ca8a04',
+        gain: 35,
+        treble: 55,
+        output: 75,
+        cleanBlend: 65
+      },
+      {
+        id: 'pedal-fuzz-woodstock-1',
+        type: 'fuzz',
+        name: 'Vintage Big Fuzz',
+        enabled: true,
+        color: '#b91c1c',
+        fuzz: 68,
+        tone: 58,
+        volume: 62,
+        scoop: 30
+      },
+      {
+        id: 'pedal-delay-woodstock-1',
+        type: 'delay',
+        name: 'Space Tape Delay',
+        enabled: true,
+        color: '#047857',
+        time: 320,
+        feedback: 40,
+        mix: 30,
+        flutter: 45,
+        pingPong: false
+      }
+    ]
+  },
+  {
+    id: 'guitar-slowdive-shoegaze-bloom',
+    name: 'Slowdive Cathedral Reverse Bloom',
+    author: 'ToneCraft Ambient Works',
+    instrument: 'guitar',
+    genre: 'Shoegaze',
+    description: 'The definitive My Bloody Valentine / Slowdive dreampop wall: 100% Wet Reverse Reverb Bloom -> Crystal Pitch Delay (+12th cascade) -> Tape Glitch -> Vox AC10 NAM.',
+    tags: ['Shoegaze', 'ReverseReverb', 'Crystals', 'Ambient', 'DreamPop', 'Bloom'],
+    bpm: 88,
+    likes: 890,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      gain: 4.2,
+      bass: 6.0,
+      mid: 6.5,
+      treble: 7.2,
+      presence: 6.0
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[1] || BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-revreb-slowdive-1',
+        type: 'reverseReverb',
+        name: 'Shoegaze Reverse',
+        enabled: true,
+        color: '#be185d',
+        time: 750,
+        preDelay: 40,
+        feedback: 45,
+        damping: 25,
+        mix: 80
+      },
+      {
+        id: 'pedal-crystal-slowdive-1',
+        type: 'crystalDelay',
+        name: 'Crystal Pitch Echo',
+        enabled: true,
+        color: '#0891b2',
+        time: 420,
+        interval: '+12th',
+        feedback: 60,
+        shimmer: 70,
+        reverse: false,
+        mix: 55
+      },
+      {
+        id: 'pedal-glitch-slowdive-1',
+        type: 'tapeGlitch',
+        name: 'Tape Glitch / Rev',
+        enabled: true,
+        color: '#d97706',
+        direction: 'reverse',
+        sliceLength: 480,
+        pitch: 0,
+        randomGlitch: 25,
+        wowFlutter: 40,
+        feedback: 35,
+        mix: 45
+      }
+    ]
+  },
+  {
+    id: 'guitar-brownface-harmonic-shimmer',
+    name: '1962 Brownface Harmonic Swell',
+    author: 'ToneCraft Americana Dept',
+    instrument: 'guitar',
+    genre: 'Blues',
+    description: 'Americana roots tone: Slow Gear bowed violining swell -> Klon Centaur transparent edge-of-breakup -> 1962 Brownface Harmonic Tremolo -> Studio Spring Reverb.',
+    tags: ['HarmonicTremolo', 'Brownface', 'SlowGear', 'Klon', 'Roots', 'Americana'],
+    bpm: 92,
+    likes: 780,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[4] || BUILT_IN_AMP_MODELS[0],
+      gain: 4.2,
+      bass: 6.2,
+      mid: 5.5,
+      treble: 6.0,
+      presence: 5.8
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[3] || BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-slow-brown-1',
+        type: 'slowGear',
+        name: 'Auto-Swell Gear',
+        enabled: true,
+        color: '#0284c7',
+        attack: 380,
+        sensitivity: 70,
+        release: 160,
+        mix: 100
+      },
+      {
+        id: 'pedal-klon-brown-1',
+        type: 'klonOverdrive',
+        name: 'Centaur Gold OD',
+        enabled: true,
+        color: '#ca8a04',
+        gain: 42,
+        treble: 52,
+        output: 70,
+        cleanBlend: 60
+      },
+      {
+        id: 'pedal-harmtrem-brown-1',
+        type: 'harmonicTremolo',
+        name: '1962 Brown Tremolo',
+        enabled: true,
+        color: '#b45309',
+        rate: 3.2,
+        depth: 75,
+        crossover: 680,
+        waveform: 'sine',
+        mix: 90
+      },
+      {
+        id: 'pedal-reverb-brown-1',
+        type: 'reverb',
+        name: 'Celestial Reverb',
+        enabled: true,
+        color: '#4338ca',
+        decay: 55,
+        preDelay: 15,
+        damping: 35,
+        shimmer: false,
+        roomType: 'spring',
+        mix: 40
+      }
+    ]
+  },
+  {
+    id: 'guitar-cathedral-multi-octave-organ',
+    name: 'Cathedral Pipe Organ & 12-String',
+    author: 'ToneCraft Symphonic Studio',
+    instrument: 'guitar',
+    genre: 'Ambient',
+    description: 'Turns any 6-string into a cathedral pipe organ: Slow Gear pick removal -> Multi-Octave Generator (-2, -1, Dry, +1, +2) -> Crystal Delay (+5th harmony) -> Celestial Reverb.',
+    tags: ['POG', 'Octave', 'Organ', 'SlowGear', 'Crystals', 'Symphonic'],
+    bpm: 72,
+    likes: 855,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[1] || BUILT_IN_AMP_MODELS[0],
+      gain: 4.5,
+      bass: 6.8,
+      mid: 5.8,
+      treble: 6.5,
+      presence: 6.0
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-slow-organ-1',
+        type: 'slowGear',
+        name: 'Auto-Swell Gear',
+        enabled: true,
+        color: '#0284c7',
+        attack: 320,
+        sensitivity: 75,
+        release: 200,
+        mix: 100
+      },
+      {
+        id: 'pedal-pog-organ-1',
+        type: 'multiOctave',
+        name: 'Poly Octave Gen',
+        enabled: true,
+        color: '#b91c1c',
+        sub2: 45,
+        sub1: 65,
+        dry: 70,
+        oct1: 75,
+        oct2: 40,
+        tone: 70
+      },
+      {
+        id: 'pedal-crystal-organ-1',
+        type: 'crystalDelay',
+        name: 'Crystal Pitch Echo',
+        enabled: true,
+        color: '#0891b2',
+        time: 360,
+        interval: '+5th',
+        feedback: 48,
+        shimmer: 55,
+        reverse: false,
+        mix: 45
+      },
+      {
+        id: 'pedal-reverb-organ-1',
+        type: 'reverb',
+        name: 'Celestial Reverb',
+        enabled: true,
+        color: '#4338ca',
+        decay: 75,
+        preDelay: 25,
+        damping: 30,
+        shimmer: true,
+        roomType: 'hall',
+        mix: 55
+      }
+    ]
+  },
+  {
+    id: 'guitar-funkadelic-talking-wah',
+    name: 'Funkadelic Talking Envelope Wah',
+    author: 'ToneCraft Groove Foundry',
+    instrument: 'guitar',
+    genre: 'Funk',
+    description: 'High-octane funk & quack: DynaSqueeze Optical Compression -> Talking Box Vocal Wah (ya-ya / ow-ow) -> Klon Centaur drive -> Ping-Pong Delay.',
+    tags: ['TalkingWah', 'Funk', 'Envelope', 'Formant', 'Klon', 'Groove'],
+    bpm: 116,
+    likes: 730,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[7] || BUILT_IN_AMP_MODELS[0],
+      gain: 3.5,
+      bass: 6.5,
+      mid: 6.0,
+      treble: 7.0,
+      presence: 6.5
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[3] || BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-comp-funk-1',
+        type: 'compressor',
+        name: 'DynaSqueeze Comp',
+        enabled: true,
+        color: '#b45309',
+        sustain: 65,
+        attack: 15,
+        level: 70,
+        blend: 85
+      },
+      {
+        id: 'pedal-talk-funk-1',
+        type: 'talkingWah',
+        name: 'Talking Vocal Wah',
+        enabled: true,
+        color: '#8b5cf6',
+        vowel: 'ya-ya',
+        sensitivity: 72,
+        direction: 'up',
+        resonance: 8,
+        drive: 35,
+        mix: 90
+      },
+      {
+        id: 'pedal-klon-funk-1',
+        type: 'klonOverdrive',
+        name: 'Centaur Gold OD',
+        enabled: true,
+        color: '#ca8a04',
+        gain: 38,
+        treble: 58,
+        output: 75,
+        cleanBlend: 50
+      },
+      {
+        id: 'pedal-delay-funk-1',
+        type: 'delay',
+        name: 'Space Tape Delay',
+        enabled: true,
+        color: '#047857',
+        time: 240,
+        feedback: 35,
+        mix: 25,
+        flutter: 20,
+        pingPong: true
+      }
+    ]
+  },
+  {
+    id: 'vocal-trap-hard-tune-autotune',
+    name: 'Trap Hard-Tune & Vocal Polish',
+    author: 'ToneCraft Urban Audio',
+    instrument: 'vocal',
+    genre: 'Vocal',
+    description: 'Modern billboard vocal strip: Tube Vocal Preamp -> Trap Hard-Tune (0ms instant snap in C Minor) -> Dynamic De-Esser -> Stereo Vocal Doubler -> Plate Reverb.',
+    tags: ['AutoTune', 'HardTune', 'Trap', 'Vocal', 'Pop', 'HipHop'],
+    bpm: 130,
+    likes: 915,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[8] || BUILT_IN_AMP_MODELS[0],
+      bypassed: true
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[1] || BUILT_IN_IR_CABINETS[0],
+      bypassed: true
+    },
+    pedals: [
+      {
+        id: 'pedal-vpre-trap-1',
+        type: 'vocalPreamp',
+        name: 'Tube Mic Preamp',
+        enabled: true,
+        color: '#b45309',
+        warmth: 55,
+        compression: 50,
+        air: 65,
+        body: 50,
+        lowCut: true,
+        outputGain: 50
+      },
+      {
+        id: 'pedal-hardtune-trap-1',
+        type: 'hardTune',
+        name: 'Trap Hard-Tune',
+        enabled: true,
+        color: '#059669',
+        key: 'C',
+        scale: 'minor',
+        retuneSpeed: 0,
+        formantWarp: 0,
+        mix: 100
+      },
+      {
+        id: 'pedal-deess-trap-1',
+        type: 'deEsser',
+        name: 'Vocal De-Esser',
+        enabled: true,
+        color: '#475569',
+        threshold: -24,
+        frequency: 6800,
+        reduction: 55,
+        listen: false,
+        bandwidth: 'wide'
+      },
+      {
+        id: 'pedal-vdbl-trap-1',
+        type: 'vocalDoubler',
+        name: 'Stereo Doubler',
+        enabled: true,
+        color: '#0284c7',
+        detune: 18,
+        spread: 85,
+        delay: 25,
+        depth: 40,
+        mix: 45
+      },
+      {
+        id: 'pedal-reverb-trap-1',
+        type: 'reverb',
+        name: 'Celestial Reverb',
+        enabled: true,
+        color: '#4338ca',
+        decay: 55,
+        preDelay: 20,
+        damping: 35,
+        shimmer: false,
+        roomType: 'plate',
+        mix: 35
+      }
+    ]
+  },
+  {
+    id: 'guitar-lofi-vinyl-tape-chill',
+    name: 'Lo-Fi Vinyl & Tape Chillout',
+    author: 'ToneCraft Nostalgia Labs',
+    instrument: 'guitar',
+    genre: 'Ambient',
+    description: 'Warm cassette & vinyl nostalgia: Slow Gear pad swells -> Lo-Fi Vinyl Saturation (crackle, wow/flutter, cassette head EQ) -> Tape Glitch Warper -> Space Tape Delay.',
+    tags: ['LoFi', 'Vinyl', 'Cassette', 'Tape', 'Chillhop', 'Ambient'],
+    bpm: 82,
+    likes: 840,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[7] || BUILT_IN_AMP_MODELS[0],
+      gain: 4.0,
+      bass: 6.5,
+      mid: 5.5,
+      treble: 5.0,
+      presence: 4.8
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[3] || BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-slow-lofi-1',
+        type: 'slowGear',
+        name: 'Auto-Swell Gear',
+        enabled: true,
+        color: '#0284c7',
+        attack: 450,
+        sensitivity: 68,
+        release: 220,
+        mix: 90
+      },
+      {
+        id: 'pedal-vinyl-lofi-1',
+        type: 'lofiVinyl',
+        name: 'Lo-Fi Vinyl & Tape',
+        enabled: true,
+        color: '#78350f',
+        wear: 55,
+        dustCrackle: 60,
+        flutter: 50,
+        filter: 50,
+        saturation: 60,
+        mix: 90
+      },
+      {
+        id: 'pedal-glitch-lofi-1',
+        type: 'tapeGlitch',
+        name: 'Tape Glitch / Rev',
+        enabled: true,
+        color: '#d97706',
+        direction: 'forward',
+        sliceLength: 320,
+        pitch: 0,
+        randomGlitch: 20,
+        wowFlutter: 55,
+        feedback: 30,
+        mix: 45
+      },
+      {
+        id: 'pedal-delay-lofi-1',
+        type: 'delay',
+        name: 'Space Tape Delay',
+        enabled: true,
+        color: '#047857',
+        time: 400,
+        feedback: 45,
+        mix: 35,
+        flutter: 60,
+        pingPong: false
+      }
+    ]
+  },
+  {
+    id: 'guitar-crystal-dimension-arpeggiator',
+    name: 'Crystal Staircase Arpeggiator',
+    author: 'ToneCraft Ethereal Labs',
+    instrument: 'guitar',
+    genre: 'Ambient',
+    description: 'Celestial ambient cascade: Multi-Octave Generator (+1 Oct shimmer) -> Optical Uni-Vibe (vibrato swirl) -> Crystal Pitch Delay (+7th fifths & +12th octaves) -> Shoegaze Reverse Reverb.',
+    tags: ['Crystals', 'PitchDelay', 'UniVibe', 'Octave', 'Ambient', 'Ethereal'],
+    bpm: 80,
+    likes: 885,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[1] || BUILT_IN_AMP_MODELS[0],
+      gain: 4.0,
+      bass: 6.2,
+      mid: 5.8,
+      treble: 6.8,
+      presence: 6.2
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-pog-crystal-1',
+        type: 'multiOctave',
+        name: 'Poly Octave Gen',
+        enabled: true,
+        color: '#b91c1c',
+        sub2: 0,
+        sub1: 25,
+        dry: 75,
+        oct1: 70,
+        oct2: 30,
+        tone: 80
+      },
+      {
+        id: 'pedal-vibe-crystal-1',
+        type: 'uniVibe',
+        name: 'Rotary Uni-Vibe',
+        enabled: true,
+        color: '#7e22ce',
+        speed: 2.2,
+        intensity: 70,
+        mode: 'vibrato',
+        lampBias: 50,
+        mix: 70
+      },
+      {
+        id: 'pedal-crystal-stair-1',
+        type: 'crystalDelay',
+        name: 'Crystal Pitch Echo',
+        enabled: true,
+        color: '#0891b2',
+        time: 450,
+        interval: '+7th',
+        feedback: 65,
+        shimmer: 75,
+        reverse: false,
+        mix: 60
+      },
+      {
+        id: 'pedal-revreb-crystal-1',
+        type: 'reverseReverb',
+        name: 'Shoegaze Reverse',
+        enabled: true,
+        color: '#be185d',
+        time: 800,
+        preDelay: 30,
+        feedback: 40,
+        damping: 20,
+        mix: 50
+      }
+    ]
+  },
+  {
     id: 'guitar-shoegaze-granular-cloud',
     name: 'Shoegaze Granular Dreamscape',
     author: 'ToneCraft Ambient Labs',

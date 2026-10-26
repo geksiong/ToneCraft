@@ -62,13 +62,25 @@ import {
   GranularCloudPedal,
   ArcadeSynthPedal,
   SpectralFreezePedal,
-  TapeGlitchPedal
+  TapeGlitchPedal,
+  UniVibePedal,
+  HarmonicTremoloPedal,
+  SlowGearPedal,
+  KlonOverdrivePedal,
+  MultiOctavePedal,
+  TalkingWahPedal,
+  ReverseReverbPedal,
+  CrystalDelayPedal,
+  HardTunePedal,
+  LofiVinylPedal
 } from '../types/pedal';
 import {
   createOverdriveCurve,
   createDistortionCurve,
   createFuzzCurve,
-  createTelephoneCurve
+  createTelephoneCurve,
+  createKlonCurve,
+  createTapeSaturationCurve
 } from './curves';
 
 export interface PitchShifterNodes {
@@ -502,6 +514,56 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
 
     case 'tapeGlitch': {
       dspNodes = createTapeGlitchDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'uniVibe': {
+      dspNodes = createUniVibeDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'harmonicTremolo': {
+      dspNodes = createHarmonicTremoloDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'slowGear': {
+      dspNodes = createSlowGearDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'klonOverdrive': {
+      dspNodes = createKlonOverdriveDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'multiOctave': {
+      dspNodes = createMultiOctaveDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'talkingWah': {
+      dspNodes = createTalkingWahDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'reverseReverb': {
+      dspNodes = createReverseReverbDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'crystalDelay': {
+      dspNodes = createCrystalDelayDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'hardTune': {
+      dspNodes = createHardTuneDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'lofiVinyl': {
+      dspNodes = createLofiVinylDsp(ctx, input, wetGain);
       break;
     }
   }
@@ -1199,6 +1261,20 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
     case 'tapeGlitch': {
       const p = pedal as TapeGlitchPedal;
       if (nodes.updateParams) nodes.updateParams(p);
+      break;
+    }
+
+    case 'uniVibe':
+    case 'harmonicTremolo':
+    case 'slowGear':
+    case 'klonOverdrive':
+    case 'multiOctave':
+    case 'talkingWah':
+    case 'reverseReverb':
+    case 'crystalDelay':
+    case 'hardTune':
+    case 'lofiVinyl': {
+      if (nodes.updateParams) nodes.updateParams(pedal as any);
       break;
     }
   }
@@ -3450,4 +3526,1027 @@ function createTapeGlitchDsp(ctx: AudioContext, input: GainNode, output: GainNod
     }
   };
 }
+
+/**
+ * 1. Uni-Vibe / Rotary Speaker DSP Engine.
+ * 4-stage allpass filter ladder with asymmetric optical bulb modulation.
+ */
+function createUniVibeDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+  const baseFreqs = [280, 560, 1100, 2200];
+  const stages: BiquadFilterNode[] = baseFreqs.map((f) => {
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'allpass';
+    filter.frequency.value = f;
+    filter.Q.value = 1.25;
+    return filter;
+  });
+
+  // Chain stages
+  input.connect(stages[0]);
+  for (let i = 0; i < stages.length - 1; i++) {
+    stages[i].connect(stages[i + 1]);
+  }
+  stages[stages.length - 1].connect(wetGain);
+  input.connect(dryGain);
+
+  dryGain.connect(output);
+  wetGain.connect(output);
+
+  // Optical LFO modulation
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 2.5;
+
+  const lfoGains: GainNode[] = baseFreqs.map((f) => {
+    const g = ctx.createGain();
+    g.gain.value = f * 0.65;
+    lfo.connect(g);
+    return g;
+  });
+
+  for (let i = 0; i < stages.length; i++) {
+    lfoGains[i].connect(stages[i].frequency);
+  }
+
+  try {
+    lfo.start();
+  } catch {}
+
+  return {
+    updateParams: (p: UniVibePedal) => {
+      const now = ctx.currentTime;
+      lfo.frequency.setTargetAtTime(Math.max(0.2, Math.min(12, p.speed)), now, 0.02);
+
+      const intensity = Math.max(0, Math.min(100, p.intensity)) / 100;
+      const biasMod = 0.5 + (p.lampBias / 100) * 0.7;
+
+      for (let i = 0; i < stages.length; i++) {
+        const base = baseFreqs[i] * biasMod;
+        stages[i].frequency.setTargetAtTime(base, now, 0.02);
+        lfoGains[i].gain.setTargetAtTime(base * 0.8 * intensity, now, 0.02);
+      }
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      if (p.mode === 'vibrato') {
+        // True pitch-vibrato: smoothly crossfades from 100% dry to 100% vibrato modulated
+        dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+        wetGain.gain.setTargetAtTime(mix, now, 0.02);
+      } else {
+        // Chorus mode: Shin-ei 4-stage optical phase cancellation
+        // When mix is 0%, passes 100% dry; as mix increases, balances dry and wet for deep swirling notches without volume loss
+        const dryLevel = (1.0 - mix) + mix * 0.65;
+        const wetLevel = mix * 0.65;
+        dryGain.gain.setTargetAtTime(dryLevel, now, 0.02);
+        wetGain.gain.setTargetAtTime(wetLevel, now, 0.02);
+      }
+    },
+    dispose: () => {
+      try {
+        lfo.stop();
+        lfo.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 2. Harmonic Tremolo DSP Engine.
+ * 1962 Fender Brownface split-band out-of-phase modulation.
+ */
+function createHarmonicTremoloDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const lowFilter = ctx.createBiquadFilter();
+  lowFilter.type = 'lowpass';
+  lowFilter.Q.value = 0.707;
+  lowFilter.frequency.value = 700;
+
+  const highFilter = ctx.createBiquadFilter();
+  highFilter.type = 'highpass';
+  highFilter.Q.value = 0.707;
+  highFilter.frequency.value = 700;
+
+  const lowGain = ctx.createGain();
+  const highGain = ctx.createGain();
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(lowFilter);
+  input.connect(highFilter);
+  input.connect(dryGain);
+
+  lowFilter.connect(lowGain);
+  highFilter.connect(highGain);
+
+  lowGain.connect(wetGain);
+  highGain.connect(wetGain);
+
+  dryGain.connect(output);
+  wetGain.connect(output);
+
+  // LFO
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 4.0;
+
+  const lowLfoGain = ctx.createGain();
+  const inverter = ctx.createGain();
+  inverter.gain.value = -1;
+  const highLfoGain = ctx.createGain();
+
+  lfo.connect(lowLfoGain);
+  lfo.connect(inverter);
+  inverter.connect(highLfoGain);
+
+  lowLfoGain.connect(lowGain.gain);
+  highLfoGain.connect(highGain.gain);
+
+  try {
+    lfo.start();
+  } catch {}
+
+  return {
+    updateParams: (p: HarmonicTremoloPedal) => {
+      const now = ctx.currentTime;
+      lfo.frequency.setTargetAtTime(Math.max(0.5, Math.min(15, p.rate)), now, 0.02);
+      lfo.type = p.waveform === 'triangle' ? 'triangle' : p.waveform === 'pulse' ? 'square' : 'sine';
+
+      const crossover = Math.max(250, Math.min(1800, p.crossover || 700));
+      lowFilter.frequency.setTargetAtTime(crossover, now, 0.02);
+      highFilter.frequency.setTargetAtTime(crossover, now, 0.02);
+
+      // Baseline gains at unity (1.0), modulated 180° out-of-phase with depth up to 0.85
+      // This maintains full perceived volume matching the bypassed tone without the -6dB drop!
+      const depth = (Math.max(0, Math.min(100, p.depth)) / 100) * 0.85;
+      lowGain.gain.setTargetAtTime(1.0, now, 0.02);
+      highGain.gain.setTargetAtTime(1.0, now, 0.02);
+      lowLfoGain.gain.setTargetAtTime(depth, now, 0.02);
+      highLfoGain.gain.setTargetAtTime(depth, now, 0.02);
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        lfo.stop();
+        lfo.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 3. Slow Gear / Auto-Swell DSP Engine.
+ * Attack-delay envelope auto-violining pick-attack suppressor.
+ */
+function createSlowGearDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const processor = ctx.createScriptProcessor(512, 1, 1);
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  input.connect(processor);
+  processor.connect(wetGain);
+
+  dryGain.connect(output);
+  wetGain.connect(output);
+
+  // Prevent premature V8 garbage collection
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  let currentGain = 0.0;
+  let envelopeState: 'idle' | 'swelling' | 'sustaining' = 'idle';
+  let attackMs = 350;
+  let sensitivityThreshold = 0.015;
+  let releaseMs = 180;
+  let lastPeak = 0;
+
+  processor.onaudioprocess = (e) => {
+    try {
+      const inputBuf = e.inputBuffer.getChannelData(0);
+      const outputBuf = e.outputBuffer.getChannelData(0);
+      const sampleRate = ctx.sampleRate || 48000;
+      const dt = 1.0 / sampleRate;
+
+      for (let i = 0; i < inputBuf.length; i++) {
+        const s = inputBuf[i];
+        const absS = Math.abs(s);
+        lastPeak = lastPeak * 0.993 + absS * 0.007;
+
+        // Note trigger detection:
+        // Trigger from idle OR re-trigger if a sharp new pick attack occurs while sustaining
+        if (envelopeState === 'idle') {
+          if (absS > sensitivityThreshold) {
+            envelopeState = 'swelling';
+            currentGain = 0.001;
+          }
+        } else if (envelopeState === 'sustaining') {
+          if (absS > Math.max(sensitivityThreshold, lastPeak * 2.3 + 0.015)) {
+            // New pick transient detected: restart swell for natural legato/picked passage
+            envelopeState = 'swelling';
+            currentGain = 0.05;
+          } else if (lastPeak < sensitivityThreshold * 0.45) {
+            const releaseStep = dt / Math.max(0.04, releaseMs / 1000);
+            currentGain -= releaseStep;
+            if (currentGain <= 0.01) {
+              currentGain = 0.0;
+              envelopeState = 'idle';
+            }
+          }
+        } else if (envelopeState === 'swelling') {
+          const attackStep = dt / Math.max(0.04, attackMs / 1000);
+          currentGain += attackStep;
+          if (currentGain >= 1.0) {
+            currentGain = 1.0;
+            envelopeState = 'sustaining';
+          }
+        }
+
+        outputBuf[i] = s * currentGain;
+      }
+    } catch {
+      try {
+        const inCh = e.inputBuffer.getChannelData(0);
+        const outCh = e.outputBuffer.getChannelData(0);
+        outCh.set(inCh);
+      } catch {}
+    }
+  };
+
+  return {
+    updateParams: (p: SlowGearPedal) => {
+      const now = ctx.currentTime;
+      attackMs = Math.max(40, Math.min(1500, p.attack));
+      const sens = Math.max(0, Math.min(100, p.sensitivity));
+      // Musical sensitivity curve: sensitive enough for gentle fingerpicking yet quiet when resting
+      sensitivityThreshold = 0.045 - (sens / 100) * 0.041;
+      releaseMs = Math.max(40, Math.min(600, p.release));
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      // Slight makeup boost on wet gain for silky bowed sustain
+      wetGain.gain.setTargetAtTime(mix * 1.08, now, 0.02);
+    },
+    dispose: () => {
+      if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+        (window as any).__activeAudioProcessors.delete(processor);
+      }
+      try {
+        processor.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 4. Klon Centaur Transparent Overdrive DSP Engine.
+ * Dual-ganged transparent clean boost + 1N34A germanium diode saturation.
+ */
+function createKlonOverdriveDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const cleanGain = ctx.createGain();
+  const driveGain = ctx.createGain();
+  const waveshaper = ctx.createWaveShaper();
+  waveshaper.oversample = '4x';
+
+  const drivePreFilter = ctx.createBiquadFilter();
+  drivePreFilter.type = 'peaking';
+  drivePreFilter.frequency.value = 1000;
+  drivePreFilter.Q.value = 1.4;
+  drivePreFilter.gain.value = 4.5; // Klon upper-mid signature push
+
+  const trebleFilter = ctx.createBiquadFilter();
+  trebleFilter.type = 'highshelf';
+  trebleFilter.frequency.value = 4200;
+  trebleFilter.gain.value = 0;
+
+  const masterGain = ctx.createGain();
+
+  // Clean path
+  input.connect(cleanGain);
+  cleanGain.connect(trebleFilter);
+
+  // Overdrive path
+  input.connect(drivePreFilter);
+  drivePreFilter.connect(waveshaper);
+  waveshaper.connect(driveGain);
+  driveGain.connect(trebleFilter);
+
+  trebleFilter.connect(masterGain);
+  masterGain.connect(output);
+
+  return {
+    updateParams: (p: KlonOverdrivePedal) => {
+      const now = ctx.currentTime;
+      waveshaper.curve = createKlonCurve(p.gain) as any;
+
+      // Active treble control (-8dB to +8dB)
+      const trebleDb = ((p.treble - 50) / 50) * 8.5;
+      trebleFilter.gain.setTargetAtTime(trebleDb, now, 0.02);
+
+      // Klon dual-gang blending
+      const cleanRatio = (p.cleanBlend / 100);
+      const gainFactor = (p.gain / 100);
+      cleanGain.gain.setTargetAtTime(cleanRatio * (1.2 - gainFactor * 0.4), now, 0.02);
+      driveGain.gain.setTargetAtTime((1.0 - cleanRatio * 0.5) * (0.6 + gainFactor * 0.6), now, 0.02);
+
+      const vol = (p.output / 100) * 1.5;
+      masterGain.gain.setTargetAtTime(vol, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        waveshaper.disconnect();
+        drivePreFilter.disconnect();
+        cleanGain.disconnect();
+        driveGain.disconnect();
+        trebleFilter.disconnect();
+        masterGain.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 5. Polyphonic Multi-Octave Generator (POG) DSP Engine.
+ * 4 independent octave generators (-2, -1, +1, +2) + dry blend + organ tone filter.
+ */
+function createMultiOctaveDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const dryGain = ctx.createGain();
+  const sub2Gain = ctx.createGain();
+  const sub1Gain = ctx.createGain();
+  const oct1Gain = ctx.createGain();
+  const oct2Gain = ctx.createGain();
+
+  const wetToneFilter = ctx.createBiquadFilter();
+  wetToneFilter.type = 'lowpass';
+  wetToneFilter.frequency.value = 6500;
+  wetToneFilter.Q.value = 0.707;
+
+  // Dedicated pitch shifters
+  const shifterSub2 = createPitchShifterDsp(ctx, input, wetToneFilter);
+  shifterSub2.setShift(-24);
+  shifterSub2.setOctaveBlend?.(false); // disable sub-harmonic divider to avoid sub-audible 15Hz rumble
+  shifterSub2.dryGain.gain.value = 0;
+
+  const shifterSub1 = createPitchShifterDsp(ctx, input, wetToneFilter);
+  shifterSub1.setShift(-12);
+  shifterSub1.setOctaveBlend?.(true); // punchy sub-octave fundamental tracking
+  shifterSub1.dryGain.gain.value = 0;
+
+  const shifterOct1 = createPitchShifterDsp(ctx, input, wetToneFilter);
+  shifterOct1.setShift(12);
+  shifterOct1.dryGain.gain.value = 0;
+
+  const shifterOct2 = createPitchShifterDsp(ctx, input, wetToneFilter);
+  shifterOct2.setShift(24);
+  shifterOct2.dryGain.gain.value = 0;
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+  wetToneFilter.connect(output);
+
+  return {
+    updateParams: (p: MultiOctavePedal) => {
+      const now = ctx.currentTime;
+      dryGain.gain.setTargetAtTime((Math.max(0, Math.min(100, p.dry)) / 100) * 0.9, now, 0.02);
+      // Calibrated organ voice balance: sum of all 4 octaves remains clean without digital clipping
+      shifterSub2.wetGain.gain.setTargetAtTime((p.sub2 / 100) * 0.55, now, 0.02);
+      shifterSub1.wetGain.gain.setTargetAtTime((p.sub1 / 100) * 0.65, now, 0.02);
+      shifterOct1.wetGain.gain.setTargetAtTime((p.oct1 / 100) * 0.65, now, 0.02);
+      shifterOct2.wetGain.gain.setTargetAtTime((p.oct2 / 100) * 0.50, now, 0.02);
+
+      const toneHz = 1200 + (Math.max(0, Math.min(100, p.tone)) / 100) * 7000;
+      wetToneFilter.frequency.setTargetAtTime(toneHz, now, 0.02);
+    },
+    dispose: () => {
+      shifterSub2.dispose?.();
+      shifterSub1.dispose?.();
+      shifterOct1.dispose?.();
+      shifterOct2.dispose?.();
+      try {
+        dryGain.disconnect();
+        wetToneFilter.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 6. Dynamic Envelope "Talking" Wah DSP Engine.
+ * Dual formant vocal bandpass filters swept dynamically by envelope follower.
+ */
+function createTalkingWahDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const f1 = ctx.createBiquadFilter();
+  f1.type = 'bandpass';
+  f1.Q.value = 6.0;
+
+  const f2 = ctx.createBiquadFilter();
+  f2.type = 'bandpass';
+  f2.Q.value = 7.0;
+
+  const driveShaper = ctx.createWaveShaper();
+  driveShaper.curve = createOverdriveCurve(25) as any;
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(f1);
+  input.connect(f2);
+  f1.connect(driveShaper);
+  f2.connect(driveShaper);
+  driveShaper.connect(wetGain);
+  wetGain.connect(output);
+
+  const processor = ctx.createScriptProcessor(512, 1, 1);
+  const dummyGain = ctx.createGain();
+  dummyGain.gain.value = 0.0;
+  input.connect(processor);
+  processor.connect(dummyGain);
+  dummyGain.connect(output);
+
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  // Vowel formant frequencies [F1_start, F1_end, F2_start, F2_end]
+  const vowels = {
+    'ow-ow': [400, 850, 800, 1300],
+    'ya-ya': [320, 750, 2200, 1200],
+    'ee-ah': [280, 800, 2400, 1300],
+    'oo-ee': [350, 280, 800, 2300]
+  };
+
+  let currentVowel: keyof typeof vowels = 'ya-ya';
+  let sensitivity = 60;
+  let direction: 'up' | 'down' = 'up';
+  let envSmooth = 0;
+
+  processor.onaudioprocess = (e) => {
+    try {
+      const inputBuf = e.inputBuffer.getChannelData(0);
+      const outBuf = e.outputBuffer.getChannelData(0);
+      if (outBuf) outBuf.fill(0);
+      let sum = 0;
+      for (let i = 0; i < inputBuf.length; i++) {
+        sum += Math.abs(inputBuf[i]);
+      }
+      const currentPeak = sum / inputBuf.length;
+      envSmooth = envSmooth * 0.85 + currentPeak * 0.15;
+
+      const [f1s, f1e, f2s, f2e] = vowels[currentVowel] || vowels['ya-ya'];
+      const amount = Math.min(1.0, envSmooth * (sensitivity / 100) * 12.0);
+      const mod = direction === 'up' ? amount : 1.0 - amount;
+
+      const targetF1 = f1s + (f1e - f1s) * mod;
+      const targetF2 = f2s + (f2e - f2s) * mod;
+
+      f1.frequency.setTargetAtTime(targetF1, ctx.currentTime, 0.015);
+      f2.frequency.setTargetAtTime(targetF2, ctx.currentTime, 0.015);
+    } catch {}
+  };
+
+  return {
+    updateParams: (p: TalkingWahPedal) => {
+      const now = ctx.currentTime;
+      currentVowel = p.vowel || 'ya-ya';
+      sensitivity = Math.max(0, Math.min(100, p.sensitivity));
+      direction = p.direction || 'up';
+
+      const q = Math.max(2, Math.min(15, p.resonance));
+      f1.Q.setTargetAtTime(q, now, 0.02);
+      f2.Q.setTargetAtTime(q * 1.1, now, 0.02);
+
+      driveShaper.curve = createOverdriveCurve(p.drive) as any;
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix * 1.25, now, 0.02);
+    },
+    dispose: () => {
+      if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+        (window as any).__activeAudioProcessors.delete(processor);
+      }
+      try {
+        processor.disconnect();
+        dummyGain.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 7. Reverse Reverb & Shoegaze Bloom DSP Engine.
+ * Engineered reverse exponential impulse with feedback bloom.
+ */
+function createReverseReverbDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const convolver = ctx.createConvolver();
+  convolver.normalize = true;
+
+  const preDelay = ctx.createDelay(1.0);
+  preDelay.delayTime.value = 0.04;
+
+  const dampingFilter = ctx.createBiquadFilter();
+  dampingFilter.type = 'lowpass';
+  dampingFilter.frequency.value = 6000;
+
+  const feedbackGain = ctx.createGain();
+  feedbackGain.gain.value = 0.2;
+
+  // Diffusion delay line inside feedback cycle to satisfy Web Audio cycle constraint strictly
+  const feedbackDelay = ctx.createDelay(1.0);
+  feedbackDelay.delayTime.value = 0.08;
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(preDelay);
+  preDelay.connect(convolver);
+  convolver.connect(dampingFilter);
+
+  // Web Audio compliant regenerative bloom feedback loop (contains DelayNode)
+  dampingFilter.connect(feedbackGain);
+  feedbackGain.connect(feedbackDelay);
+  feedbackDelay.connect(convolver);
+
+  dampingFilter.connect(wetGain);
+  wetGain.connect(output);
+
+  let lastTimeMs = 600;
+
+  const rebuildImpulse = (timeMs: number) => {
+    const rate = ctx.sampleRate || 48000;
+    const lengthSec = Math.max(0.15, Math.min(1.6, timeMs / 1000));
+    const length = Math.floor(rate * lengthSec);
+    const buffer = ctx.createBuffer(2, length, rate);
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+
+    let maxPeak = 0.0001;
+    for (let i = 0; i < length; i++) {
+      // Exponential swell building up to a sharp cliff-edge cutoff
+      const progress = i / length;
+      const envelope = Math.pow(progress, 2.4);
+      const noiseL = (Math.random() * 2 - 1) * envelope;
+      const noiseR = (Math.random() * 2 - 1) * envelope;
+      left[i] = noiseL;
+      right[i] = noiseR;
+      const p = Math.max(Math.abs(noiseL), Math.abs(noiseR));
+      if (p > maxPeak) maxPeak = p;
+    }
+
+    // Peak normalization
+    const scale = 0.707 / maxPeak;
+    for (let i = 0; i < length; i++) {
+      left[i] *= scale;
+      right[i] *= scale;
+    }
+
+    convolver.buffer = buffer;
+  };
+
+  rebuildImpulse(lastTimeMs);
+
+  return {
+    updateParams: (p: ReverseReverbPedal) => {
+      const now = ctx.currentTime;
+      if (Math.abs(p.time - lastTimeMs) > 60) {
+        lastTimeMs = p.time;
+        rebuildImpulse(p.time);
+      }
+
+      preDelay.delayTime.setTargetAtTime(Math.max(0, Math.min(200, p.preDelay)) / 1000, now, 0.02);
+      // Safe regenerative bloom feedback (< 0.70 to prevent runaway overload)
+      feedbackGain.gain.setTargetAtTime(Math.min(0.68, (p.feedback / 100) * 0.68), now, 0.02);
+
+      const dampCutoff = 1500 + ((100 - p.damping) / 100) * 7500;
+      dampingFilter.frequency.setTargetAtTime(dampCutoff, now, 0.02);
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix * 1.15, now, 0.02);
+    },
+    dispose: () => {
+      try {
+        convolver.disconnect();
+        preDelay.disconnect();
+        dampingFilter.disconnect();
+        feedbackGain.disconnect();
+        feedbackDelay.disconnect();
+        dryGain.disconnect();
+        wetGain.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 8. Crystal Pitch-Shifted Delay DSP Engine (Mode 7 / Eventide Crystals).
+ * Delay loop containing granular pitch shift staircase into infinity.
+ */
+function createCrystalDelayDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const delayNode = ctx.createDelay(1.5);
+  delayNode.delayTime.value = 0.38;
+
+  const feedbackGain = ctx.createGain();
+  feedbackGain.gain.value = 0.45;
+
+  const straightDelayGain = ctx.createGain();
+  straightDelayGain.gain.value = 0.6;
+
+  const shimmerGain = ctx.createGain();
+  shimmerGain.gain.value = 0.7;
+
+  // Gentle tone shaping: low rumble cut (160Hz) + high sparkle shelf (3500Hz)
+  const shimmerHp = ctx.createBiquadFilter();
+  shimmerHp.type = 'highpass';
+  shimmerHp.frequency.value = 160;
+
+  const shimmerSparkle = ctx.createBiquadFilter();
+  shimmerSparkle.type = 'highshelf';
+  shimmerSparkle.frequency.value = 3500;
+  shimmerSparkle.gain.value = 2.5;
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  // Dry path
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  // Delay line
+  input.connect(delayNode);
+
+  // Full-body straight delay path to wet output
+  delayNode.connect(straightDelayGain);
+  straightDelayGain.connect(wetGain);
+
+  // Pitch-shifting crystal shimmer path
+  const delayTapGain = ctx.createGain();
+  delayNode.connect(delayTapGain);
+  const pitchShifter = createPitchShifterDsp(ctx, delayTapGain, feedbackGain);
+  pitchShifter.setShift(12);
+  pitchShifter.dryGain.gain.value = 0;
+
+  // Feedback loop: pitch-shifted repeats loop back into delay line for cascading crystal staircase
+  feedbackGain.connect(delayNode);
+
+  // Also route pitch shifter output directly to wet output for instant crystal sparkle on first tap!
+  feedbackGain.connect(shimmerHp);
+  shimmerHp.connect(shimmerSparkle);
+  shimmerSparkle.connect(shimmerGain);
+  shimmerGain.connect(wetGain);
+
+  wetGain.connect(output);
+
+  const intervalMap: Record<string, number> = {
+    '+5th': 7,
+    '+7th': 11,
+    '+12th': 12,
+    '+24th': 24,
+    '-12th': -12
+  };
+
+  return {
+    updateParams: (p: CrystalDelayPedal) => {
+      const now = ctx.currentTime;
+      delayNode.delayTime.setTargetAtTime(Math.max(0.06, Math.min(1.2, p.time / 1000)), now, 0.02);
+      // Safe regenerative feedback limit to avoid infinite runaway howling
+      feedbackGain.gain.setTargetAtTime(Math.min(0.85, (p.feedback / 100) * 0.82), now, 0.02);
+
+      const shift = intervalMap[p.interval] ?? 12;
+      pitchShifter.setShift(shift);
+
+      // Shimmer knob balances between straight delay repeats and glistening crystal octave cascade
+      const shimmerFrac = Math.max(0, Math.min(100, p.shimmer)) / 100;
+      shimmerGain.gain.setTargetAtTime(shimmerFrac * 0.95, now, 0.02);
+      straightDelayGain.gain.setTargetAtTime(Math.max(0.15, 1.0 - shimmerFrac * 0.65), now, 0.02);
+      shimmerSparkle.gain.setTargetAtTime((shimmerFrac - 0.5) * 6.0, now, 0.02);
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      wetGain.gain.setTargetAtTime(mix * 1.05, now, 0.02);
+    },
+    dispose: () => {
+      pitchShifter.dispose?.();
+      try {
+        delayNode.disconnect();
+        delayTapGain.disconnect();
+        feedbackGain.disconnect();
+        straightDelayGain.disconnect();
+        shimmerGain.disconnect();
+        shimmerHp.disconnect();
+        shimmerSparkle.disconnect();
+        dryGain.disconnect();
+        wetGain.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 9. Aggressive Hard-Tune & Retune Snapper DSP Engine.
+ * Instant 0ms vocal pitch quantizer with scale lock and formant shift.
+ */
+function createHardTuneDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  // Directly connect high-accuracy pitch shifter between input and output
+  const pitchShifter = createPitchShifterDsp(ctx, input, output);
+  pitchShifter.dryGain.gain.value = 0.0;
+  pitchShifter.wetGain.gain.value = 1.0;
+
+  // Analysis processor for real-time vocal pitch tracking & scale quantization
+  const bufferQuantum = 512;
+  const processor = ctx.createScriptProcessor(bufferQuantum, 1, 1);
+  const dummyGain = ctx.createGain();
+  dummyGain.gain.value = 0.0;
+
+  // Connect processor through muted dummy gain to output so WebAudio graph schedules onaudioprocess
+  input.connect(processor);
+  processor.connect(dummyGain);
+  dummyGain.connect(output);
+
+  // Prevent premature garbage collection by V8
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(processor);
+  }
+
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const scalePatterns: Record<string, number[]> = {
+    major: [0, 2, 4, 5, 7, 9, 11],
+    minor: [0, 2, 3, 5, 7, 8, 10],
+    pentatonic: [0, 2, 4, 7, 9],
+    chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    arabic: [0, 1, 4, 5, 7, 8, 11]
+  };
+
+  let currentKey = 'C';
+  let currentScale = 'minor';
+  let retuneSpeed = 0;
+  let formantWarp = 0;
+  let currentShift = 0.0;
+  let targetShift = 0.0;
+
+  // Real-time normalized autocorrelation pitch tracking
+  processor.onaudioprocess = (e) => {
+    try {
+      const inCh = e.inputBuffer.getChannelData(0);
+      const outCh = e.outputBuffer.getChannelData(0);
+      if (!inCh || !outCh) return;
+      outCh.fill(0); // Muted dummy buffer
+
+      const sampleRate = ctx.sampleRate || 48000;
+      const len = inCh.length;
+
+      // 1. RMS level check with sensitive threshold for vocal tracking
+      let sumSq = 0;
+      for (let i = 0; i < len; i += 2) {
+        const s = inCh[i];
+        sumSq += s * s;
+      }
+      const rms = Math.sqrt(sumSq / (len / 2));
+
+      if (rms > 0.0015) {
+        // Human vocal fundamental range: ~70Hz (low male bass) to ~850Hz (high soprano)
+        const minPeriod = Math.max(16, Math.floor(sampleRate / 850));
+        const maxPeriod = Math.min(Math.floor(len * 0.9), Math.floor(sampleRate / 70));
+
+        let bestCorr = -Infinity;
+        let bestPeriod = -1;
+
+        // Step by 2 for low CPU footprint and sub-millisecond execution
+        for (let lag = minPeriod; lag < maxPeriod; lag += 2) {
+          let corr = 0;
+          let energy = 0;
+          const searchLen = len - lag;
+          for (let i = 0; i < searchLen; i += 4) {
+            const s0 = inCh[i];
+            const sLag = inCh[i + lag];
+            corr += s0 * sLag;
+            energy += s0 * s0 + sLag * sLag;
+          }
+          const norm = energy > 0.0001 ? (2 * corr) / energy : 0;
+          if (norm > bestCorr) {
+            bestCorr = norm;
+            bestPeriod = lag;
+          }
+        }
+
+        // Reliable fundamental detected
+        if (bestPeriod > 0 && bestCorr > 0.28) {
+          const detectedFreq = sampleRate / bestPeriod;
+          // MIDI pitch: 69 = A4 (440 Hz)
+          const midi = 69 + 12 * Math.log2(Math.max(20, detectedFreq) / 440);
+          const rootOffset = noteNames.indexOf(currentKey);
+          const pattern = scalePatterns[currentScale] || scalePatterns.minor;
+
+          // Find nearest target scale note
+          let bestMidi = Math.round(midi);
+          let minDiff = 999;
+          for (let octave = 1; octave <= 7; octave++) {
+            for (const degree of pattern) {
+              const candidateMidi = (octave + 1) * 12 + ((rootOffset + degree) % 12);
+              const diff = Math.abs(candidateMidi - midi);
+              if (diff < minDiff) {
+                minDiff = diff;
+                bestMidi = candidateMidi;
+              }
+            }
+          }
+
+          // Hard quantize shift in semitones + formant shift offset
+          const rawShift = (bestMidi - midi) + formantWarp * 0.35;
+          targetShift = Math.max(-12, Math.min(12, rawShift));
+        }
+      }
+
+      // 2. Retune Speed snap:
+      // In Trap / HipHop, 0ms retune speed snaps instantly to the exact quantized scale note!
+      if (retuneSpeed <= 2) {
+        currentShift = targetShift;
+      } else {
+        const slewRate = Math.max(0.04, Math.min(1.0, 15 / (retuneSpeed + 1)));
+        currentShift += (targetShift - currentShift) * slewRate;
+      }
+
+      pitchShifter.setShift(currentShift);
+    } catch {}
+  };
+
+  return {
+    updateParams: (p: HardTunePedal) => {
+      const now = ctx.currentTime;
+      currentKey = p.key || 'C';
+      currentScale = p.scale || 'minor';
+      retuneSpeed = typeof p.retuneSpeed === 'number' ? Math.max(0, Math.min(50, p.retuneSpeed)) : 0;
+      formantWarp = Math.max(-12, Math.min(12, p.formantWarp || 0));
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      pitchShifter.dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      pitchShifter.wetGain.gain.setTargetAtTime(mix, now, 0.02);
+    },
+    dispose: () => {
+      if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+        (window as any).__activeAudioProcessors.delete(processor);
+      }
+      try {
+        processor.disconnect();
+        dummyGain.disconnect();
+      } catch {}
+      pitchShifter.dispose?.();
+    }
+  };
+}
+
+/**
+ * 10. Lo-Fi Cassette & Vinyl Saturation DSP Engine.
+ * Wow & flutter delay modulation + vinyl dust crackle + cassette head filter.
+ */
+function createLofiVinylDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const headFilterLow = ctx.createBiquadFilter();
+  headFilterLow.type = 'highpass';
+  headFilterLow.frequency.value = 130;
+
+  const headFilterHigh = ctx.createBiquadFilter();
+  headFilterHigh.type = 'lowpass';
+  headFilterHigh.frequency.value = 5200;
+
+  const tapeShaper = ctx.createWaveShaper();
+  tapeShaper.curve = createTapeSaturationCurve(50) as any;
+
+  // Wow & Flutter modulation delay
+  const flutterDelay = ctx.createDelay(0.1);
+  flutterDelay.delayTime.value = 0.015;
+
+  const wowOsc = ctx.createOscillator();
+  wowOsc.type = 'sine';
+  wowOsc.frequency.value = 0.4;
+
+  const wowGain = ctx.createGain();
+  wowGain.gain.value = 0.0015;
+  wowOsc.connect(wowGain);
+  wowGain.connect(flutterDelay.delayTime);
+
+  const flutterOsc = ctx.createOscillator();
+  flutterOsc.type = 'triangle';
+  flutterOsc.frequency.value = 5.6;
+
+  const flutterGain = ctx.createGain();
+  flutterGain.gain.value = 0.0006;
+  flutterOsc.connect(flutterGain);
+  flutterGain.connect(flutterDelay.delayTime);
+
+  try {
+    wowOsc.start();
+    flutterOsc.start();
+  } catch {}
+
+  // Vinyl Crackle Synthesizer
+  const crackleNode = ctx.createScriptProcessor(512, 1, 1);
+  const crackleGain = ctx.createGain();
+  crackleGain.gain.value = 0.08;
+
+  // Connect input to crackleNode so WebAudio scheduler keeps processing the node continuously
+  input.connect(crackleNode);
+  crackleNode.connect(crackleGain);
+
+  // Prevent premature V8 garbage collection
+  if (typeof window !== 'undefined') {
+    if (!(window as any).__activeAudioProcessors) {
+      (window as any).__activeAudioProcessors = new Set();
+    }
+    (window as any).__activeAudioProcessors.add(crackleNode);
+  }
+
+  let crackleAmount = 35;
+  crackleNode.onaudioprocess = (e) => {
+    try {
+      const out = e.outputBuffer.getChannelData(0);
+      const prob = (crackleAmount / 100) * 0.015;
+      for (let i = 0; i < out.length; i++) {
+        if (Math.random() < prob) {
+          // Vinyl pop click impulse
+          out[i] = (Math.random() * 2 - 1) * 0.85;
+        } else {
+          // Surface hiss
+          out[i] = (Math.random() * 2 - 1) * 0.012;
+        }
+      }
+    } catch {}
+  };
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  input.connect(dryGain);
+  dryGain.connect(output);
+
+  input.connect(headFilterLow);
+  headFilterLow.connect(headFilterHigh);
+  headFilterHigh.connect(tapeShaper);
+  tapeShaper.connect(flutterDelay);
+  flutterDelay.connect(wetGain);
+  crackleGain.connect(wetGain);
+  wetGain.connect(output);
+
+  return {
+    updateParams: (p: LofiVinylPedal) => {
+      const now = ctx.currentTime;
+      tapeShaper.curve = createTapeSaturationCurve(p.saturation) as any;
+
+      const flutterLevel = (Math.max(0, Math.min(100, p.flutter)) / 100);
+      wowGain.gain.setTargetAtTime(0.002 * flutterLevel, now, 0.02);
+      flutterGain.gain.setTargetAtTime(0.0009 * flutterLevel, now, 0.02);
+
+      crackleAmount = Math.max(0, Math.min(100, p.dustCrackle));
+      crackleGain.gain.setTargetAtTime((p.dustCrackle / 100) * 0.15, now, 0.02);
+
+      // Filter head loss
+      const filterCutoff = 2200 + ((100 - p.filter) / 100) * 6000;
+      headFilterHigh.frequency.setTargetAtTime(filterCutoff, now, 0.02);
+
+      const mix = Math.max(0, Math.min(100, p.mix)) / 100;
+      dryGain.gain.setTargetAtTime(1.0 - mix, now, 0.02);
+      // Warm analog makeup gain compensating for vintage tape head loss
+      wetGain.gain.setTargetAtTime(mix * 1.15, now, 0.02);
+    },
+    dispose: () => {
+      if (typeof window !== 'undefined' && (window as any).__activeAudioProcessors) {
+        (window as any).__activeAudioProcessors.delete(crackleNode);
+      }
+      try {
+        wowOsc.stop();
+        flutterOsc.stop();
+        wowOsc.disconnect();
+        flutterOsc.disconnect();
+        wowGain.disconnect();
+        flutterGain.disconnect();
+        crackleNode.disconnect();
+        crackleGain.disconnect();
+        headFilterLow.disconnect();
+        headFilterHigh.disconnect();
+        tapeShaper.disconnect();
+        flutterDelay.disconnect();
+        dryGain.disconnect();
+        wetGain.disconnect();
+      } catch {}
+    }
+  };
+}
+
 

@@ -26,7 +26,17 @@ export type PedalType =
   | 'granularCloud'
   | 'arcadeSynth'
   | 'spectralFreeze'
-  | 'tapeGlitch';
+  | 'tapeGlitch'
+  | 'uniVibe'
+  | 'harmonicTremolo'
+  | 'slowGear'
+  | 'klonOverdrive'
+  | 'multiOctave'
+  | 'talkingWah'
+  | 'reverseReverb'
+  | 'crystalDelay'
+  | 'hardTune'
+  | 'lofiVinyl';
 
 
 export interface BasePedalConfig {
@@ -298,6 +308,98 @@ export interface TapeGlitchPedal extends BasePedalConfig {
   mix: number; // 0 - 100%
 }
 
+export interface UniVibePedal extends BasePedalConfig {
+  type: 'uniVibe';
+  speed: number; // 0.5 - 10.0 Hz
+  intensity: number; // 0 - 100%
+  mode: 'chorus' | 'vibrato';
+  lampBias: number; // 0 - 100%
+  mix: number; // 0 - 100%
+}
+
+export interface HarmonicTremoloPedal extends BasePedalConfig {
+  type: 'harmonicTremolo';
+  rate: number; // 0.5 - 12.0 Hz
+  depth: number; // 0 - 100%
+  crossover: number; // 300 - 1600 Hz
+  waveform: 'sine' | 'triangle' | 'pulse';
+  mix: number; // 0 - 100%
+}
+
+export interface SlowGearPedal extends BasePedalConfig {
+  type: 'slowGear';
+  attack: number; // 40 - 1500 ms
+  sensitivity: number; // 0 - 100%
+  release: number; // 40 - 600 ms
+  mix: number; // 0 - 100%
+}
+
+export interface KlonOverdrivePedal extends BasePedalConfig {
+  type: 'klonOverdrive';
+  gain: number; // 0 - 100%
+  treble: number; // 0 - 100%
+  output: number; // 0 - 100%
+  cleanBlend: number; // 0 - 100%
+}
+
+export interface MultiOctavePedal extends BasePedalConfig {
+  type: 'multiOctave';
+  sub2: number; // 0 - 100% (-2 Octaves)
+  sub1: number; // 0 - 100% (-1 Octave)
+  dry: number; // 0 - 100%
+  oct1: number; // 0 - 100% (+1 Octave)
+  oct2: number; // 0 - 100% (+2 Octaves)
+  tone: number; // 0 - 100%
+}
+
+export interface TalkingWahPedal extends BasePedalConfig {
+  type: 'talkingWah';
+  vowel: 'ow-ow' | 'ya-ya' | 'ee-ah' | 'oo-ee';
+  sensitivity: number; // 0 - 100%
+  direction: 'up' | 'down';
+  resonance: number; // 1 - 15
+  drive: number; // 0 - 100%
+  mix: number; // 0 - 100%
+}
+
+export interface ReverseReverbPedal extends BasePedalConfig {
+  type: 'reverseReverb';
+  time: number; // 200 - 1600 ms
+  preDelay: number; // 0 - 200 ms
+  feedback: number; // 0 - 85%
+  damping: number; // 0 - 100%
+  mix: number; // 0 - 100%
+}
+
+export interface CrystalDelayPedal extends BasePedalConfig {
+  type: 'crystalDelay';
+  time: number; // 60 - 1200 ms
+  interval: '+5th' | '+7th' | '+12th' | '+24th' | '-12th';
+  feedback: number; // 0 - 90%
+  shimmer: number; // 0 - 100%
+  reverse: boolean;
+  mix: number; // 0 - 100%
+}
+
+export interface HardTunePedal extends BasePedalConfig {
+  type: 'hardTune';
+  key: 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
+  scale: 'major' | 'minor' | 'pentatonic' | 'chromatic' | 'arabic';
+  retuneSpeed: number; // 0 - 50 ms
+  formantWarp: number; // -12 to +12 semitones
+  mix: number; // 0 - 100%
+}
+
+export interface LofiVinylPedal extends BasePedalConfig {
+  type: 'lofiVinyl';
+  wear: number; // 0 - 100%
+  dustCrackle: number; // 0 - 100%
+  flutter: number; // 0 - 100%
+  filter: number; // 0 - 100%
+  saturation: number; // 0 - 100%
+  mix: number; // 0 - 100%
+}
+
 export type AnyPedal =
   | OverdrivePedal
   | DistortionPedal
@@ -326,7 +428,17 @@ export type AnyPedal =
   | GranularCloudPedal
   | ArcadeSynthPedal
   | SpectralFreezePedal
-  | TapeGlitchPedal;
+  | TapeGlitchPedal
+  | UniVibePedal
+  | HarmonicTremoloPedal
+  | SlowGearPedal
+  | KlonOverdrivePedal
+  | MultiOctavePedal
+  | TalkingWahPedal
+  | ReverseReverbPedal
+  | CrystalDelayPedal
+  | HardTunePedal
+  | LofiVinylPedal;
 
 
 

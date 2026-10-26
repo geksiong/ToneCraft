@@ -86,6 +86,24 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       scoop: 40
     })
   },
+  {
+    type: 'klonOverdrive',
+    title: 'Klon Centaur Gold Overdrive',
+    category: 'Gain & Dirt',
+    description: 'Mythical transparent dual-gang overdrive blending clean headroom boost with 1N34A germanium diode clipping.',
+    color: '#ca8a04',
+    createDefault: () => ({
+      id: `pedal-klon-${Date.now()}`,
+      type: 'klonOverdrive',
+      name: 'Centaur Gold OD',
+      enabled: true,
+      color: '#ca8a04',
+      gain: 45,
+      treble: 52,
+      output: 65,
+      cleanBlend: 60
+    })
+  },
 
   // Tone & Dynamics
   {
@@ -162,6 +180,44 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       mode: 'envelope'
     })
   },
+  {
+    type: 'slowGear',
+    title: 'Slow Gear / Auto-Swell',
+    category: 'Tone & Dynamics',
+    description: 'Envelope-triggered pick attack suppressor producing smooth bowed violin, cello, and pedal steel swells.',
+    color: '#0284c7',
+    createDefault: () => ({
+      id: `pedal-slow-${Date.now()}`,
+      type: 'slowGear',
+      name: 'Auto-Swell Gear',
+      enabled: true,
+      color: '#0284c7',
+      attack: 350,
+      sensitivity: 65,
+      release: 180,
+      mix: 100
+    })
+  },
+  {
+    type: 'talkingWah',
+    title: 'Talking Box / Vocal Wah',
+    category: 'Tone & Dynamics',
+    description: 'Dual resonant vocal formant filters dynamically swept by pick dynamics with vowel select and drive.',
+    color: '#8b5cf6',
+    createDefault: () => ({
+      id: `pedal-talk-${Date.now()}`,
+      type: 'talkingWah',
+      name: 'Talking Vocal Wah',
+      enabled: true,
+      color: '#8b5cf6',
+      vowel: 'ya-ya',
+      sensitivity: 65,
+      direction: 'up',
+      resonance: 7,
+      drive: 30,
+      mix: 85
+    })
+  },
 
   // Modulation
   {
@@ -235,6 +291,44 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       waveform: 'sine'
     })
   },
+  {
+    type: 'uniVibe',
+    title: 'Uni-Vibe / Rotary Swirl',
+    category: 'Modulation',
+    description: 'Legendary 4-stage optical bulb phase-chorus with Chorus/Vibrato switch and warm incandescent lamp sweep.',
+    color: '#7e22ce',
+    createDefault: () => ({
+      id: `pedal-vibe-${Date.now()}`,
+      type: 'uniVibe',
+      name: 'Rotary Uni-Vibe',
+      enabled: true,
+      color: '#7e22ce',
+      speed: 2.8,
+      intensity: 75,
+      mode: 'chorus',
+      lampBias: 50,
+      mix: 80
+    })
+  },
+  {
+    type: 'harmonicTremolo',
+    title: 'Harmonic 1962 Tremolo',
+    category: 'Modulation',
+    description: 'Vintage Fender Brownface split-band crossover tremolo modulating bass and treble 180° out-of-phase.',
+    color: '#b45309',
+    createDefault: () => ({
+      id: `pedal-harmtrem-${Date.now()}`,
+      type: 'harmonicTremolo',
+      name: '1962 Brown Tremolo',
+      enabled: true,
+      color: '#b45309',
+      rate: 3.5,
+      depth: 70,
+      crossover: 700,
+      waveform: 'sine',
+      mix: 85
+    })
+  },
 
   // Time & Space
   {
@@ -276,6 +370,45 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       roomType: 'plate'
     })
   },
+  {
+    type: 'reverseReverb',
+    title: 'Reverse Reverb & Shoegaze Bloom',
+    category: 'Time & Space',
+    description: 'Yamaha SPX90 / MBV style nonlinear reverse reverb with exponential swell envelope, pre-delay, and regenerative bloom.',
+    color: '#be185d',
+    createDefault: () => ({
+      id: `pedal-revreb-${Date.now()}`,
+      type: 'reverseReverb',
+      name: 'Shoegaze Reverse',
+      enabled: true,
+      color: '#be185d',
+      time: 650,
+      preDelay: 35,
+      feedback: 35,
+      damping: 35,
+      mix: 65
+    })
+  },
+  {
+    type: 'crystalDelay',
+    title: 'Crystal Pitch-Shifted Delay',
+    category: 'Time & Space',
+    description: 'Eventide Crystals & Boss PS-3 Mode 7 cascading pitch staircase delay with high-sparkle shimmer feedback.',
+    color: '#0891b2',
+    createDefault: () => ({
+      id: `pedal-crystal-${Date.now()}`,
+      type: 'crystalDelay',
+      name: 'Crystal Pitch Echo',
+      enabled: true,
+      color: '#0891b2',
+      time: 380,
+      interval: '+12th',
+      feedback: 55,
+      shimmer: 60,
+      reverse: false,
+      mix: 50
+    })
+  },
 
   // Pitch & Harmony
   {
@@ -315,6 +448,26 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       interval: '5th',
       harmonyLevel: 60,
       directLevel: 90
+    })
+  },
+  {
+    type: 'multiOctave',
+    title: 'Polyphonic Multi-Octave Generator',
+    category: 'Pitch & Harmony',
+    description: 'EHX POG-style 5-voice polyphonic octave generator (-2, -1, Dry, +1, +2) with organ tone shaping filter.',
+    color: '#b91c1c',
+    createDefault: () => ({
+      id: `pedal-pog-${Date.now()}`,
+      type: 'multiOctave',
+      name: 'Poly Octave Gen',
+      enabled: true,
+      color: '#b91c1c',
+      sub2: 40,
+      sub1: 65,
+      dry: 80,
+      oct1: 60,
+      oct2: 30,
+      tone: 75
     })
   },
 
@@ -497,6 +650,25 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       mix: 100
     })
   },
+  {
+    type: 'hardTune',
+    title: 'Trap Hard-Tune & Retune Snapper',
+    category: 'Vocal & Speech',
+    description: 'Instant 0ms pitch snapping with scale and key quantization (Major/Minor/Pentatonic/Arabic) and formant warp.',
+    color: '#059669',
+    createDefault: () => ({
+      id: `pedal-hardtune-${Date.now()}`,
+      type: 'hardTune',
+      name: 'Trap Hard-Tune',
+      enabled: true,
+      color: '#059669',
+      key: 'C',
+      scale: 'minor',
+      retuneSpeed: 0,
+      formantWarp: 0,
+      mix: 90
+    })
+  },
 
   // Experimental & Boutique Unconventional Guitar Effects
   {
@@ -581,6 +753,26 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
       wowFlutter: 35,
       feedback: 35,
       mix: 65
+    })
+  },
+  {
+    type: 'lofiVinyl',
+    title: 'Lo-Fi Cassette & Vinyl Saturation',
+    category: 'Experimental & Boutique',
+    description: 'Vintage record surface crackle & clicks, magnetic tape wow/flutter, head loss EQ, and warm tape saturation.',
+    color: '#78350f',
+    createDefault: () => ({
+      id: `pedal-vinyl-${Date.now()}`,
+      type: 'lofiVinyl',
+      name: 'Lo-Fi Vinyl & Tape',
+      enabled: true,
+      color: '#78350f',
+      wear: 45,
+      dustCrackle: 50,
+      flutter: 40,
+      filter: 45,
+      saturation: 55,
+      mix: 80
     })
   }
 ];
