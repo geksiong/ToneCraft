@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Preset } from '../types/pedal';
 import { SAMPLE_RIFFS } from '../audio/sampleRiffs';
+import { groupPresetsByCategory, getPresetCategory } from '../utils/presetCategories';
 import {
   Mic,
   Disc3,
@@ -136,6 +137,9 @@ export const Header: React.FC<HeaderProps> = ({
       !d.label?.toLowerCase().startsWith('default') &&
       !d.label?.toLowerCase().startsWith('communications')
   );
+
+  const groupedPresets = useMemo(() => groupPresetsByCategory(presets), [presets]);
+  const currentCategory = useMemo(() => getPresetCategory(currentPreset), [currentPreset]);
 
   return (
     <header className="sticky top-0 z-40 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-800 shadow-2xl px-3 sm:px-5 py-2">
@@ -377,7 +381,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>DSP:</span>
               </div>
 
-              {/* 1. Rig (Preset Selector) */}
+              {/* 1. Rig (Categorized Preset Selector) */}
               <div className="flex items-center gap-1.5 bg-neutral-900/90 border border-neutral-800 rounded-lg px-2 py-1 shrink-0">
                 <span className="text-[10px] font-mono text-neutral-400 uppercase shrink-0">Rig:</span>
                 <select
@@ -386,13 +390,25 @@ export const Header: React.FC<HeaderProps> = ({
                     const found = presets.find((p) => p.id === e.target.value);
                     if (found) onSelectPreset(found);
                   }}
-                  className="bg-transparent text-xs font-semibold text-neutral-200 focus:outline-none w-36 sm:w-48 truncate cursor-pointer"
-                  title="Select Guitar Rig Preset"
+                  className="bg-transparent text-xs font-semibold text-neutral-200 focus:outline-none w-44 sm:w-60 truncate cursor-pointer"
+                  title={`Active Rig: "${currentPreset.name}" · ${currentCategory}`}
                 >
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-neutral-900 text-white">
-                      {p.name}
-                    </option>
+                  {groupedPresets.map((group) => (
+                    <optgroup
+                      key={group.category}
+                      label={group.category}
+                      className="bg-neutral-900 text-amber-400 font-bold tracking-wider uppercase text-[10px] py-1.5"
+                    >
+                      {group.presets.map((p) => (
+                        <option
+                          key={p.id}
+                          value={p.id}
+                          className="bg-neutral-950 text-white font-normal pl-3 py-1 text-xs"
+                        >
+                          {p.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

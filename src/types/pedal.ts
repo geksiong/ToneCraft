@@ -508,6 +508,7 @@ export interface Preset {
   id: string;
   name: string;
   author: string;
+  category?: string;
   instrument: 'guitar' | 'bass' | 'vocal';
   genre: 'Rock' | 'Metal' | 'Blues' | 'Ambient' | 'Funk' | 'Jazz' | 'Shoegaze' | 'Pop' | 'Vocal' | 'R&B';
   description: string;

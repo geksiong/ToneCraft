@@ -186,7 +186,7 @@ export const PresetLibraryModal: React.FC<PresetLibraryModalProps> = ({
     savePresetsToStorage(updated);
   };
 
-  const genres = ['all', 'Rock', 'Metal', 'Blues', 'Ambient', 'Funk', 'Jazz', 'Pop'];
+  const genres = ['all', 'Rock', 'Metal', 'Blues', 'Ambient', 'Shoegaze', 'Funk', 'Jazz', 'Pop', 'Vocal'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-150">
