@@ -26,6 +26,7 @@ interface LooperPedalProps {
   onVolumeChange: (vol: number) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  showCollapseToggle?: boolean;
 }
 
 export const LooperPedal: React.FC<LooperPedalProps> = ({
@@ -38,7 +39,8 @@ export const LooperPedal: React.FC<LooperPedalProps> = ({
   onToggleSpeed,
   onVolumeChange,
   isCollapsed: controlledCollapsed,
-  onToggleCollapse: controlledToggleCollapse
+  onToggleCollapse: controlledToggleCollapse,
+  showCollapseToggle = true
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(false);
   const isCollapsed = controlledCollapsed !== undefined ? controlledCollapsed : internalCollapsed;
@@ -152,19 +154,21 @@ export const LooperPedal: React.FC<LooperPedalProps> = ({
             <span>CLEAR</span>
           </button>
 
-          {/* Collapse / Expand Toggle Button */}
-          <button
-            onClick={toggleCollapse}
-            className={`flex items-center gap-1 px-2 py-0.5 text-xs font-mono font-medium rounded-lg border transition-all ${
-              isCollapsed
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
-                : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700 hover:text-white'
-            }`}
-            title={isCollapsed ? 'Expand Looper to view circular meter and foot controls' : 'Collapse Looper into compact control strip'}
-          >
-            {isCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-            <span>{isCollapsed ? 'Expand Looper' : 'Collapse'}</span>
-          </button>
+          {/* Collapse / Expand Toggle Button (Hidden in Tab View) */}
+          {showCollapseToggle && (
+            <button
+              onClick={toggleCollapse}
+              className={`flex items-center gap-1 px-2 py-0.5 text-xs font-mono font-medium rounded-lg border transition-all ${
+                isCollapsed
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
+                  : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700 hover:text-white'
+              }`}
+              title={isCollapsed ? 'Expand Looper to view circular meter and foot controls' : 'Collapse Looper into compact control strip'}
+            >
+              {isCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+              <span>{isCollapsed ? 'Expand Looper' : 'Collapse'}</span>
+            </button>
+          )}
         </div>
       </div>
 

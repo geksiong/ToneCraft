@@ -28,6 +28,7 @@ interface AmpCabSectionProps {
   currentLatencyMs?: number;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  showCollapseToggle?: boolean;
 }
 
 export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
@@ -41,7 +42,8 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
   onOpenLatencyInspector,
   currentLatencyMs,
   isCollapsed: controlledCollapsed,
-  onToggleCollapse: controlledToggleCollapse
+  onToggleCollapse: controlledToggleCollapse,
+  showCollapseToggle = true
 }) => {
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(false);
   const isCollapsed =
@@ -289,19 +291,21 @@ export const AmpCabSection: React.FC<AmpCabSectionProps> = ({
             <span>{irCabinet.bypassed ? 'CAB BYPASS' : 'CAB ON'}</span>
           </button>
 
-          {/* Single Unified Collapse / Expand Toggle Button for the combined unit */}
-          <button
-            onClick={toggleCollapse}
-            className={`flex items-center gap-1 px-2 py-1 text-xs font-mono font-medium rounded-lg border transition-all ${
-              isCollapsed
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
-                : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700 hover:text-white'
-            }`}
-            title={isCollapsed ? 'Expand Amp & Cabinet to view full tone stack and IR knobs' : 'Collapse Amp & Cabinet into compact 1U rack strip'}
-          >
-            {isCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-            <span>{isCollapsed ? 'Expand Amp & Cab' : 'Collapse'}</span>
-          </button>
+          {/* Single Unified Collapse / Expand Toggle Button for the combined unit (Hidden in Tab View) */}
+          {showCollapseToggle && (
+            <button
+              onClick={toggleCollapse}
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-mono font-medium rounded-lg border transition-all ${
+                isCollapsed
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
+                  : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700 hover:text-white'
+              }`}
+              title={isCollapsed ? 'Expand Amp & Cabinet to view full tone stack and IR knobs' : 'Collapse Amp & Cabinet into compact 1U rack strip'}
+            >
+              {isCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+              <span>{isCollapsed ? 'Expand Amp & Cab' : 'Collapse'}</span>
+            </button>
+          )}
         </div>
       </div>
 

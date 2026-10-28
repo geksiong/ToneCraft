@@ -19,8 +19,10 @@ import {
   savePresetsToStorage,
   decodePresetFromShareUrl
 } from './presets/defaultPresets';
-import { Header } from './components/Header';
-import { SignalChainControlStack, CollapsedSectionsState } from './components/SignalChainControlStack';
+import { UnifiedHeader } from './components/UnifiedHeader';
+import { SignalChainTabs, ActiveChainTab, ViewMode } from './components/SignalChainTabs';
+import { QuickAudioDrawer } from './components/QuickAudioDrawer';
+import { CollapsedSectionsState } from './components/SignalChainControlStack';
 import { Pedalboard } from './components/Pedalboard';
 import { AmpCabSection } from './components/AmpCabSection';
 import { LooperPedal } from './components/LooperPedal';
@@ -43,7 +45,7 @@ import {
   OutputChannelRoutingMode
 } from './audio/inputChannelRouter';
 import { isNamModelProfile } from './audio/ampModels';
-import { Music2, Power, Radio } from 'lucide-react';
+import { Music2, Power, Radio, LayoutGrid, Columns, Plus } from 'lucide-react';
 
 export default function App() {
   // Preset & Rig State
@@ -232,6 +234,23 @@ export default function App() {
       localStorage.setItem('tonecraft_collapsed_views', JSON.stringify(collapsedSections));
     } catch {}
   }, [collapsedSections]);
+
+  // Streamlined UX Navigation: Active Tab & View Mode
+  const [activeChainTab, setActiveChainTab] = useState<ActiveChainTab>('pedals');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      return (localStorage.getItem('tonecraft_view_mode') as ViewMode) || 'tabs';
+    } catch {
+      return 'tabs';
+    }
+  });
+  const [isQuickDrawerOpen, setIsQuickDrawerOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('tonecraft_view_mode', viewMode);
+    } catch {}
+  }, [viewMode]);
 
   const handleToggleSectionCollapse = (section: keyof CollapsedSectionsState) => {
     setCollapsedSections(prev => ({
@@ -895,154 +914,263 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
-      {/* Top App Header with 2 rows of controls and hardware DSP power switch with LED */}
-      <Header
+      {/* Unified Single-Row Studio Header */}
+      <UnifiedHeader
         isRunning={isRunning}
         onToggleEngine={toggleEngine}
-        onRestartEngine={handleRestartEngine}
-        inputSource={inputSource}
-        onSelectCombinedInput={handleSelectCombinedInput}
-        availableInputDevices={availableInputDevices}
-        selectedInputDeviceId={latencySettings.selectedInputDeviceId}
-        inputGain={inputGain}
-        onInputGainChange={(v) => {
-          setInputGain(v);
-          audioEngine.setInputGain(v);
-        }}
-        inputPeak={inputPeak}
-        gateEnabled={conditionerConfig.gateEnabled}
-        onToggleGate={handleToggleGate}
-        gateState={conditionerTelemetry.gateState}
-        onOpenInputConditioner={() => handleOpenSettings('input')}
-        channelTelemetry={inputChannelTelemetry}
-        inputRoutingMode={inputRoutingMode}
-        onInputRoutingChange={handleInputRoutingChange}
-        isRiffPlaying={isRiffPlaying}
-        onToggleRiffPlaying={handleToggleRiffPlaying}
         currentPreset={currentPreset}
         presets={presets}
         onSelectPreset={handleSelectPreset}
         onOpenPresetLibrary={() => handleOpenSettings('presets')}
-        availableOutputDevices={availableOutputDevices}
-        selectedOutputDeviceId={latencySettings.selectedOutputDeviceId}
-        onSelectOutputDevice={handleSelectOutputDevice}
-        latencyMs={latencyReport.totalCalculatedMs}
-        isTurboActive={
-          latencySettings.profile === 'ultra-low' &&
-          latencySettings.sampleRateMode === 'native' &&
-          latencySettings.zeroLookaheadLimiter &&
-          latencySettings.bypassOsVoiceProcessing
-        }
-        isBluetoothDetected={latencyReport.isBluetoothActive}
-        onOpenEngineSettings={() => handleOpenSettings('engine')}
-        onMinimiseLatency={handleMinimiseLatency}
-        onOpenMidiSettings={() => handleOpenSettings('midi')}
+        masterVolume={masterVolume}
+        onMasterVolumeChange={(v) => {
+          setMasterVolume(v);
+          audioEngine.setMasterGain(v);
+        }}
+        isMuted={isMuted}
+        onToggleMute={handleToggleMute}
+        outputPeak={outputPeak}
+        tunerData={tunerData}
+        onOpenTuner={() => setIsTunerOpen(true)}
+        isMicInput={inputSource.startsWith('mic')}
+        bpm={bpm}
+        onBpmChange={setBpm}
+        isBypassAll={isBypassAll}
+        onToggleBypassAll={handleToggleBypassAll}
+        inputSource={inputSource}
+        inputGain={inputGain}
+        isQuickDrawerOpen={isQuickDrawerOpen}
+        onToggleQuickDrawer={() => setIsQuickDrawerOpen((prev) => !prev)}
+        gateEnabled={conditionerConfig.gateEnabled}
         onOpenSettings={handleOpenSettings}
         onOpenAbout={() => setIsAboutOpen(true)}
-        midiDeviceCount={midiDeviceCount}
         isMidiActivity={isMidiActivity}
+        midiDeviceCount={midiDeviceCount}
       />
 
       {/* Main Studio Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-3 flex flex-col">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 flex flex-col">
         {/* Startup banner when DSP is OFF */}
         {!isRunning && (
-          <div className="mb-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-500/15 via-neutral-900 to-amber-500/15 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800 text-emerald-400 flex items-center justify-center font-bold">
-                <Power size={16} />
+          <div className="mb-3 p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-neutral-900 to-amber-500/10 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-neutral-800 text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                <Power size={15} />
               </div>
               <div>
                 <h3 className="text-xs font-bold text-white flex items-center gap-2">
-                  <span>DSP is currently OFF</span>
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-neutral-800 text-neutral-400 border border-neutral-700">STANDBY</span>
+                  <span>DSP Standby Mode</span>
+                  <span className="text-[10px] text-neutral-400 font-mono">Audio engine paused</span>
                 </h3>
-                <p className="text-[11px] text-neutral-300">
-                  Switch the DSP power button ON to begin real-time modeling with minimized latency and neural amp models.
+                <p className="text-[11px] text-neutral-400">
+                  Click the illuminated <strong>DSP ON</strong> power button in the top bar to activate real-time neural modeling.
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => startAudioEngine()}
-              className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-md shadow-emerald-500/25 active:scale-95 flex items-center gap-1.5"
+              className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs tracking-wider uppercase transition-all shadow-md shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5 shrink-0"
             >
-              <Power size={13} className="fill-black" />
+              <Power size={13} className="fill-black stroke-black" />
               <span>Turn DSP ON</span>
             </button>
           </div>
         )}
 
-        {/* Real-time Oscilloscope & Spectrum Analyzer Deck */}
-        <div className="mb-2">
-          <SpectrumVisualizer isRunning={isRunning} />
-        </div>
+        {/* Workstation Viewport Content */}
+        {viewMode === 'tabs' ? (
+          <>
+            {/* Signal Chain Viewport Navigator (Tabs only shown in Tab View) */}
+            <SignalChainTabs
+              activeTab={activeChainTab}
+              onSelectTab={setActiveChainTab}
+              viewMode={viewMode}
+              onToggleViewMode={() => setViewMode('stack')}
+              pedalsCount={pedals.length}
+              activePedalsCount={pedals.filter((p) => p.enabled).length}
+              onOpenAddPedal={() => setIsAddPedalOpen(true)}
+              ampModel={ampModel}
+              irCabinet={irCabinet}
+              looperState={looperState}
+            />
 
-        {/* Control Stack directly above the signal chain: Tuner, Tap Tempo, Mute & Master Vol */}
-        <SignalChainControlStack
-          tunerData={tunerData}
-          onOpenTuner={() => setIsTunerOpen(true)}
-          isMicInput={inputSource.startsWith('mic')}
-          bpm={bpm}
-          onBpmChange={setBpm}
-          isMuted={isMuted}
-          onToggleMute={handleToggleMute}
-          masterVolume={masterVolume}
-          onMasterVolumeChange={(v) => {
-            setMasterVolume(v);
-            audioEngine.setMasterGain(v);
-          }}
-          outputPeak={outputPeak}
-          isBypassAll={isBypassAll}
-          onToggleBypassAll={handleToggleBypassAll}
-          pedalsCount={pedals.length}
-          collapsedSections={collapsedSections}
-          onToggleSectionCollapse={handleToggleSectionCollapse}
-          onToggleAllCollapse={handleToggleAllCollapse}
-        />
+            <div className="flex-1">
+              {activeChainTab === 'pedals' && (
+                <Pedalboard
+                  pedals={pedals}
+                  onUpdatePedal={handleUpdatePedal}
+                  onRemovePedal={handleRemovePedal}
+                  onReorderPedals={handleReorderPedals}
+                  onOpenAddPedal={() => setIsAddPedalOpen(true)}
+                  isCollapsed={false}
+                  showCollapseToggle={false}
+                  midiMappings={midiMappings}
+                  onOpenMidiSettings={() => handleOpenSettings('midi')}
+                />
+              )}
 
-        {/* Pedalboard Stage */}
-        <Pedalboard
-          pedals={pedals}
-          onUpdatePedal={handleUpdatePedal}
-          onRemovePedal={handleRemovePedal}
-          onReorderPedals={handleReorderPedals}
-          onOpenAddPedal={() => setIsAddPedalOpen(true)}
-          isCollapsed={collapsedSections.pedalboard}
-          onToggleCollapse={() => handleToggleSectionCollapse('pedalboard')}
-          midiMappings={midiMappings}
-          onOpenMidiSettings={() => handleOpenSettings('midi')}
-        />
+              {activeChainTab === 'amp-cab' && (
+                <AmpCabSection
+                  ampModel={ampModel}
+                  irCabinet={irCabinet}
+                  onUpdateAmp={handleUpdateAmp}
+                  onUpdateCab={handleUpdateCab}
+                  onLoadCustomIrWav={handleLoadCustomIrWav}
+                  ampEngineMode={ampEngineMode}
+                  onSetAmpEngineMode={handleSetAmpEngineMode}
+                  onOpenLatencyInspector={() => handleOpenSettings('engine')}
+                  currentLatencyMs={latencyReport.totalCalculatedMs}
+                  isCollapsed={false}
+                  showCollapseToggle={false}
+                />
+              )}
 
-        {/* Amp & Cabinet Stage */}
-        <AmpCabSection
-          ampModel={ampModel}
-          irCabinet={irCabinet}
-          onUpdateAmp={handleUpdateAmp}
-          onUpdateCab={handleUpdateCab}
-          onLoadCustomIrWav={handleLoadCustomIrWav}
-          ampEngineMode={ampEngineMode}
-          onSetAmpEngineMode={handleSetAmpEngineMode}
-          onOpenLatencyInspector={() => handleOpenSettings('engine')}
-          currentLatencyMs={latencyReport.totalCalculatedMs}
-          isCollapsed={collapsedSections.ampCab}
-          onToggleCollapse={() => handleToggleSectionCollapse('ampCab')}
-        />
+              {activeChainTab === 'looper' && (
+                <LooperPedal
+                  looperState={looperState}
+                  onToggleRecord={() => audioEngine.toggleLooperRecord()}
+                  onTogglePlayStop={() => audioEngine.toggleLooperPlayStop()}
+                  onClear={() => audioEngine.clearLooper()}
+                  onUndo={() => audioEngine.undoLooper()}
+                  onToggleReverse={() => audioEngine.toggleLooperReverse()}
+                  onToggleSpeed={() => audioEngine.toggleLooperSpeed()}
+                  onVolumeChange={(vol) => audioEngine.setLooperVolume(vol)}
+                  isCollapsed={false}
+                  showCollapseToggle={false}
+                />
+              )}
 
-        {/* Tape Looper Unit */}
-        <LooperPedal
-          looperState={looperState}
-          onToggleRecord={() => audioEngine.toggleLooperRecord()}
-          onTogglePlayStop={() => audioEngine.toggleLooperPlayStop()}
-          onClear={() => audioEngine.clearLooper()}
-          onUndo={() => audioEngine.undoLooper()}
-          onToggleReverse={() => audioEngine.toggleLooperReverse()}
-          onToggleSpeed={() => audioEngine.toggleLooperSpeed()}
-          onVolumeChange={(vol) => audioEngine.setLooperVolume(vol)}
-          isCollapsed={collapsedSections.looper}
-          onToggleCollapse={() => handleToggleSectionCollapse('looper')}
-        />
+              {activeChainTab === 'spectrum' && (
+                <div className="bg-[#10131A] border border-[#1E232B] rounded-2xl p-4 shadow-xl">
+                  <div className="flex items-center justify-between mb-3 border-b border-neutral-800 pb-2">
+                    <h3 className="text-xs font-bold font-mono tracking-wider text-neutral-300 uppercase flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <span>Real-Time Spectrum Analyzer &amp; Waveform Oscilloscope</span>
+                    </h3>
+                    <span className="text-[11px] font-mono text-neutral-400">
+                      48 kHz · 2048-point FFT
+                    </span>
+                  </div>
+                  <SpectrumVisualizer isRunning={isRunning} />
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* Stacked Rig View: all modules visible in one scrollable canvas (NO TABS) */
+          <div className="space-y-4">
+            {/* Minimal Stack Bar with Switch to Tabs View button */}
+            <div className="w-full flex flex-wrap items-center justify-between gap-2 bg-[#0E1117] border border-[#1E232B] rounded-xl px-3 py-2 shadow-md">
+              <div className="flex items-center gap-2">
+                <LayoutGrid size={15} className="text-amber-400" />
+                <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                  Full Rig Stack
+                </span>
+                <span className="text-[10px] text-neutral-400 font-mono hidden sm:inline">
+                  · {pedals.filter((p) => p.enabled).length}/{pedals.length} FX Active
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsAddPedalOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-medium transition-colors"
+                  title="Add a Stompbox Pedal to Chain"
+                >
+                  <Plus size={13} />
+                  <span>Add Pedal</span>
+                </button>
+
+                <button
+                  onClick={() => setViewMode('tabs')}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-mono font-bold text-white border border-neutral-700 transition-colors cursor-pointer"
+                  title="Switch back to Focused Tabs View"
+                >
+                  <Columns size={13} className="text-amber-400" />
+                  <span>Switch to Tabs View</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-[#10131A] border border-[#1E232B] rounded-xl p-2.5 shadow-md">
+              <SpectrumVisualizer isRunning={isRunning} />
+            </div>
+
+            <Pedalboard
+              pedals={pedals}
+              onUpdatePedal={handleUpdatePedal}
+              onRemovePedal={handleRemovePedal}
+              onReorderPedals={handleReorderPedals}
+              onOpenAddPedal={() => setIsAddPedalOpen(true)}
+              isCollapsed={collapsedSections.pedalboard}
+              onToggleCollapse={() => handleToggleSectionCollapse('pedalboard')}
+              showCollapseToggle={true}
+              midiMappings={midiMappings}
+              onOpenMidiSettings={() => handleOpenSettings('midi')}
+            />
+
+            <AmpCabSection
+              ampModel={ampModel}
+              irCabinet={irCabinet}
+              onUpdateAmp={handleUpdateAmp}
+              onUpdateCab={handleUpdateCab}
+              onLoadCustomIrWav={handleLoadCustomIrWav}
+              ampEngineMode={ampEngineMode}
+              onSetAmpEngineMode={handleSetAmpEngineMode}
+              onOpenLatencyInspector={() => handleOpenSettings('engine')}
+              currentLatencyMs={latencyReport.totalCalculatedMs}
+              isCollapsed={collapsedSections.ampCab}
+              onToggleCollapse={() => handleToggleSectionCollapse('ampCab')}
+              showCollapseToggle={true}
+            />
+
+            <LooperPedal
+              looperState={looperState}
+              onToggleRecord={() => audioEngine.toggleLooperRecord()}
+              onTogglePlayStop={() => audioEngine.toggleLooperPlayStop()}
+              onClear={() => audioEngine.clearLooper()}
+              onUndo={() => audioEngine.undoLooper()}
+              onToggleReverse={() => audioEngine.toggleLooperReverse()}
+              onToggleSpeed={() => audioEngine.toggleLooperSpeed()}
+              onVolumeChange={(vol) => audioEngine.setLooperVolume(vol)}
+              isCollapsed={collapsedSections.looper}
+              onToggleCollapse={() => handleToggleSectionCollapse('looper')}
+              showCollapseToggle={true}
+            />
+          </div>
+        )}
       </main>
+
+      {/* Slide-Over Quick Audio & Routing Drawer */}
+      <QuickAudioDrawer
+        isOpen={isQuickDrawerOpen}
+        onClose={() => setIsQuickDrawerOpen(false)}
+        isRunning={isRunning}
+        inputSource={inputSource}
+        onSelectCombinedInput={handleSelectCombinedInput}
+        availableInputDevices={availableInputDevices}
+        selectedInputDeviceId={latencySettings.selectedInputDeviceId}
+        isRiffPlaying={isRiffPlaying}
+        onToggleRiffPlaying={handleToggleRiffPlaying}
+        inputGain={inputGain}
+        onInputGainChange={(v) => {
+          setInputGain(v);
+          audioEngine.setInputGain(v);
+        }}
+        inputPeak={inputPeak}
+        conditionerConfig={conditionerConfig}
+        conditionerTelemetry={conditionerTelemetry}
+        onUpdateConditionerConfig={handleUpdateConditionerConfig}
+        onLearnNoiseFloor={handleLearnNoiseFloor}
+        isLearningNoiseFloor={isLearningNoiseFloor}
+        availableOutputDevices={availableOutputDevices}
+        selectedOutputDeviceId={latencySettings.selectedOutputDeviceId}
+        onSelectOutputDevice={handleSelectOutputDevice}
+        latencyReport={latencyReport}
+        onRunLatencyPing={handleRunLatencyPing}
+        onOpenSettings={handleOpenSettings}
+      />
 
       {/* Footer info bar with live engine and latency status */}
       <footer className="border-t border-neutral-900 bg-neutral-950 px-4 py-1.5 text-[11px] text-neutral-400">

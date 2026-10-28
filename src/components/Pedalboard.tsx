@@ -22,6 +22,7 @@ interface PedalboardProps {
   onOpenAddPedal: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  showCollapseToggle?: boolean;
   midiMappings?: MidiMapping[];
   onOpenMidiSettings?: () => void;
 }
@@ -34,6 +35,7 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
   onOpenAddPedal,
   isCollapsed: controlledCollapsed,
   onToggleCollapse: controlledToggleCollapse,
+  showCollapseToggle = true,
   midiMappings,
   onOpenMidiSettings
 }) => {
@@ -160,19 +162,21 @@ export const Pedalboard: React.FC<PedalboardProps> = ({
             <strong className="text-emerald-400">{activeCount}</strong>/{pedals.length} Active
           </span>
 
-          {/* Collapse / Expand Toggle Button */}
-          <button
-            onClick={toggleCollapse}
-            className={`flex items-center gap-1 px-2 py-0.5 text-xs font-mono font-medium rounded-lg border transition-all ${
-              isCollapsed
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
-                : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700 hover:text-white'
-            }`}
-            title={isCollapsed ? 'Expand Pedalboard to view full stompbox controls' : 'Collapse Pedalboard into compact switcher strip'}
-          >
-            {isCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-            <span>{isCollapsed ? 'Expand Board' : 'Collapse'}</span>
-          </button>
+          {/* Collapse / Expand Toggle Button (Hidden in Tab View) */}
+          {showCollapseToggle && (
+            <button
+              onClick={toggleCollapse}
+              className={`flex items-center gap-1 px-2 py-0.5 text-xs font-mono font-medium rounded-lg border transition-all ${
+                isCollapsed
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
+                  : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700 hover:text-white'
+              }`}
+              title={isCollapsed ? 'Expand Pedalboard to view full stompbox controls' : 'Collapse Pedalboard into compact switcher strip'}
+            >
+              {isCollapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+              <span>{isCollapsed ? 'Expand Board' : 'Collapse'}</span>
+            </button>
+          )}
         </div>
       </div>
 
