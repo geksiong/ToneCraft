@@ -72,7 +72,8 @@ import {
   ReverseReverbPedal,
   CrystalDelayPedal,
   HardTunePedal,
-  LofiVinylPedal
+  LofiVinylPedal,
+  DualNotchPedal
 } from '../types/pedal';
 import {
   createOverdriveCurve,
@@ -564,6 +565,11 @@ export function createPedalDspNodes(ctx: AudioContext, pedal: AnyPedal): PedalNo
 
     case 'lofiVinyl': {
       dspNodes = createLofiVinylDsp(ctx, input, wetGain);
+      break;
+    }
+
+    case 'dualNotch': {
+      dspNodes = createDualNotchDsp(ctx, input, wetGain);
       break;
     }
   }
@@ -1273,7 +1279,8 @@ export function updatePedalParameters(ctx: AudioContext, pedal: AnyPedal, wrap: 
     case 'reverseReverb':
     case 'crystalDelay':
     case 'hardTune':
-    case 'lofiVinyl': {
+    case 'lofiVinyl':
+    case 'dualNotch': {
       if (nodes.updateParams) nodes.updateParams(pedal as any);
       break;
     }
@@ -4544,6 +4551,83 @@ function createLofiVinylDsp(ctx: AudioContext, input: GainNode, output: GainNode
         flutterDelay.disconnect();
         dryGain.disconnect();
         wetGain.disconnect();
+      } catch {}
+    }
+  };
+}
+
+/**
+ * 11. Dual-Frequency Notch Filter DSP Engine.
+ * Dual-band surgical notch & hum killer with independent frequency, Q, depth, and bypass controls.
+ */
+function createDualNotchDsp(ctx: AudioContext, input: GainNode, output: GainNode) {
+  const notch1 = ctx.createBiquadFilter();
+  const notch2 = ctx.createBiquadFilter();
+  const levelGain = ctx.createGain();
+
+  // Series processing: input -> notch1 -> notch2 -> levelGain -> output
+  input.connect(notch1);
+  notch1.connect(notch2);
+  notch2.connect(levelGain);
+  levelGain.connect(output);
+
+  return {
+    notch1,
+    notch2,
+    levelGain,
+    updateParams: (p: DualNotchPedal) => {
+      const now = ctx.currentTime;
+      const fadeTime = 0.02;
+
+      // Notch 1
+      const freq1 = Math.max(30, Math.min(18000, p.freq1 || 250));
+      const q1 = Math.max(0.5, Math.min(30, p.q1 || 8.0));
+      const depth1 = Math.max(0, Math.min(100, p.depth1 !== undefined ? p.depth1 : 100));
+      const isEn1 = p.enabled1 !== undefined ? p.enabled1 : true;
+
+      notch1.frequency.setTargetAtTime(freq1, now, fadeTime);
+      notch1.Q.setTargetAtTime(q1, now, fadeTime);
+
+      if (!isEn1 || depth1 === 0) {
+        notch1.type = 'peaking';
+        notch1.gain.setTargetAtTime(0, now, fadeTime);
+      } else if (depth1 >= 96) {
+        notch1.type = 'notch';
+      } else {
+        notch1.type = 'peaking';
+        const cutDb = -(depth1 / 100) * 48;
+        notch1.gain.setTargetAtTime(cutDb, now, fadeTime);
+      }
+
+      // Notch 2
+      const freq2 = Math.max(30, Math.min(18000, p.freq2 || 3200));
+      const q2 = Math.max(0.5, Math.min(30, p.q2 || 8.0));
+      const depth2 = Math.max(0, Math.min(100, p.depth2 !== undefined ? p.depth2 : 100));
+      const isEn2 = p.enabled2 !== undefined ? p.enabled2 : true;
+
+      notch2.frequency.setTargetAtTime(freq2, now, fadeTime);
+      notch2.Q.setTargetAtTime(q2, now, fadeTime);
+
+      if (!isEn2 || depth2 === 0) {
+        notch2.type = 'peaking';
+        notch2.gain.setTargetAtTime(0, now, fadeTime);
+      } else if (depth2 >= 96) {
+        notch2.type = 'notch';
+      } else {
+        notch2.type = 'peaking';
+        const cutDb = -(depth2 / 100) * 48;
+        notch2.gain.setTargetAtTime(cutDb, now, fadeTime);
+      }
+
+      // Makeup Level Gain: 0 to 1.5x (default 100% = 1.0)
+      const lvl = Math.max(0, Math.min(150, p.level !== undefined ? p.level : 100)) / 100;
+      levelGain.gain.setTargetAtTime(lvl, now, fadeTime);
+    },
+    dispose: () => {
+      try {
+        notch1.disconnect();
+        notch2.disconnect();
+        levelGain.disconnect();
       } catch {}
     }
   };

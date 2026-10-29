@@ -38,7 +38,8 @@ import {
   ReverseReverbPedal,
   CrystalDelayPedal,
   HardTunePedal,
-  LofiVinylPedal
+  LofiVinylPedal,
+  DualNotchPedal
 } from '../types/pedal';
 import { MidiMapping } from '../types/midi';
 import { RotaryKnob } from './RotaryKnob';
@@ -104,7 +105,7 @@ export const PedalCard: React.FC<PedalCardProps> = ({
     if (pedal.type === 'fuzz' || pedal.type === 'distortion') return 'bg-red-500 led-glow-red border-red-300';
     if (pedal.type === 'overdrive') return 'bg-emerald-400 led-glow-emerald border-emerald-200';
     if (pedal.type === 'chorus' || pedal.type === 'flanger') return 'bg-blue-400 led-glow-blue border-blue-200';
-    if (pedal.type === 'vocalTuner') return 'bg-cyan-400 led-glow-cyan border-cyan-200';
+    if (pedal.type === 'vocalTuner' || pedal.type === 'dualNotch') return 'bg-cyan-400 led-glow-cyan border-cyan-200';
     if (pedal.type === 'vocalDoubler') return 'bg-indigo-400 led-glow-indigo border-indigo-200';
     if (pedal.type === 'vocalFormant') return 'bg-fuchsia-400 led-glow-fuchsia border-fuchsia-200';
     if (pedal.type === 'pitchShifter' || pedal.type === 'harmonizer' || pedal.type === 'reverb') {
@@ -2612,6 +2613,184 @@ function renderPedalControls(
 
           <div className="text-center text-[7.5px] font-mono text-amber-300 font-bold tracking-widest uppercase">
             📻 VINYL DUST & CASSETTE WARP
+          </div>
+        </div>
+      );
+    }
+
+    case 'dualNotch': {
+      const p = pedal as DualNotchPedal;
+      const formatFreq = (f: number) => {
+        if (f >= 1000) return `${(f / 1000).toFixed(1)}k`;
+        return `${Math.round(f)}Hz`;
+      };
+
+      const applyPreset = (f1: number, q1: number, f2: number, q2: number) => {
+        onUpdate({
+          ...p,
+          freq1: f1,
+          q1: q1,
+          depth1: 100,
+          enabled1: true,
+          freq2: f2,
+          q2: q2,
+          depth2: 100,
+          enabled2: true
+        });
+      };
+
+      return (
+        <div className="space-y-2">
+          {/* NOTCH 1 MODULE */}
+          <div className="bg-black/30 rounded-lg p-1.5 border border-cyan-500/20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-mono font-bold tracking-wider text-cyan-300 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${p.enabled1 !== false ? 'bg-cyan-400' : 'bg-neutral-600'}`} />
+                NOTCH 1
+              </span>
+              <button
+                onClick={() => onUpdate({ ...p, enabled1: p.enabled1 === false ? true : false })}
+                className={`text-[8px] font-mono px-1.5 py-0.2 rounded uppercase transition-colors ${
+                  p.enabled1 !== false ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold' : 'bg-neutral-800 text-neutral-400'
+                }`}
+              >
+                {p.enabled1 !== false ? 'ACTIVE' : 'BYPASS'}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <RotaryKnob
+                label="Freq 1"
+                value={p.freq1 || 250}
+                min={40}
+                max={14000}
+                unit="Hz"
+                size="sm"
+                formatValue={formatFreq}
+                midiBadge={getKnobBadge('freq1')}
+                onChange={(v) => onUpdate({ ...p, freq1: Math.round(v) })}
+              />
+              <RotaryKnob
+                label="Q 1"
+                value={p.q1 || 8.0}
+                min={0.5}
+                max={25.0}
+                step={0.5}
+                size="sm"
+                formatValue={(v) => `Q ${v.toFixed(1)}`}
+                midiBadge={getKnobBadge('q1')}
+                onChange={(v) => onUpdate({ ...p, q1: Math.round(v * 10) / 10 })}
+              />
+              <RotaryKnob
+                label="Depth 1"
+                value={p.depth1 !== undefined ? p.depth1 : 100}
+                unit="%"
+                size="sm"
+                midiBadge={getKnobBadge('depth1')}
+                onChange={(v) => onUpdate({ ...p, depth1: Math.round(v) })}
+              />
+            </div>
+          </div>
+
+          {/* NOTCH 2 MODULE */}
+          <div className="bg-black/30 rounded-lg p-1.5 border border-amber-500/20">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-mono font-bold tracking-wider text-amber-300 flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${p.enabled2 !== false ? 'bg-amber-400' : 'bg-neutral-600'}`} />
+                NOTCH 2
+              </span>
+              <button
+                onClick={() => onUpdate({ ...p, enabled2: p.enabled2 === false ? true : false })}
+                className={`text-[8px] font-mono px-1.5 py-0.2 rounded uppercase transition-colors ${
+                  p.enabled2 !== false ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold' : 'bg-neutral-800 text-neutral-400'
+                }`}
+              >
+                {p.enabled2 !== false ? 'ACTIVE' : 'BYPASS'}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              <RotaryKnob
+                label="Freq 2"
+                value={p.freq2 || 3200}
+                min={40}
+                max={16000}
+                unit="Hz"
+                size="sm"
+                formatValue={formatFreq}
+                midiBadge={getKnobBadge('freq2')}
+                onChange={(v) => onUpdate({ ...p, freq2: Math.round(v) })}
+              />
+              <RotaryKnob
+                label="Q 2"
+                value={p.q2 || 8.0}
+                min={0.5}
+                max={25.0}
+                step={0.5}
+                size="sm"
+                formatValue={(v) => `Q ${v.toFixed(1)}`}
+                midiBadge={getKnobBadge('q2')}
+                onChange={(v) => onUpdate({ ...p, q2: Math.round(v * 10) / 10 })}
+              />
+              <RotaryKnob
+                label="Depth 2"
+                value={p.depth2 !== undefined ? p.depth2 : 100}
+                unit="%"
+                size="sm"
+                midiBadge={getKnobBadge('depth2')}
+                onChange={(v) => onUpdate({ ...p, depth2: Math.round(v) })}
+              />
+            </div>
+          </div>
+
+          {/* LEVEL & QUICK PRESETS */}
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+            <div className="flex items-center gap-1">
+              <RotaryKnob
+                label="Level"
+                value={p.level !== undefined ? p.level : 100}
+                min={0}
+                max={150}
+                unit="%"
+                size="sm"
+                midiBadge={getKnobBadge('level')}
+                onChange={(v) => onUpdate({ ...p, level: Math.round(v) })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1 flex-1">
+              <div className="text-[8px] font-mono text-neutral-400 font-semibold text-center">
+                QUICK TARGETS
+              </div>
+              <div className="grid grid-cols-2 gap-1 text-[8px] font-mono">
+                <button
+                  onClick={() => applyPreset(60, 10, 120, 10)}
+                  className="px-1 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition-colors"
+                  title="60Hz Mains Hum + 120Hz 2nd Harmonic"
+                >
+                  60+120 Hum
+                </button>
+                <button
+                  onClick={() => applyPreset(4000, 12, 8000, 12)}
+                  className="px-1 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition-colors"
+                  title="4kHz & 8kHz USB Audio Whine Killers"
+                >
+                  USB Whine
+                </button>
+                <button
+                  onClick={() => applyPreset(180, 7, 850, 7)}
+                  className="px-1 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition-colors"
+                  title="Acoustic Box Resonance & Mid Howl"
+                >
+                  Acoustic
+                </button>
+                <button
+                  onClick={() => applyPreset(2800, 8, 4500, 8)}
+                  className="px-1 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition-colors"
+                  title="Harsh Upper-Mid Pick Click & Piercing Treble"
+                >
+                  De-Harsh
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       );

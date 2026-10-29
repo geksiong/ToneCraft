@@ -375,6 +375,34 @@ function getPedalFilterCoeffs(pedal: AnyPedal, fs: number): BiquadCoeffs[] {
       }
       break;
     }
+
+    case 'dualNotch': {
+      const p = pedal as any;
+      const isEn1 = p.enabled1 !== undefined ? p.enabled1 : true;
+      const depth1 = Math.max(0, Math.min(100, p.depth1 !== undefined ? p.depth1 : 100));
+      if (isEn1 && depth1 > 0) {
+        const f1 = Math.max(30, Math.min(18000, p.freq1 || 250));
+        const q1 = Math.max(0.5, Math.min(30, p.q1 || 8.0));
+        if (depth1 >= 96) {
+          list.push(makeNotchCoeffs(f1, q1, fs));
+        } else {
+          list.push(makePeakingCoeffs(f1, -(depth1 / 100) * 48, q1, fs));
+        }
+      }
+
+      const isEn2 = p.enabled2 !== undefined ? p.enabled2 : true;
+      const depth2 = Math.max(0, Math.min(100, p.depth2 !== undefined ? p.depth2 : 100));
+      if (isEn2 && depth2 > 0) {
+        const f2 = Math.max(30, Math.min(18000, p.freq2 || 3200));
+        const q2 = Math.max(0.5, Math.min(30, p.q2 || 8.0));
+        if (depth2 >= 96) {
+          list.push(makeNotchCoeffs(f2, q2, fs));
+        } else {
+          list.push(makePeakingCoeffs(f2, -(depth2 / 100) * 48, q2, fs));
+        }
+      }
+      break;
+    }
   }
 
   return list;

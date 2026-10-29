@@ -36,7 +36,8 @@ export type PedalType =
   | 'reverseReverb'
   | 'crystalDelay'
   | 'hardTune'
-  | 'lofiVinyl';
+  | 'lofiVinyl'
+  | 'dualNotch';
 
 
 export interface BasePedalConfig {
@@ -400,6 +401,19 @@ export interface LofiVinylPedal extends BasePedalConfig {
   mix: number; // 0 - 100%
 }
 
+export interface DualNotchPedal extends BasePedalConfig {
+  type: 'dualNotch';
+  freq1: number;       // 40 - 16000 Hz, default 250
+  q1: number;          // 0.5 - 30, default 8.0
+  depth1: number;      // 0 - 100%, default 100
+  enabled1: boolean;   // default true
+  freq2: number;       // 40 - 16000 Hz, default 3200
+  q2: number;          // 0.5 - 30, default 8.0
+  depth2: number;      // 0 - 100%, default 100
+  enabled2: boolean;   // default true
+  level: number;       // 0 - 100%, default 100
+}
+
 export type AnyPedal =
   | OverdrivePedal
   | DistortionPedal
@@ -438,7 +452,8 @@ export type AnyPedal =
   | ReverseReverbPedal
   | CrystalDelayPedal
   | HardTunePedal
-  | LofiVinylPedal;
+  | LofiVinylPedal
+  | DualNotchPedal;
 
 
 

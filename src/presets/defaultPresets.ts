@@ -4,6 +4,69 @@ import { BUILT_IN_IR_CABINETS } from '../audio/irData';
 
 export const INITIAL_PRESETS: Preset[] = [
   {
+    id: 'guitar-studio-notch-clean',
+    name: 'Pure Studio DI & Dual Notch Slayer',
+    author: 'ToneCraft Studio Labs',
+    instrument: 'guitar',
+    genre: 'Funk',
+    description: 'Ultra-clean studio tone with Dual Notch Filter killing 60Hz single-coil hum and 3.2kHz harsh treble spikes -> DynaSqueeze compressor -> Fender Twin.',
+    tags: ['DualNotch', 'Clean', 'Studio', 'HumKiller', 'Precision', 'Compressor'],
+    bpm: 115,
+    likes: 820,
+    isCommunity: false,
+    ampModel: {
+      ...BUILT_IN_AMP_MODELS[0],
+      gain: 3.5,
+      bass: 5.5,
+      mid: 6.0,
+      treble: 6.5,
+      presence: 6.0
+    },
+    irCabinet: {
+      ...BUILT_IN_IR_CABINETS[3] || BUILT_IN_IR_CABINETS[0]
+    },
+    pedals: [
+      {
+        id: 'pedal-notch-clean-1',
+        type: 'dualNotch',
+        name: 'Twin Notch Filter',
+        enabled: true,
+        color: '#0f766e',
+        freq1: 60,
+        q1: 12.0,
+        depth1: 100,
+        enabled1: true,
+        freq2: 3200,
+        q2: 8.0,
+        depth2: 90,
+        enabled2: true,
+        level: 100
+      },
+      {
+        id: 'pedal-comp-clean-1',
+        type: 'compressor',
+        name: 'DynaSqueeze Comp',
+        enabled: true,
+        color: '#b45309',
+        sustain: 55,
+        attack: 25,
+        level: 70,
+        blend: 80
+      },
+      {
+        id: 'pedal-chorus-clean-1',
+        type: 'chorus',
+        name: 'Stereo Ensemble Chorus',
+        enabled: false,
+        color: '#2563eb',
+        rate: 35,
+        depth: 60,
+        mix: 45,
+        tone: 60
+      }
+    ]
+  },
+  {
     id: 'guitar-hendrix-univibe-woodstock',
     name: '1969 Woodstock Psychedelic Vibe',
     author: 'ToneCraft Vintage Labs',

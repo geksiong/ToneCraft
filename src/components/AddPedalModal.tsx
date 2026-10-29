@@ -147,6 +147,29 @@ const PEDAL_TEMPLATES: PedalTemplateInfo[] = [
     })
   },
   {
+    type: 'dualNotch',
+    title: 'Twin Notch Filter (Dual Freq)',
+    category: 'Tone & Dynamics',
+    description: 'Surgical dual-band notch filter for eliminating mains hum, acoustic body resonance, piercing treble spikes, and USB coil whine.',
+    color: '#0f766e',
+    createDefault: () => ({
+      id: `pedal-notch-${Date.now()}`,
+      type: 'dualNotch',
+      name: 'Twin Notch Filter',
+      enabled: true,
+      color: '#0f766e',
+      freq1: 250,
+      q1: 8.0,
+      depth1: 100,
+      enabled1: true,
+      freq2: 3200,
+      q2: 8.0,
+      depth2: 100,
+      enabled2: true,
+      level: 100
+    })
+  },
+  {
     type: 'noiseGate',
     title: 'Decimator Noise Gate',
     category: 'Tone & Dynamics',
