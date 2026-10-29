@@ -27,6 +27,7 @@ import { Pedalboard } from './components/Pedalboard';
 import { AmpCabSection } from './components/AmpCabSection';
 import { LooperPedal } from './components/LooperPedal';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
+import { FrequencyResponseGraph } from './components/FrequencyResponseGraph';
 import { TunerModal } from './components/TunerModal';
 import { AddPedalModal } from './components/AddPedalModal';
 import { SettingsModal, SettingsModalTab } from './components/SettingsModal';
@@ -1042,17 +1043,16 @@ export default function App() {
               )}
 
               {activeChainTab === 'spectrum' && (
-                <div className="bg-[#10131A] border border-[#1E232B] rounded-2xl p-4 shadow-xl">
-                  <div className="flex items-center justify-between mb-3 border-b border-neutral-800 pb-2">
-                    <h3 className="text-xs font-bold font-mono tracking-wider text-neutral-300 uppercase flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span>Real-Time Spectrum Analyzer &amp; Waveform Oscilloscope</span>
-                    </h3>
-                    <span className="text-[11px] font-mono text-neutral-400">
-                      48 kHz · 2048-point FFT
-                    </span>
-                  </div>
-                  <SpectrumVisualizer isRunning={isRunning} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <SpectrumVisualizer isRunning={isRunning} isTall={true} />
+                  <FrequencyResponseGraph
+                    pedals={pedals}
+                    ampModel={ampModel}
+                    irCabinet={irCabinet}
+                    conditionerConfig={conditionerConfig}
+                    isRunning={isRunning}
+                    isTall={true}
+                  />
                 </div>
               )}
             </div>
@@ -1093,8 +1093,16 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-[#10131A] border border-[#1E232B] rounded-xl p-2.5 shadow-md">
-              <SpectrumVisualizer isRunning={isRunning} />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <SpectrumVisualizer isRunning={isRunning} isTall={false} />
+              <FrequencyResponseGraph
+                pedals={pedals}
+                ampModel={ampModel}
+                irCabinet={irCabinet}
+                conditionerConfig={conditionerConfig}
+                isRunning={isRunning}
+                isTall={false}
+              />
             </div>
 
             <Pedalboard

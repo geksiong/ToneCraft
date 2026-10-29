@@ -107,7 +107,7 @@ export const SignalChainTabs: React.FC<SignalChainTabsProps> = ({
           )}
         </button>
 
-        {/* TAB 4: SPECTRUM ANALYZER */}
+        {/* TAB 4: SPECTRUM & FREQUENCY RESPONSE */}
         <button
           onClick={() => onSelectTab('spectrum')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -117,7 +117,7 @@ export const SignalChainTabs: React.FC<SignalChainTabsProps> = ({
           }`}
         >
           <Activity size={14} className={activeTab === 'spectrum' ? 'text-emerald-400' : 'text-neutral-500'} />
-          <span>Spectrum</span>
+          <span>Spectrum &amp; Bode Plot</span>
         </button>
       </div>
 
