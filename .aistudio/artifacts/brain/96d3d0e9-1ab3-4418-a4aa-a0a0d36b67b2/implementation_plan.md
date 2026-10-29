@@ -1,23 +1,25 @@
-# ToneCraft Studio UX Redesign & Streamlined Signal Chain
+# Streamlined Studio Configuration & Settings Hub
 
-Transform ToneCraft DSP from a dense, multi-tiered cockpit into a sleek, minimalist modern audio workstation that preserves every pro feature while eliminating visual clutter.
+Redesign and simplify ToneCraft's main Audio and Engine Settings modal into a clean, intuitive **Studio Hub** that delivers smart one-tap audio profiles and progressive disclosure for advanced DSP parameters.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
 > Based on your selections in Phase 1, the following core architecture and design decisions are confirmed for execution:
 
-- **Confirmed Decision 1 (Chain Viewports)**: Tabbed workspace switching cleanly between **Pedalboard**, **Amp & Cab**, and **Looper**, eliminating vertical scrolling fatigue and cognitive overload while keeping signal routing live and seamless in the background.
-- **Confirmed Decision 2 (Header Consolidation)**: Unified slim 44px top bar consolidating the previous dual-row header and the secondary `SignalChainControlStack`. Quick preset picker, master power, live tuner chip, and master volume remain front and center, while detailed I/O routing and engine telemetry slide gracefully into a Quick Audio Drawer.
-- **Confirmed Decision 3 (Visual Identity)**: Sleek modern dark studio aesthetic (deep carbon/slate `#0d0f12`, precision hairline borders `#1e232b`, warm amber/gold accents for active pedal states, emerald for pristine audio signal, and tabular monospace numerals for accurate dB and latency tracking).
+- **Confirmed Decision 1 (Unified Studio Hub)**: The main `SettingsModal` is redesigned as a unified Studio Hub with clean, quiet navigation tabs (`Audio & Input`, `DSP & Engine`, `MIDI Controller`, `Cloud Presets`), consistent typography, and a unified header showing active hardware status at a glance.
+- **Confirmed Decision 2 (Smart One-Tap Presets + Expandable Pro Mode)**:
+  - Technical audio configurations (noise suppression, input type, buffer latency) are packaged into intuitive, 1-tap quick profiles (e.g., *Direct Guitar High-Z*, *Studio Mic*, *Ultra-Low Latency*, *Balanced Audio*).
+  - A clean **"Pro Audio Controls"** toggle cleanly hides or reveals the granular engineering controls (L/R channel routing matrices, 60Hz hum notch filters, high-pass frequencies, raw buffer samples, and ping breakdowns).
+- **Confirmed Decision 3 (Scope Boundary)**: Modifications focus strictly on the main Audio and Engine Settings modal and its tabs (`SettingsModal.tsx`, `InputSettingsTab.tsx`, and `EngineSettingsTab.tsx`), avoiding disruption to the main pedalboard canvas, tuner, and cabinet controls.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: ToneCraft is a web-based guitar workstation featuring Neural Amp Modeler (NAM), impulse response (IR) cabinet simulation, modular stompbox pedalboard, tape-style looper, chromatic tuner, and real-time audio routing.
-- **The Problem Solved**: Currently, three stacked toolbars (Dual Header + SignalChainControlStack) take up over 260px of vertical space before any instrument controls appear. Furthermore, rendering the pedalboard, 12+ amp knobs, dual-IR mixer, and multi-track looper simultaneously produces severe visual clutter and scrolling friction.
-- **The Solution**: A unified professional single-strip top bar, a dedicated signal chain tab navigator with active badges, and dedicated full-focus workspaces for each stage of the rig.
+- **What It Does**: Provides a distraction-free, professional audio interface setup where musicians can select input/output hardware, trim guitar gain, suppress room noise, and configure engine performance in seconds.
+- **The Problem Solved**: The current settings modal spans over 1,700 lines of code across nested sub-tabs (`all`, `routing`, `gate`, `filter`), displaying complex DSP math, raw dB curves, and unorganized technical sliders that create cognitive overload.
+- **The Solution**: A minimalist, high-contrast control center that presents the essential 20% of controls musicians use 90% of the time, with deep telemetry gracefully tucked behind an expandable Pro Mode disclosure.
 
 ---
 
@@ -25,95 +27,117 @@ Transform ToneCraft DSP from a dense, multi-tiered cockpit into a sleek, minimal
 
 ### Key User Flows
 
-1. **Quick Play & Preset Selection**:
-   - The user opens ToneCraft and sees a clean 48px top bar with the wordmark, the current preset dropdown (`Clean Funk Studio`, `British Crunch`, etc.), preset step buttons (`<` and `>`), and the master Power toggle.
-   - Click **Power**: Audio turns on with a warm status ring, and the chosen riff/mic immediately plays.
-   - Master volume and mute sit compactly on the right of the header with a mini stereo LED meter.
+1. **Quick Hardware & Input Level Setup (Default View)**:
+   - User opens Settings and lands on **Audio & Input**.
+   - **Device & Source Card**: Clear input device dropdown (Guitar Interface, USB Mic, or built-in audio) and output monitor dropdown, with instant Bluetooth latency indicators.
+   - **Smart Instrument Presets**: 3 quick profile buttons:
+     - 🎸 *Electric Guitar (High-Z)*: Flat EQ, auto-conditioned input trim.
+     - 🎙️ *Vocal / Mic*: Anti-rumble high pass engaged, vocal gate threshold.
+     - 🎧 *Line In / Sample Riff*: Unity gain, transparent routing.
+   - **Clean Level & Gain Slider**: Large, high-resolution stereo meter with live dB readout (`tabular-nums`) and a ±12dB trim slider with a quick "0.0 dB Reset" button.
+   - **One-Tap Noise Suppression**:
+     - 3 clean states: `Off`, `Smart Gate`, `Max Suppression`.
+     - 1-tap `Auto-Learn Noise Floor` button that listens for 2 seconds and dials in the ideal threshold automatically with friendly visual countdown feedback.
 
-2. **Tabbed Signal Chain Navigation**:
-   - Centered right beneath the header is an elegant tab selector:
-     - `Pedalboard` (showing active pedal count dot, e.g., `4 active`)
-     - `Amp & Cab` (showing active NAM or Triode model name)
-     - `Looper` (showing state indicator: `Idle`, `Recording`, or `Looping`)
-     - `Spectrum & Diagnostics` (optional full-width real-time analyzer)
-   - Switching tabs keeps the audio engine running continuously with zero dropouts.
+2. **DSP & Engine Performance**:
+   - Switches to **DSP & Engine** tab.
+   - **Performance Tier Cards**:
+     - ⚡ *Ultra-Low Latency* (64–128 samples, < 5ms for tight live playing).
+     - ⚖️ *Balanced Studio* (256 samples, stable on all browsers and laptops).
+     - 💎 *High Fidelity / NAM Neural* (high sample rate, maximum neural model accuracy).
+   - **1-Click Ping Test**: Clean button to measure round-trip audio latency with a simple status badge (e.g., `4.2 ms · Pro Grade`).
 
-3. **Slide-Out Quick Audio Drawer (I/O & Hardware)**:
-   - Clicking the compact `I/O & Engine` button in the top bar slides out a sleek, non-intrusive drawer on the right.
-   - Houses microphone/riff selection, input gain slider with 0.0 dB reset, noise gate threshold, buffer/latency ping, and MIDI hardware status without polluting the main creative canvas.
-
-4. **Integrated Quick-Access Tuner**:
-   - A chromatic tuner pill in the top bar indicates detected note (e.g., `E2 +2¢`). Clicking it opens the full chromatic tuner modal for precision tuning without obscuring primary controls.
+3. **Expandable Pro Audio Mode (Progressive Disclosure)**:
+   - A subtle toggle at the bottom of each tab: `Show Pro Controls [Switch]`.
+   - When engaged, smoothly reveals:
+     - In **Audio & Input**: Channel splitter/router (Left, Right, Stereo, Auto Mono), manual High-Pass cutoff frequency (20Hz–200Hz), Whine Killer 1kHz/3kHz notch filters, and raw telemetry curves.
+     - In **DSP & Engine**: Worklet thread type (HD-AudioWorklet vs. Standard ScriptProcessor), explicit buffer size selector (64, 128, 256, 512, 1024), and sample rate diagnostics.
 
 ### Visual Identity & Theme Tokens
 
-- **Aesthetic Direction**: High-end modern audio studio (inspired by Universal Audio, Quad Cortex, and Ableton Live dark mode).
-- **Color Palette**:
-  - Background Canvas: Carbon Slate (`#0B0D10` / `neutral-950`)
-  - Elevated Surfaces & Pedal Chassis: Matte Anthracite (`#14171D` / `neutral-900`)
-  - Hairline Borders: Precision Studio Gray (`#222731` / `neutral-800`)
-  - Primary Active Accent: Warm Gold / Amber (`#F59E0B` to `#D97706`)
-  - Clean Signal / Nominal State: Emerald Studio Green (`#10B981`)
-  - NAM Neural / Engine Status: Precision Sky Blue (`#38BDF8`)
-- **Typography**:
-  - Primary UI & Tabs: Modern geometric sans with medium tracking (`Plus Jakarta Sans` / clean system font).
-  - Telemetry & Measurements: Strict monospace with tabular figures (`font-mono tabular-nums`) for dB levels, cents, BPM, and latency.
+- **Aesthetic Direction**: Minimalist dark studio hardware (clean matte dark aluminum, precise hairline dividers, zero cluttered pill capsules).
+- **Color Tokens**:
+  - Backdrop: `rgba(10, 12, 16, 0.85)` with `backdrop-blur-md`
+  - Modal Shell: `#12151B` (`neutral-900` / deep carbon)
+  - Card Surfaces: `#181C24` with hairline border `rgba(255, 255, 255, 0.07)`
+  - Active Accents: Warm studio amber (`#F59E0B`) for active states; emerald (`#10B981`) for pristine audio level and connected hardware.
+- **Typography & Layout**:
+  - Clean typographic hierarchy using bold section headers with quiet 1-line subtext.
+  - Tabular monospace numbers for all dB, Hz, and latency ms readouts.
+  - Zero static pill badges; metadata presented with typographic separators (`·`).
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-### Decision 1: Tabbed Viewports vs. Long Multi-Accordion Scroll
-- **Chosen Approach**: Three primary tabs (**Pedalboard**, **Amp & Cab**, **Looper**) with a compact unified top strip.
-- **Why**: Eliminates 800+ pixels of vertical scroll and prevents knob fatigue. When dialing in pedal parameters, the guitarist wants clear spatial focus; when sculpting an amp tone, the cab and mic placement deserve full attention.
-- **Alternatives Considered**: Collapsible accordions (current implementation). While flexible, they created an unruly, jumpy layout with multiple independent scrollbars and visual fragmentation.
+### Decision 1: Smart Presets vs. Raw Parameter Matrix
+- **Chosen Approach**: Provide high-level presets (e.g. *Direct Guitar*, *Vocal Mic*, *Ultra-Low Latency*) that configure multiple underlying parameters under the hood, while allowing individual tweaks.
+- **Why**: Eliminates 80% of manual trial-and-error for players who just want their guitar to sound great with zero latency and no noise hum.
+- **Alternatives Considered**: Keeping all sliders visible on screen. Discarded as it overwhelms non-audio engineers with parameters like `qFactor`, `windowSize`, and `sampleRateCompensation`.
 
-### Decision 2: Consolidating Top Bars into a Unified 48px Strip
-- **Chosen Approach**: Merge `Header.tsx` (dual row) and `SignalChainControlStack.tsx` into one streamlined header with a dedicated slide-out drawer for deep audio routing.
-- **Why**: Recovers over 180px of prime viewport real estate. Essential performance actions (Preset switch, Engine Power, Volume, Tuner note, Tab switch) remain 1 click away.
-- **Alternatives Considered**: Keeping a floating footer dock. Discarded because footers conflict with pedal footswitch clicks and screen borders on laptops.
+### Decision 2: Seamless Tab Structure in Studio Hub
+- **Chosen Approach**: Horizontal clean tab bar at the top of the modal with active indicator bar, eliminating nested secondary tabs (`filterSubTab` in `InputSettingsTab`).
+- **Why**: Nested tabs inside tabs are a recognized UX anti-pattern that creates disorientation.
+- **Alternatives Considered**: Left vertical sidebar. Discarded because horizontal tabs maintain wider horizontal canvas for stereo level meters and device selectors.
 
-### Decision 3: Quick Audio Drawer vs. Multi-Tab Settings Modal
-- **Chosen Approach**: Keep the full `SettingsModal` for deep configuration (MIDI mapping tables, cloud presets), but introduce a quick slide-out drawer for fast rehearsal adjustments (input gain, input device switch, noise gate toggle).
-- **Why**: Allows instant adjustment of input levels and test riffs while observing pedal reaction in real time, without blocking the entire screen with a modal backdrop.
+### Decision 3: Preserving Full Deep Capabilities in Pro Mode
+- **Chosen Approach**: Retain all existing audio engine, channel routing, and telemetry calculations without removing functionality—simply structuring them behind the `Show Pro Controls` toggle.
+- **Why**: Ensures advanced power users with multi-channel audio interfaces (e.g., Focusrite Scarlett, Universal Audio Apollo) can still route Channel 2 as guitar input and monitor in stereo without compromise.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 4. Technical Architecture & Component Structure
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        UNIFIED TOP BAR (48px)                          │
-│ [Brand] [Preset Picker ◄ ►] [Tuner Mini-Pill] [BPM] ─── [Vol/Mute] [Power] [I/O Drawer] │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-       ┌────────────────────────┐      ┌─────────────────────────┐
-       │   VIEWPORT TAB BAR     │      │   QUICK AUDIO DRAWER    │
-       │ [Pedals] [Amp/Cab] [Looper]   │ (Input src, Gain, Gate, │
-       └────────────┬───────────┘      │  Latency, MIDI pill)    │
-                    │                  └─────────────────────────┘
-        ┌───────────┼───────────┐
-        ▼           ▼           ▼
- ┌───────────┐┌───────────┐┌───────────┐
- │Pedalboard ││ Amp & Cab ││  Looper   │
- │Drag/Drop  ││ NAM / IR  ││ Multi-Dub │
- │Stompboxes ││ Tone Stack││ Waveform  │
- └───────────┘└───────────┘└───────────┘
+│                      STUDIO HUB (SettingsModal)                        │
+│ [Icon] Studio Settings & Hardware                  [Active: 48kHz] [✕] │
+├────────────────────────────────────────────────────────────────────────┤
+│ [ Audio & Input ]   [ DSP & Engine ]   [ MIDI ]   [ Cloud Presets ]    │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌─ SMART PROFILES ─────────────────────────────────────────────────┐  │
+│  │ [🎸 Electric Guitar]   [🎙️ Studio Mic]   [🎧 Line / Sample]      │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  ┌─ HARDWARE & LEVELS ──────────────────────────────────────────────┐  │
+│  │ Input Device:  [Scarlett 2i2 USB ▾]       Gain: [-2.4 dB] [Reset]│  │
+│  │ Output Device: [Built-in Output ▾]       [====|=========]        │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  ┌─ SMART NOISE SUPPRESSION ────────────────────────────────────────┐  │
+│  │ [Off]  [Smart Gate]  [Aggressive]   [✦ Auto-Learn Noise Floor]   │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  ┌─ [✓] Show Pro Audio Controls ────────────────────────────────────┐  │
+│  │ (Expandable: Channel L/R Routing, High-Pass Cutoff, Hum Notch)   │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component & State Mapping
+### Component Refactor Plan
 
-- `App.tsx`:
-  - Retains master audio engine lifecycle, Web Audio graph, preset loading, and MIDI bindings.
-  - Replaces the multi-bar stack with `UnifiedHeader` and an active viewport state: `'pedalboard' | 'amp-cab' | 'looper'`.
-  - Manages `isQuickDrawerOpen` boolean for instant slide-out access to input gain, noise gate, and device routing.
-- `src/components/UnifiedHeader.tsx` (New & Streamlined):
-  - 1-row responsive bar adhering to the Top Bar Contract.
-  - Houses Brand, Preset navigator, quick Tuner indicator, Master Volume / Mute, and Master Engine Power.
-  - Replaces both legacy dual-row header and `SignalChainControlStack`.
-- `src/components/QuickAudioDrawer.tsx` (New):
-  - Slide-over panel containing: Input device selector, Riff player, Unity Gain slider, Noise Floor learner, and Latency status.
-- `src/components/AmpCabSection.tsx` & `Pedalboard.tsx` & `LooperPedal.tsx`:
-  - Refactored with refined studio card styling, removing duplicate collapse widgets and harmonizing knob paddings.
+1. **`src/components/SettingsModal.tsx`**:
+   - Modernized backdrop and modal container ($760\text{px}$ max width, smooth entrance animation).
+   - Streamlined header with live audio engine status pill (`Active · 48 kHz · 5.2 ms`).
+   - Clean horizontal navigation bar with icons and clear labels.
+   - Centralized `isProMode` state passed down or toggled smoothly.
+
+2. **`src/components/settings/InputSettingsTab.tsx`**:
+   - Deconstruct the 1,000+ line monolith into:
+     - **Quick Profile Selector** (*Direct Guitar*, *Vocal Mic*, *Line In*).
+     - **Device & Level Section** (Interface picker, real-time stereo meter, trim slider).
+     - **Smart Gate Section** (One-tap modes + Auto-Learn with interactive countdown).
+     - **Collapsible Pro Drawer** (Channel routing L/R/Sum, High Pass filter, USB whine killer).
+
+3. **`src/components/settings/EngineSettingsTab.tsx`**:
+   - Simplify the 600 line tab into:
+     - **Performance Presets** (*Ultra-Low Latency*, *Balanced Studio*, *High Fidelity*).
+     - **Interactive Ping Latency Widget** with clear visual status indicator.
+     - **Model Engine Mode** (*Neural NAM WASM* vs *HD-Triode Tube Sim*).
+     - **Collapsible Pro Drawer** (Exact buffer sizes 64–1024, thread mode, sample rate stats).
+
+4. **Verification**:
+   - Run `compile_applet` to ensure zero TypeScript errors and maintain all audio routing interfaces.
+   - Verify all audio events, gain changes, noise learning, and latency pinging execute seamlessly.

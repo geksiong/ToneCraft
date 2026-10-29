@@ -5,11 +5,11 @@ import {
   ShieldAlert,
   Cpu,
   Radio,
+  Globe,
   Sliders,
   CheckCircle2,
   Clock,
-  Volume2,
-  Globe
+  Volume2
 } from 'lucide-react';
 import {
   InputConditionerConfig,
@@ -155,45 +155,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-5xl h-[90vh] max-h-[850px] flex flex-col rounded-2xl bg-neutral-950 border border-neutral-800 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+      <div className="relative w-full max-w-4xl h-[90vh] max-h-[820px] flex flex-col rounded-2xl bg-neutral-950 border border-neutral-800 shadow-2xl overflow-hidden">
         {/* Top Header */}
-        <div className="px-5 py-3.5 bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border-b border-neutral-800/80 flex items-center justify-between shrink-0">
+        <div className="px-5 py-3.5 bg-neutral-900/90 border-b border-neutral-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
-              <Settings size={20} />
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Settings size={18} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">
-                  ToneCraft Studio Settings
+                <h2 className="text-base font-bold text-white tracking-wide">
+                  ToneCraft Studio Hub
                 </h2>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-800 text-amber-300 border border-neutral-700">
-                  UNIFIED CONSOLE
+                <span className="hidden sm:inline-block text-[11px] font-mono text-neutral-400">
+                  · Configuration &amp; Hardware
                 </span>
               </div>
               <p className="text-xs text-neutral-400">
-                Input conditioning &amp; noise gate, DSP latency tuning, MIDI mapping, and Cloud Preset Hub
+                Input conditioning, noise suppression, DSP performance &amp; MIDI control
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center transition-colors border border-neutral-800 shrink-0"
-            title="Close Settings (Esc)"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Live Audio Status Badge */}
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-[11px] font-mono text-neutral-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+              <span>48.0 kHz</span>
+              <span>·</span>
+              <span className="text-emerald-400">{latencyReport.totalCalculatedMs.toFixed(1)} ms</span>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-lg bg-neutral-800/80 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center transition-colors border border-neutral-700/60 shrink-0"
+              title="Close (Esc)"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
-        {/* Tab Navigation Ribbon */}
-        <div className="px-4 sm:px-6 bg-neutral-900/90 border-b border-neutral-800/80 flex items-center justify-between gap-2 overflow-x-auto shrink-0 select-none">
-          <div className="flex items-center gap-1 sm:gap-2 py-2">
-            {/* Tab 1: Input Settings */}
+        {/* Unified Tab Navigation Bar */}
+        <div className="px-4 sm:px-6 bg-neutral-900/50 border-b border-neutral-800 flex items-center justify-between gap-2 overflow-x-auto shrink-0 select-none">
+          <div className="flex items-center gap-1.5 py-2">
+            {/* Tab 1: Audio & Input */}
             <button
               onClick={() => handleTabSelect('input')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
                 currentTab === 'input'
                   ? 'bg-neutral-800 border-emerald-500/50 text-white shadow-sm'
                   : 'bg-transparent border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850'
@@ -203,26 +213,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 size={15}
                 className={currentTab === 'input' ? 'text-emerald-400' : 'text-neutral-400'}
               />
-              <span>Input &amp; Noise Gate</span>
+              <span>Audio &amp; Input</span>
               <span
-                className={`text-[10px] font-mono px-1.5 py-0.2 rounded border hidden sm:inline-block ${
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border hidden sm:inline-block ${
                   conditionerConfig.gateEnabled
                     ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                     : 'bg-neutral-800 border-neutral-700 text-neutral-400'
                 }`}
               >
-                {conditionerConfig.gateEnabled
-                  ? conditionerTelemetry.gateState === 'open'
-                    ? 'Open'
-                    : 'Gating'
-                  : 'Off'}
+                {conditionerConfig.gateEnabled ? 'Gate On' : 'Bypass'}
               </span>
             </button>
 
-            {/* Tab 2: Engine Settings */}
+            {/* Tab 2: DSP & Engine */}
             <button
               onClick={() => handleTabSelect('engine')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
                 currentTab === 'engine'
                   ? 'bg-neutral-800 border-amber-500/50 text-white shadow-sm'
                   : 'bg-transparent border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850'
@@ -232,16 +238,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 size={15}
                 className={currentTab === 'engine' ? 'text-amber-400' : 'text-neutral-400'}
               />
-              <span>DSP Engine &amp; Latency</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 hidden sm:inline-block">
-                {latencyReport.totalCalculatedMs.toFixed(1)}ms
+              <span>DSP &amp; Engine</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 hidden sm:inline-block">
+                {latencyReport.totalCalculatedMs.toFixed(1)} ms
               </span>
             </button>
 
-            {/* Tab 3: MIDI Settings */}
+            {/* Tab 3: MIDI Controller */}
             <button
               onClick={() => handleTabSelect('midi')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
                 currentTab === 'midi'
                   ? 'bg-neutral-800 border-sky-500/50 text-white shadow-sm'
                   : 'bg-transparent border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850'
@@ -257,22 +263,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : 'text-neutral-400'
                 }
               />
-              <span>MIDI Controller</span>
+              <span>MIDI Hardware</span>
               <span
-                className={`text-[10px] font-mono px-1.5 py-0.2 rounded border hidden sm:inline-block ${
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border hidden sm:inline-block ${
                   midiDeviceCount > 0
                     ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                     : 'bg-neutral-800 border-neutral-700 text-neutral-400'
                 }`}
               >
-                {midiDeviceCount > 0 ? `${midiDeviceCount} Dev` : 'Enabled'}
+                {midiDeviceCount > 0 ? `${midiDeviceCount} Dev` : 'Ready'}
               </span>
             </button>
 
-            {/* Tab 4: Cloud Hub & Presets */}
+            {/* Tab 4: Cloud Presets */}
             <button
               onClick={() => handleTabSelect('presets')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
                 currentTab === 'presets'
                   ? 'bg-neutral-800 border-sky-400/50 text-white shadow-sm'
                   : 'bg-transparent border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-neutral-850'
@@ -282,17 +288,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 size={15}
                 className={currentTab === 'presets' ? 'text-sky-400' : 'text-neutral-400'}
               />
-              <span>Cloud Hub &amp; Presets</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 hidden sm:inline-block">
-                {presets.length} Presets
+              <span>Cloud Presets</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 hidden sm:inline-block">
+                {presets.length}
               </span>
             </button>
-          </div>
-
-          <div className="hidden md:flex items-center gap-3 text-[11px] font-mono text-neutral-400">
-            <span>Core: 48.0 kHz</span>
-            <span>·</span>
-            <span>{latencyReport.bufferSize} samples</span>
           </div>
         </div>
 
@@ -314,6 +314,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onInputRoutingChange={onInputRoutingChange}
               outputRoutingMode={outputRoutingMode}
               onOutputRoutingChange={onOutputRoutingChange}
+              availableInputDevices={availableInputDevices}
+              availableOutputDevices={availableOutputDevices}
             />
           )}
 
@@ -389,11 +391,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between text-xs text-neutral-400 shrink-0">
+        <div className="px-5 py-3 bg-neutral-900/90 border-t border-neutral-800 flex items-center justify-between text-xs text-neutral-400 shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span className="hidden sm:inline">Settings applied immediately to real-time DSP graph</span>
-            <span className="sm:hidden">Real-time sync active</span>
+            <span className="hidden sm:inline">Settings applied instantly to real-time Web Audio graph</span>
+            <span className="sm:hidden">Real-time sync</span>
           </div>
 
           <button
