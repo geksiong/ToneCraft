@@ -36,7 +36,9 @@ export type MidiActionTarget =
   // Cab controls
   | { type: 'cab_param'; paramKey: 'micDistance' | 'highCut' | 'lowCut' | 'bypassed' }
   // Looper controls
-  | { type: 'looper_cmd'; command: 'record' | 'play' | 'clear' | 'undo' | 'reverse' | 'speed' | 'volume' };
+  | { type: 'looper_cmd'; command: 'record' | 'play' | 'clear' | 'undo' | 'reverse' | 'speed' | 'volume' }
+  | { type: 'looper_track_cmd'; trackIndex: number; command: 'record' | 'play' | 'mute' | 'solo' | 'clear' }
+  | { type: 'metronome_toggle' };
 
 export interface MidiMapping {
   id: string;

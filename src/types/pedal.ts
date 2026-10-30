@@ -508,7 +508,24 @@ export interface IrCabinetConfig {
   bypassed?: boolean;
 }
 
+export interface LooperTrackState {
+  id: string;
+  name: string;
+  status: 'idle' | 'recording' | 'playing' | 'overdubbing' | 'stopped';
+  muted: boolean;
+  soloed: boolean;
+  volume: number; // 0 - 100
+  pan: number; // -100 to +100
+  duration: number; // seconds
+  layersCount: number;
+  hasUndo: boolean;
+  hasData: boolean;
+  waveformPreview?: number[]; // Peak envelope array for track lane visualization
+  currentPosition?: number; // Current playback position in seconds (0 to duration)
+}
+
 export interface LooperState {
+  mode: 'basic' | 'pro';
   status: 'idle' | 'recording' | 'playing' | 'overdubbing';
   speed: 1.0 | 0.5;
   reverse: boolean;
@@ -517,6 +534,9 @@ export interface LooperState {
   currentTime: number; // seconds
   layersCount: number;
   hasUndo: boolean;
+  activeTrackIndex: number;
+  tracks: LooperTrackState[];
+  syncLock: boolean;
 }
 
 export interface Preset {

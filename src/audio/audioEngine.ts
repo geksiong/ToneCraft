@@ -24,6 +24,7 @@ import { AmpEngine, AmpEngineStatus } from './ampEngine';
 import { isNamModelProfile } from './ampModels';
 import { LooperEngine } from './looperEngine';
 import { TunerEngine } from './tunerEngine';
+import { MetronomeEngine, MetronomeState, MetronomeSound } from './metronomeEngine';
 import {
   createPedalDspNodes,
   updatePedalParameters,
@@ -121,7 +122,8 @@ export class ToneCraftEngine {
   // Sub-Engines
   public inputRouter: InputChannelRouter = new InputChannelRouter();
   public ampEngine: AmpEngine = new AmpEngine();
-  private looperEngine: LooperEngine = new LooperEngine();
+  public looperEngine: LooperEngine = new LooperEngine();
+  public metronomeEngine: MetronomeEngine = new MetronomeEngine();
   private tunerEngine: TunerEngine = new TunerEngine();
   public inputConditioner: InputConditionerEngine = new InputConditionerEngine();
 
@@ -150,6 +152,7 @@ export class ToneCraftEngine {
   // Metering & Notification Callbacks
   public onTunerUpdate: ((data: TunerData) => void) | null = null;
   public onLooperUpdate: ((state: LooperState) => void) | null = null;
+  public onMetronomeUpdate: ((state: MetronomeState) => void) | null = null;
   public onPeakUpdate: ((inputPeak: number, outputPeak: number) => void) | null = null;
   public onAmpStatusUpdate: ((status: AmpEngineStatus) => void) | null = null;
   public onTelemetryUpdate: ((telemetry: HdWorkletTelemetry) => void) | null = null;
@@ -158,7 +161,33 @@ export class ToneCraftEngine {
   public onInputChannelUpdate: ((telemetry: InputChannelTelemetry) => void) | null = null;
   private peakMeterTimer: any = null;
 
-  constructor() {}
+  constructor() {
+    this.looperEngine.setOnStateChange((state) => {
+      if (this.onLooperUpdate) this.onLooperUpdate(state);
+    });
+    this.metronomeEngine.setOnStateChange((state) => {
+      if (this.onMetronomeUpdate) this.onMetronomeUpdate(state);
+    });
+  }
+
+  /**
+   * Ensures Web Audio context is initialized and resumed from suspended state.
+   */
+  public async ensureContextReady(): Promise<boolean> {
+    if (!this.ctx || this.ctx.state === 'closed') {
+      await this.init();
+      return true;
+    }
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch (err) {
+        console.warn('[ToneCraftEngine] AudioContext resume failed:', err);
+      }
+    }
+    this.isRunning = true;
+    return true;
+  }
 
   /**
    * Initializes the AudioContext with lowest latency hardware configuration.
@@ -336,6 +365,11 @@ export class ToneCraftEngine {
     // Looper layer playback mixes into master bus
     looperOutput.connect(this.masterGainNode);
 
+    // Initialize and route Metronome Engine into master bus (isolated from recording tap)
+    this.metronomeEngine.init(this.ctx, this.masterGainNode, (mState) => {
+      if (this.onMetronomeUpdate) this.onMetronomeUpdate(mState);
+    });
+
     // Master Bus -> Limiter Bus -> Analyser -> Output Dual-Channel Stage -> Output Routing Stage
     this.masterLimiterBus.connect(this.analyserNode);
 
@@ -404,6 +438,19 @@ export class ToneCraftEngine {
     }
 
     this.isRunning = true;
+
+    // Ensure pedalboard and amp/cab graph connections exist even if started via looper/metronome action
+    if (this.currentPedals && this.currentPedals.length > 0) {
+      this.updatePedalboardChain(this.currentPedals);
+    } else if (this.chainInputNode && this.chainOutputNode) {
+      try { this.chainInputNode.connect(this.chainOutputNode); } catch {}
+    }
+    if (this.currentAmpConfig) {
+      this.updateAmpModel(this.currentAmpConfig);
+    }
+    if (this.currentCabConfig) {
+      this.updateIrCabinet(this.currentCabConfig);
+    }
 
     // 7. Background Services
     this.tunerEngine.attach(
@@ -1174,14 +1221,32 @@ export class ToneCraftEngine {
   }
 
   // ==========================================================================
-  // LOOPER DELEGATION
+  // LOOPER & MULTI-TRACK PRO DELEGATION
   // ==========================================================================
 
-  public toggleLooperRecord(): void {
+  public setLooperMode(mode: 'basic' | 'pro'): void {
+    this.looperEngine.setMode(mode);
+  }
+
+  public toggleLooperMode(): 'basic' | 'pro' {
+    return this.looperEngine.toggleMode();
+  }
+
+  public setLooperSyncLock(locked: boolean): void {
+    this.looperEngine.setSyncLock(locked);
+  }
+
+  public setActiveLooperTrack(idx: number): void {
+    this.looperEngine.setActiveTrackIndex(idx);
+  }
+
+  public async toggleLooperRecord(): Promise<void> {
+    await this.ensureContextReady();
     this.looperEngine.toggleRecord();
   }
 
-  public toggleLooperPlayStop(): void {
+  public async toggleLooperPlayStop(): Promise<void> {
+    await this.ensureContextReady();
     this.looperEngine.togglePlayStop();
   }
 
@@ -1203,6 +1268,100 @@ export class ToneCraftEngine {
 
   public setLooperVolume(vol: number): void {
     this.looperEngine.setVolume(vol);
+  }
+
+  public async toggleTrackRecord(trackIdx: number): Promise<void> {
+    await this.ensureContextReady();
+    this.looperEngine.toggleTrackRecord(trackIdx);
+  }
+
+  public async toggleTrackPlay(trackIdx: number): Promise<void> {
+    await this.ensureContextReady();
+    this.looperEngine.toggleTrackPlay(trackIdx);
+  }
+
+  public toggleTrackMute(trackIdx: number): void {
+    this.looperEngine.toggleTrackMute(trackIdx);
+  }
+
+  public toggleTrackSolo(trackIdx: number): void {
+    this.looperEngine.toggleTrackSolo(trackIdx);
+  }
+
+  public clearTrack(trackIdx: number): void {
+    this.looperEngine.clearTrack(trackIdx);
+  }
+
+  public undoTrack(trackIdx: number): void {
+    this.looperEngine.undoTrack(trackIdx);
+  }
+
+  public setTrackVolume(trackIdx: number, vol: number): void {
+    this.looperEngine.setTrackVolume(trackIdx, vol);
+  }
+
+  public setTrackPan(trackIdx: number, pan: number): void {
+    this.looperEngine.setTrackPan(trackIdx, pan);
+  }
+
+  public setTrackName(trackIdx: number, name: string): void {
+    this.looperEngine.setTrackName(trackIdx, name);
+  }
+
+  public async playAllLooperTracks(): Promise<void> {
+    await this.ensureContextReady();
+    this.looperEngine.playAll();
+  }
+
+  public stopAllLooperTracks(): void {
+    this.looperEngine.stopAll();
+  }
+
+  public clearAllLooperTracks(): void {
+    this.looperEngine.clearAll();
+  }
+
+  // ==========================================================================
+  // METRONOME DELEGATION
+  // ==========================================================================
+
+  public async toggleMetronome(): Promise<boolean> {
+    await this.ensureContextReady();
+    return await this.metronomeEngine.toggle();
+  }
+
+  public async startMetronome(): Promise<void> {
+    await this.ensureContextReady();
+    await this.metronomeEngine.start();
+  }
+
+  public stopMetronome(): void {
+    this.metronomeEngine.stop();
+  }
+
+  public setMetronomeBpm(bpm: number): void {
+    this.metronomeEngine.setBpm(bpm);
+  }
+
+  public setMetronomeTimeSignature(ts: 2 | 3 | 4 | 6): void {
+    this.metronomeEngine.setTimeSignature(ts);
+  }
+
+  public setMetronomeSound(sound: MetronomeSound): void {
+    this.metronomeEngine.setSound(sound);
+  }
+
+  public setMetronomeVolume(vol: number): void {
+    this.metronomeEngine.setVolume(vol);
+  }
+
+  public async startLooperWithCountIn(bars: number = 1, trackIdx?: number): Promise<void> {
+    await this.ensureContextReady();
+    const state = this.looperEngine.getState();
+    const targetIdx = trackIdx !== undefined ? trackIdx : (state.mode === 'basic' ? 0 : state.activeTrackIndex);
+    this.metronomeEngine.startCountIn(bars, () => {
+      this.looperEngine.toggleTrackRecord(targetIdx);
+    });
   }
 
   // ==========================================================================
@@ -1242,6 +1401,7 @@ export class ToneCraftEngine {
   public disposeContextOnly(): void {
     this.isRunning = false;
     this.tunerEngine.stop();
+    this.metronomeEngine.dispose();
     this.looperEngine.dispose();
     this.ampEngine.dispose();
     this.inputConditioner.dispose();
@@ -1296,6 +1456,7 @@ export class ToneCraftEngine {
     console.log('[ToneCraftEngine] Switching DSP engine OFF...');
     this.isRunning = false;
     this.tunerEngine.stop();
+    this.metronomeEngine.stop();
     this.stopSampleRiff();
     if (this.micSourceNode) {
       try { this.micSourceNode.disconnect(); } catch {}

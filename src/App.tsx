@@ -13,6 +13,7 @@ import {
   Preset
 } from './types/pedal';
 import { audioEngine, AudioLatencySettings } from './audio/audioEngine';
+import { MetronomeState, MetronomeSound } from './audio/metronomeEngine';
 import {
   INITIAL_PRESETS,
   getStoredPresets,
@@ -122,17 +123,9 @@ export default function App() {
     clarity: 0
   });
 
-  // Looper State
-  const [looperState, setLooperState] = useState<LooperState>({
-    status: 'idle',
-    speed: 1.0,
-    reverse: false,
-    volume: 85,
-    duration: 0,
-    currentTime: 0,
-    layersCount: 0,
-    hasUndo: false
-  });
+  // Looper & Metronome State
+  const [looperState, setLooperState] = useState<LooperState>(() => audioEngine.looperEngine.getState());
+  const [metronomeState, setMetronomeState] = useState<MetronomeState>(() => audioEngine.metronomeEngine.getState());
 
   // Modals
   const [isTunerOpen, setIsTunerOpen] = useState<boolean>(false);
@@ -367,6 +360,7 @@ export default function App() {
   useEffect(() => {
     audioEngine.onTunerUpdate = (data) => setTunerData(data);
     audioEngine.onLooperUpdate = (state) => setLooperState(state);
+    audioEngine.onMetronomeUpdate = (state) => setMetronomeState(state);
     audioEngine.onPeakUpdate = (inPeak, outPeak) => {
       setInputPeak(inPeak);
       setOutputPeak(outPeak);
@@ -388,6 +382,7 @@ export default function App() {
     return () => {
       audioEngine.onTunerUpdate = null;
       audioEngine.onLooperUpdate = null;
+      audioEngine.onMetronomeUpdate = null;
       audioEngine.onPeakUpdate = null;
       audioEngine.onLatencyUpdate = null;
       audioEngine.onAmpStatusUpdate = null;
@@ -619,7 +614,9 @@ export default function App() {
     setAmpEngineMode(targetEngine);
 
     setIrCabinet(preset.irCabinet);
-    setBpm(preset.bpm || 120);
+    const targetBpm = preset.bpm || 120;
+    setBpm(targetBpm);
+    audioEngine.setMetronomeBpm(targetBpm);
     setIsBypassAll(false);
 
     // Keep audioEngine state references current
@@ -792,6 +789,7 @@ export default function App() {
           const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
           const calculatedBpm = Math.max(40, Math.min(260, Math.round(60000 / avgDiff)));
           setBpm(calculatedBpm);
+          audioEngine.setMetronomeBpm(calculatedBpm);
           showMidiNotice(`Tap Tempo: ${calculatedBpm} BPM`);
         }
         break;
@@ -825,6 +823,39 @@ export default function App() {
           });
         } else {
           setIrCabinet(prev => ({ ...prev, [target.paramKey]: value }));
+        }
+        break;
+      }
+
+      case 'metronome_toggle': {
+        audioEngine.toggleMetronome().then((isRunningMetronome) => {
+          showMidiNotice(`Metronome: ${isRunningMetronome ? 'ON' : 'OFF'}`);
+        });
+        break;
+      }
+
+      case 'looper_track_cmd': {
+        switch (target.command) {
+          case 'record':
+            audioEngine.toggleTrackRecord(target.trackIndex);
+            showMidiNotice(`Track ${target.trackIndex + 1}: Record / Dub`);
+            break;
+          case 'play':
+            audioEngine.toggleTrackPlay(target.trackIndex);
+            showMidiNotice(`Track ${target.trackIndex + 1}: Play / Stop`);
+            break;
+          case 'mute':
+            audioEngine.toggleTrackMute(target.trackIndex);
+            showMidiNotice(`Track ${target.trackIndex + 1}: Mute Toggle`);
+            break;
+          case 'solo':
+            audioEngine.toggleTrackSolo(target.trackIndex);
+            showMidiNotice(`Track ${target.trackIndex + 1}: Solo Toggle`);
+            break;
+          case 'clear':
+            audioEngine.clearTrack(target.trackIndex);
+            showMidiNotice(`Track ${target.trackIndex + 1}: Cleared`);
+            break;
         }
         break;
       }
@@ -907,10 +938,184 @@ export default function App() {
     setMidiMappings([...midiManager.mappings]);
   }, [isSettingsOpen]);
 
+  // Seed audioEngine audio configuration references on initial mount
+  useEffect(() => {
+    audioEngine.currentPedals = currentPreset.pedals;
+    audioEngine.currentAmpConfig = ampModel;
+    audioEngine.currentCabConfig = irCabinet;
+    audioEngine.setMetronomeBpm(bpm);
+  }, []);
+
   // Load Custom WAV IR
   const handleLoadCustomIrWav = async (buffer: ArrayBuffer, fileName: string) => {
     await audioEngine.loadCustomIrWav(buffer);
     setLatencySettings({ ...audioEngine.latencySettings, zeroLatencyCab: false });
+  };
+
+  // Robust Looper & Metronome Actions (Auto-ensures audio engine is running and state stays in sync)
+  const handleLooperModeChange = (newMode: 'basic' | 'pro') => {
+    audioEngine.setLooperMode(newMode);
+    setLooperState({ ...audioEngine.looperEngine.getState(), mode: newMode });
+  };
+
+  const handleToggleLooperRecord = async () => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.toggleLooperRecord();
+    setIsRunning(true);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleLooperPlayStop = async () => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.toggleLooperPlayStop();
+    setIsRunning(true);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleClearLooper = () => {
+    audioEngine.clearLooper();
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleUndoLooper = () => {
+    audioEngine.undoLooper();
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleLooperReverse = () => {
+    audioEngine.toggleLooperReverse();
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleLooperSpeed = () => {
+    audioEngine.toggleLooperSpeed();
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleLooperVolumeChange = (vol: number) => {
+    audioEngine.setLooperVolume(vol);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleLooperSyncLockChange = (locked: boolean) => {
+    audioEngine.setLooperSyncLock(locked);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleTrackRecord = async (trackIdx: number) => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.toggleTrackRecord(trackIdx);
+    setIsRunning(true);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleTrackPlay = async (trackIdx: number) => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.toggleTrackPlay(trackIdx);
+    setIsRunning(true);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleTrackMute = (trackIdx: number) => {
+    audioEngine.toggleTrackMute(trackIdx);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleTrackSolo = (trackIdx: number) => {
+    audioEngine.toggleTrackSolo(trackIdx);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleClearTrack = (trackIdx: number) => {
+    audioEngine.clearTrack(trackIdx);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleUndoTrack = (trackIdx: number) => {
+    audioEngine.undoTrack(trackIdx);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleTrackVolumeChange = (trackIdx: number, vol: number) => {
+    audioEngine.setTrackVolume(trackIdx, vol);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleTrackPanChange = (trackIdx: number, pan: number) => {
+    audioEngine.setTrackPan(trackIdx, pan);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleTrackNameChange = (trackIdx: number, name: string) => {
+    audioEngine.setTrackName(trackIdx, name);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handlePlayAllTracks = async () => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.playAllLooperTracks();
+    setIsRunning(true);
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleStopAllTracks = () => {
+    audioEngine.stopAllLooperTracks();
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleClearAllTracks = () => {
+    audioEngine.clearAllLooperTracks();
+    setLooperState(audioEngine.looperEngine.getState());
+  };
+
+  const handleToggleMetronome = async () => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.toggleMetronome();
+    setIsRunning(true);
+    setMetronomeState(audioEngine.metronomeEngine.getState());
+  };
+
+  const handleStartLooperWithCountIn = async (bars: number = 1, trackIdx?: number) => {
+    if (!isRunning) {
+      await startAudioEngine();
+    }
+    await audioEngine.startLooperWithCountIn(bars, trackIdx);
+    setIsRunning(true);
+  };
+
+  // Unified Rig & Metronome Tempo
+  const handleBpmChange = (newBpm: number) => {
+    const clamped = Math.max(30, Math.min(280, Math.round(newBpm)));
+    setBpm(clamped);
+    audioEngine.setMetronomeBpm(clamped);
+    setMetronomeState(prev => ({ ...prev, bpm: clamped }));
+  };
+
+  const handleMetronomeTimeSignatureChange = (ts: 2 | 3 | 4 | 6) => {
+    audioEngine.setMetronomeTimeSignature(ts);
+    setMetronomeState(audioEngine.metronomeEngine.getState());
+  };
+
+  const handleMetronomeSoundChange = (sound: MetronomeSound) => {
+    audioEngine.setMetronomeSound(sound);
+    setMetronomeState(audioEngine.metronomeEngine.getState());
+  };
+
+  const handleMetronomeVolumeChange = (vol: number) => {
+    audioEngine.setMetronomeVolume(vol);
+    setMetronomeState(audioEngine.metronomeEngine.getState());
   };
 
   return (
@@ -935,7 +1140,7 @@ export default function App() {
         onOpenTuner={() => setIsTunerOpen(true)}
         isMicInput={inputSource.startsWith('mic')}
         bpm={bpm}
-        onBpmChange={setBpm}
+        onBpmChange={handleBpmChange}
         isBypassAll={isBypassAll}
         onToggleBypassAll={handleToggleBypassAll}
         inputSource={inputSource}
@@ -1030,13 +1235,35 @@ export default function App() {
               {activeChainTab === 'looper' && (
                 <LooperPedal
                   looperState={looperState}
-                  onToggleRecord={() => audioEngine.toggleLooperRecord()}
-                  onTogglePlayStop={() => audioEngine.toggleLooperPlayStop()}
-                  onClear={() => audioEngine.clearLooper()}
-                  onUndo={() => audioEngine.undoLooper()}
-                  onToggleReverse={() => audioEngine.toggleLooperReverse()}
-                  onToggleSpeed={() => audioEngine.toggleLooperSpeed()}
-                  onVolumeChange={(vol) => audioEngine.setLooperVolume(vol)}
+                  metronomeState={metronomeState}
+                  onToggleRecord={handleToggleLooperRecord}
+                  onTogglePlayStop={handleToggleLooperPlayStop}
+                  onClear={handleClearLooper}
+                  onUndo={handleUndoLooper}
+                  onToggleReverse={handleToggleLooperReverse}
+                  onToggleSpeed={handleToggleLooperSpeed}
+                  onVolumeChange={handleLooperVolumeChange}
+                  onModeChange={handleLooperModeChange}
+                  onSyncLockChange={handleLooperSyncLockChange}
+                  onToggleTrackRecord={handleToggleTrackRecord}
+                  onToggleTrackPlay={handleToggleTrackPlay}
+                  onToggleTrackMute={handleToggleTrackMute}
+                  onToggleTrackSolo={handleToggleTrackSolo}
+                  onClearTrack={handleClearTrack}
+                  onUndoTrack={handleUndoTrack}
+                  onTrackVolumeChange={handleTrackVolumeChange}
+                  onTrackPanChange={handleTrackPanChange}
+                  onTrackNameChange={handleTrackNameChange}
+                  onPlayAllTracks={handlePlayAllTracks}
+                  onStopAllTracks={handleStopAllTracks}
+                  onClearAllTracks={handleClearAllTracks}
+                  onToggleMetronome={handleToggleMetronome}
+                  onMetronomeBpmChange={handleBpmChange}
+                  onMetronomeTimeSignatureChange={handleMetronomeTimeSignatureChange}
+                  onMetronomeSoundChange={handleMetronomeSoundChange}
+                  onMetronomeVolumeChange={handleMetronomeVolumeChange}
+                  onStartLooperWithCountIn={handleStartLooperWithCountIn}
+                  presetBpm={bpm}
                   isCollapsed={false}
                   showCollapseToggle={false}
                 />
@@ -1135,13 +1362,35 @@ export default function App() {
 
             <LooperPedal
               looperState={looperState}
-              onToggleRecord={() => audioEngine.toggleLooperRecord()}
-              onTogglePlayStop={() => audioEngine.toggleLooperPlayStop()}
-              onClear={() => audioEngine.clearLooper()}
-              onUndo={() => audioEngine.undoLooper()}
-              onToggleReverse={() => audioEngine.toggleLooperReverse()}
-              onToggleSpeed={() => audioEngine.toggleLooperSpeed()}
-              onVolumeChange={(vol) => audioEngine.setLooperVolume(vol)}
+              metronomeState={metronomeState}
+              onToggleRecord={handleToggleLooperRecord}
+              onTogglePlayStop={handleToggleLooperPlayStop}
+              onClear={handleClearLooper}
+              onUndo={handleUndoLooper}
+              onToggleReverse={handleToggleLooperReverse}
+              onToggleSpeed={handleToggleLooperSpeed}
+              onVolumeChange={handleLooperVolumeChange}
+              onModeChange={handleLooperModeChange}
+              onSyncLockChange={handleLooperSyncLockChange}
+              onToggleTrackRecord={handleToggleTrackRecord}
+              onToggleTrackPlay={handleToggleTrackPlay}
+              onToggleTrackMute={handleToggleTrackMute}
+              onToggleTrackSolo={handleToggleTrackSolo}
+              onClearTrack={handleClearTrack}
+              onUndoTrack={handleUndoTrack}
+              onTrackVolumeChange={handleTrackVolumeChange}
+              onTrackPanChange={handleTrackPanChange}
+              onTrackNameChange={handleTrackNameChange}
+              onPlayAllTracks={handlePlayAllTracks}
+              onStopAllTracks={handleStopAllTracks}
+              onClearAllTracks={handleClearAllTracks}
+              onToggleMetronome={handleToggleMetronome}
+              onMetronomeBpmChange={handleBpmChange}
+              onMetronomeTimeSignatureChange={handleMetronomeTimeSignatureChange}
+              onMetronomeSoundChange={handleMetronomeSoundChange}
+              onMetronomeVolumeChange={handleMetronomeVolumeChange}
+              onStartLooperWithCountIn={handleStartLooperWithCountIn}
+              presetBpm={bpm}
               isCollapsed={collapsedSections.looper}
               onToggleCollapse={() => handleToggleSectionCollapse('looper')}
               showCollapseToggle={true}

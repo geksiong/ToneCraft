@@ -261,10 +261,11 @@ export const MidiSettingsTab: React.FC<MidiSettingsTabProps> = ({
         m.target.type !== 'tap_tempo' &&
         m.target.type !== 'dsp_power' &&
         m.target.type !== 'amp_param' &&
-        m.target.type !== 'cab_param'
+        m.target.type !== 'cab_param' &&
+        m.target.type !== 'metronome_toggle'
       ) return false;
     } else if (categoryFilter === 'looper') {
-      if (m.target.type !== 'looper_cmd') return false;
+      if (m.target.type !== 'looper_cmd' && m.target.type !== 'looper_track_cmd') return false;
     }
 
     if (searchQuery.trim()) {
@@ -993,7 +994,9 @@ const TargetSelectDropdown: React.FC<TargetSelectDropdownProps> = ({
     if (t.type === 'tap_tempo') return 'tap_tempo';
     if (t.type === 'dsp_power') return 'dsp_power';
     if (t.type === 'amp_param') return `amp_param:${t.paramKey}`;
+    if (t.type === 'metronome_toggle') return 'metronome_toggle';
     if (t.type === 'looper_cmd') return `looper_cmd:${t.command}`;
+    if (t.type === 'looper_track_cmd') return `looper_track_cmd:${t.trackIndex}:${t.command}`;
     return 'master_volume';
   };
 
@@ -1023,8 +1026,10 @@ const TargetSelectDropdown: React.FC<TargetSelectDropdownProps> = ({
     if (kind === 'tuner_toggle') return { type: 'tuner_toggle' };
     if (kind === 'tap_tempo') return { type: 'tap_tempo' };
     if (kind === 'dsp_power') return { type: 'dsp_power' };
+    if (kind === 'metronome_toggle') return { type: 'metronome_toggle' };
     if (kind === 'amp_param') return { type: 'amp_param', paramKey: parts[1] as any };
     if (kind === 'looper_cmd') return { type: 'looper_cmd', command: parts[1] as any };
+    if (kind === 'looper_track_cmd') return { type: 'looper_track_cmd', trackIndex: Number(parts[1]), command: parts[2] as any };
     return { type: 'master_volume' };
   };
 
@@ -1074,6 +1079,7 @@ const TargetSelectDropdown: React.FC<TargetSelectDropdownProps> = ({
         <option value="tuner_toggle">Chromatic Tuner (Toggle)</option>
         <option value="tap_tempo">Tap Tempo (Trigger)</option>
         <option value="dsp_power">DSP Engine Power (Toggle)</option>
+        <option value="metronome_toggle">Metronome Click (Toggle Play/Stop)</option>
       </optgroup>
 
       <optgroup label="🔊 Amp & Cabinet">
@@ -1085,11 +1091,21 @@ const TargetSelectDropdown: React.FC<TargetSelectDropdownProps> = ({
         <option value="amp_param:bypassed">Amp Bypass Toggle</option>
       </optgroup>
 
-      <optgroup label="📼 Tape Looper">
-        <option value="looper_cmd:record">Looper: Record / Overdub</option>
-        <option value="looper_cmd:play">Looper: Play / Stop</option>
+      <optgroup label="📼 Phrase Looper & Tracks">
+        <option value="looper_cmd:record">Looper: Master Record / Overdub</option>
+        <option value="looper_cmd:play">Looper: Master Play / Stop</option>
         <option value="looper_cmd:undo">Looper: Undo Layer</option>
         <option value="looper_cmd:clear">Looper: Clear All</option>
+        <option value="looper_track_cmd:0:record">Track 1: Record / Dub</option>
+        <option value="looper_track_cmd:0:mute">Track 1: Mute Toggle</option>
+        <option value="looper_track_cmd:0:solo">Track 1: Solo Toggle</option>
+        <option value="looper_track_cmd:1:record">Track 2: Record / Dub</option>
+        <option value="looper_track_cmd:1:mute">Track 2: Mute Toggle</option>
+        <option value="looper_track_cmd:1:solo">Track 2: Solo Toggle</option>
+        <option value="looper_track_cmd:2:record">Track 3: Record / Dub</option>
+        <option value="looper_track_cmd:2:mute">Track 3: Mute Toggle</option>
+        <option value="looper_track_cmd:3:record">Track 4: Record / Dub</option>
+        <option value="looper_track_cmd:3:mute">Track 4: Mute Toggle</option>
       </optgroup>
     </select>
   );
