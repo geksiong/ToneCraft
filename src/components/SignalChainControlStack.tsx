@@ -16,6 +16,7 @@ export interface CollapsedSectionsState {
   pedalboard: boolean;
   ampCab: boolean;
   looper: boolean;
+  backingTrack?: boolean;
 }
 
 interface SignalChainControlStackProps {

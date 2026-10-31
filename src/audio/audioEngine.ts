@@ -25,6 +25,8 @@ import { isNamModelProfile } from './ampModels';
 import { LooperEngine } from './looperEngine';
 import { TunerEngine } from './tunerEngine';
 import { MetronomeEngine, MetronomeState, MetronomeSound } from './metronomeEngine';
+import { BackingTrackEngine, backingTrackEngine } from './backingTrackEngine';
+import { BackingTrackState } from '../types/backingTrack';
 import {
   createPedalDspNodes,
   updatePedalParameters,
@@ -124,6 +126,7 @@ export class ToneCraftEngine {
   public ampEngine: AmpEngine = new AmpEngine();
   public looperEngine: LooperEngine = new LooperEngine();
   public metronomeEngine: MetronomeEngine = new MetronomeEngine();
+  public backingTrackEngine: BackingTrackEngine = backingTrackEngine;
   private tunerEngine: TunerEngine = new TunerEngine();
   public inputConditioner: InputConditionerEngine = new InputConditionerEngine();
 
@@ -153,6 +156,7 @@ export class ToneCraftEngine {
   public onTunerUpdate: ((data: TunerData) => void) | null = null;
   public onLooperUpdate: ((state: LooperState) => void) | null = null;
   public onMetronomeUpdate: ((state: MetronomeState) => void) | null = null;
+  public onBackingTrackUpdate: ((state: BackingTrackState) => void) | null = null;
   public onPeakUpdate: ((inputPeak: number, outputPeak: number) => void) | null = null;
   public onAmpStatusUpdate: ((status: AmpEngineStatus) => void) | null = null;
   public onTelemetryUpdate: ((telemetry: HdWorkletTelemetry) => void) | null = null;
@@ -167,6 +171,9 @@ export class ToneCraftEngine {
     });
     this.metronomeEngine.setOnStateChange((state) => {
       if (this.onMetronomeUpdate) this.onMetronomeUpdate(state);
+    });
+    this.backingTrackEngine.setOnStateChange((state) => {
+      if (this.onBackingTrackUpdate) this.onBackingTrackUpdate(state);
     });
   }
 
@@ -368,6 +375,11 @@ export class ToneCraftEngine {
     // Initialize and route Metronome Engine into master bus (isolated from recording tap)
     this.metronomeEngine.init(this.ctx, this.masterGainNode, (mState) => {
       if (this.onMetronomeUpdate) this.onMetronomeUpdate(mState);
+    });
+
+    // Initialize and route Backing Track Machine into master bus
+    this.backingTrackEngine.init(this.ctx, this.masterGainNode, (bState) => {
+      if (this.onBackingTrackUpdate) this.onBackingTrackUpdate(bState);
     });
 
     // Master Bus -> Limiter Bus -> Analyser -> Output Dual-Channel Stage -> Output Routing Stage

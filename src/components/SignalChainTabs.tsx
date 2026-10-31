@@ -6,11 +6,12 @@ import {
   Activity,
   Plus,
   LayoutGrid,
-  Columns
+  Columns,
+  Music
 } from 'lucide-react';
 import { LooperState, AmpModelConfig, IrCabinetConfig } from '../types/pedal';
 
-export type ActiveChainTab = 'pedals' | 'amp-cab' | 'looper' | 'spectrum';
+export type ActiveChainTab = 'pedals' | 'amp-cab' | 'looper' | 'backing-track' | 'spectrum';
 export type ViewMode = 'tabs' | 'stack';
 
 interface SignalChainTabsProps {
@@ -24,6 +25,7 @@ interface SignalChainTabsProps {
   ampModel: AmpModelConfig;
   irCabinet: IrCabinetConfig;
   looperState: LooperState;
+  backingTrackPlaying?: boolean;
 }
 
 export const SignalChainTabs: React.FC<SignalChainTabsProps> = ({
@@ -36,7 +38,8 @@ export const SignalChainTabs: React.FC<SignalChainTabsProps> = ({
   onOpenAddPedal,
   ampModel,
   irCabinet,
-  looperState
+  looperState,
+  backingTrackPlaying = false
 }) => {
   return (
     <div className="w-full flex flex-wrap items-center justify-between gap-2 mb-3 bg-[#0E1117] border border-[#1E232B] rounded-xl p-1.5 shadow-md">
@@ -107,7 +110,23 @@ export const SignalChainTabs: React.FC<SignalChainTabsProps> = ({
           )}
         </button>
 
-        {/* TAB 4: SPECTRUM & FREQUENCY RESPONSE */}
+        {/* TAB 4: BACKING TRACK MACHINE */}
+        <button
+          onClick={() => onSelectTab('backing-track')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'backing-track' && viewMode === 'tabs'
+              ? 'bg-neutral-800 text-white shadow-sm border border-neutral-700/80'
+              : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
+          }`}
+        >
+          <Music
+            size={14}
+            className={activeTab === 'backing-track' ? 'text-amber-400' : 'text-neutral-500'}
+          />
+          <span>Backing Band</span>
+        </button>
+
+        {/* TAB 5: SPECTRUM & FREQUENCY RESPONSE */}
         <button
           onClick={() => onSelectTab('spectrum')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${

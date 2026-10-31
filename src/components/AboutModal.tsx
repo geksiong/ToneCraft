@@ -644,6 +644,17 @@ export const AboutModal: React.FC<AboutModalProps> = ({
                   </div>
                 </div>
 
+                {/* Step 6 */}
+                <div className="p-4 rounded-xl bg-neutral-900/60 border border-neutral-800 flex gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-neutral-800 text-neutral-300 font-mono font-bold flex items-center justify-center shrink-0">6</div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-white text-sm">Backing Track Machine &amp; Band Jam</h4>
+                    <p className="text-xs text-neutral-300">
+                      Switch to the <strong>Backing Band</strong> tab or click the header button to jam along with a 4-piece synthesized band (Percussion, Bass, Rhythm Guitar/Keys, Synth Pad). Customize chord progressions with one-click editing, transpose to any key, select from Rock, Blues, Funk, Jazz, Metal, Bossa Nova, and Reggae grooves, and adjust individual instrument volumes, mute, or solo.
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </div>
           )}

@@ -16,7 +16,8 @@ import {
   Radio,
   BookOpen,
   Ban,
-  Clock
+  Clock,
+  Music
 } from 'lucide-react';
 
 interface UnifiedHeaderProps {
@@ -61,6 +62,10 @@ interface UnifiedHeaderProps {
   onOpenSettings: (tab?: 'input' | 'engine' | 'midi' | 'presets') => void;
   onOpenAbout: () => void;
 
+  // Backing Track Machine
+  onSelectBackingTrack?: () => void;
+  backingTrackPlaying?: boolean;
+
   // MIDI activity
   isMidiActivity?: boolean;
   midiDeviceCount?: number;
@@ -92,6 +97,8 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
   gateEnabled,
   onOpenSettings,
   onOpenAbout,
+  onSelectBackingTrack,
+  backingTrackPlaying = false,
   isMidiActivity = false,
   midiDeviceCount = 0
 }) => {

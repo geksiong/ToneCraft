@@ -27,6 +27,8 @@ import { CollapsedSectionsState } from './components/SignalChainControlStack';
 import { Pedalboard } from './components/Pedalboard';
 import { AmpCabSection } from './components/AmpCabSection';
 import { LooperPedal } from './components/LooperPedal';
+import { BackingTrackMachine } from './components/BackingTrackMachine';
+import { BackingTrackState } from './types/backingTrack';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { FrequencyResponseGraph } from './components/FrequencyResponseGraph';
 import { TunerModal } from './components/TunerModal';
@@ -123,9 +125,10 @@ export default function App() {
     clarity: 0
   });
 
-  // Looper & Metronome State
+  // Looper & Metronome & Backing Track State
   const [looperState, setLooperState] = useState<LooperState>(() => audioEngine.looperEngine.getState());
   const [metronomeState, setMetronomeState] = useState<MetronomeState>(() => audioEngine.metronomeEngine.getState());
+  const [backingTrackState, setBackingTrackState] = useState<BackingTrackState>(() => audioEngine.backingTrackEngine.getState());
 
   // Modals
   const [isTunerOpen, setIsTunerOpen] = useState<boolean>(false);
@@ -212,14 +215,16 @@ export default function App() {
         return {
           pedalboard: Boolean(parsed.pedalboard),
           ampCab: Boolean(parsed.ampCab !== undefined ? parsed.ampCab : (parsed.amp || parsed.cab)),
-          looper: Boolean(parsed.looper)
+          looper: Boolean(parsed.looper),
+          backingTrack: Boolean(parsed.backingTrack)
         };
       }
     } catch {}
     return {
       pedalboard: false,
       ampCab: false,
-      looper: false
+      looper: false,
+      backingTrack: false
     };
   });
 
@@ -257,12 +262,13 @@ export default function App() {
     setCollapsedSections({
       pedalboard: collapseAll,
       ampCab: collapseAll,
-      looper: collapseAll
+      looper: collapseAll,
+      backingTrack: collapseAll
     });
   };
 
   // Engine Startup: builds the complete graph first with minimise latency profile active, and starts selected source
-  const startAudioEngine = async (sourceToUse?: string) => {
+  const startAudioEngine = async (sourceToUse?: string, autoPlayRiff: boolean = true) => {
     try {
       const activeSource = sourceToUse || inputSource;
 
@@ -291,9 +297,12 @@ export default function App() {
           setIsRiffPlaying(false);
           await audioEngine.setInputSource(activeSource);
           await refreshAudioDevices();
-        } else {
+        } else if (autoPlayRiff) {
           audioEngine.playSampleRiff(activeSource);
           setIsRiffPlaying(true);
+        } else {
+          audioEngine.stopSampleRiff();
+          setIsRiffPlaying(false);
         }
       } else {
         await audioEngine.resume();
@@ -302,9 +311,12 @@ export default function App() {
           setIsRiffPlaying(false);
           await audioEngine.setInputSource(activeSource);
           await refreshAudioDevices();
-        } else {
+        } else if (autoPlayRiff) {
           audioEngine.playSampleRiff(activeSource);
           setIsRiffPlaying(true);
+        } else {
+          audioEngine.stopSampleRiff();
+          setIsRiffPlaying(false);
         }
       }
 
@@ -361,6 +373,7 @@ export default function App() {
     audioEngine.onTunerUpdate = (data) => setTunerData(data);
     audioEngine.onLooperUpdate = (state) => setLooperState(state);
     audioEngine.onMetronomeUpdate = (state) => setMetronomeState(state);
+    audioEngine.onBackingTrackUpdate = (state) => setBackingTrackState(state);
     audioEngine.onPeakUpdate = (inPeak, outPeak) => {
       setInputPeak(inPeak);
       setOutputPeak(outPeak);
@@ -383,6 +396,7 @@ export default function App() {
       audioEngine.onTunerUpdate = null;
       audioEngine.onLooperUpdate = null;
       audioEngine.onMetronomeUpdate = null;
+      audioEngine.onBackingTrackUpdate = null;
       audioEngine.onPeakUpdate = null;
       audioEngine.onLatencyUpdate = null;
       audioEngine.onAmpStatusUpdate = null;
@@ -1199,6 +1213,7 @@ export default function App() {
               ampModel={ampModel}
               irCabinet={irCabinet}
               looperState={looperState}
+              backingTrackPlaying={backingTrackState.isPlaying}
             />
 
             <div className="flex-1">
@@ -1266,6 +1281,19 @@ export default function App() {
                   presetBpm={bpm}
                   isCollapsed={false}
                   showCollapseToggle={false}
+                />
+              )}
+
+              {activeChainTab === 'backing-track' && (
+                <BackingTrackMachine
+                  presetBpm={bpm}
+                  onBpmChange={handleBpmChange}
+                  isCollapsed={collapsedSections.backingTrack}
+                  showCollapseToggle={true}
+                  onToggleCollapse={() => handleToggleSectionCollapse('backingTrack')}
+                  onEnsureAudioReady={async () => {
+                    await startAudioEngine(undefined, false);
+                  }}
                 />
               )}
 
@@ -1394,6 +1422,17 @@ export default function App() {
               isCollapsed={collapsedSections.looper}
               onToggleCollapse={() => handleToggleSectionCollapse('looper')}
               showCollapseToggle={true}
+            />
+
+            <BackingTrackMachine
+              presetBpm={bpm}
+              onBpmChange={handleBpmChange}
+              isCollapsed={collapsedSections.backingTrack}
+              onToggleCollapse={() => handleToggleSectionCollapse('backingTrack')}
+              showCollapseToggle={true}
+              onEnsureAudioReady={async () => {
+                await startAudioEngine(undefined, false);
+              }}
             />
           </div>
         )}
