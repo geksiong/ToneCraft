@@ -363,7 +363,7 @@ export const BackingTrackMachine: React.FC<BackingTrackMachineProps> = ({
                 }`}
                 title={`Current Chord: ${currChord.root} ${CHORD_QUALITY_LABELS[currChord.quality]?.fullName || ''}`}
               >
-                <span className="text-md font-black text-amber-200">
+                <span className="text-base font-black text-amber-200">
                   {currChord.root}
                   <span className="text-sm text-amber-300 ml-0.5">
                     {CHORD_QUALITY_LABELS[currChord.quality]?.label}
