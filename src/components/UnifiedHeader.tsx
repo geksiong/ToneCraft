@@ -17,7 +17,8 @@ import {
   BookOpen,
   Ban,
   Clock,
-  Music
+  Music,
+  Flame
 } from 'lucide-react';
 
 interface UnifiedHeaderProps {
@@ -66,6 +67,10 @@ interface UnifiedHeaderProps {
   onSelectBackingTrack?: () => void;
   backingTrackPlaying?: boolean;
 
+  // Practice Riffs Library
+  onOpenRiffsLibrary?: () => void;
+  isRiffsLibraryActive?: boolean;
+
   // MIDI activity
   isMidiActivity?: boolean;
   midiDeviceCount?: number;
@@ -99,6 +104,8 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
   onOpenAbout,
   onSelectBackingTrack,
   backingTrackPlaying = false,
+  onOpenRiffsLibrary,
+  isRiffsLibraryActive = false,
   isMidiActivity = false,
   midiDeviceCount = 0
 }) => {
@@ -384,6 +391,22 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
               {getInputGainDbString(inputGain)}
             </span>
           </button>
+
+          {/* Practice Riffs Library Quick Access */}
+          {onOpenRiffsLibrary && (
+            <button
+              onClick={onOpenRiffsLibrary}
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all cursor-pointer ${
+                isRiffsLibraryActive
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-xs'
+                  : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
+              }`}
+              title="Open Riffs Practice Library with Tablature, Movable Shapes & Song Lineage"
+            >
+              <Flame size={13} className="text-amber-400" />
+              <span className="hidden md:inline">Riffs</span>
+            </button>
+          )}
 
           {/* Settings Modal Button */}
           <button

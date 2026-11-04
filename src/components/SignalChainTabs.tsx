@@ -7,11 +7,12 @@ import {
   Plus,
   LayoutGrid,
   Columns,
-  Music
+  Music,
+  Flame
 } from 'lucide-react';
 import { LooperState, AmpModelConfig, IrCabinetConfig } from '../types/pedal';
 
-export type ActiveChainTab = 'pedals' | 'amp-cab' | 'looper' | 'backing-track' | 'spectrum';
+export type ActiveChainTab = 'pedals' | 'amp-cab' | 'looper' | 'backing-track' | 'riffs' | 'spectrum';
 export type ViewMode = 'tabs' | 'stack';
 
 interface SignalChainTabsProps {
@@ -126,7 +127,26 @@ export const SignalChainTabs: React.FC<SignalChainTabsProps> = ({
           <span>Backing Band</span>
         </button>
 
-        {/* TAB 5: SPECTRUM & FREQUENCY RESPONSE */}
+        {/* TAB 5: RIFFS PRACTICE LIBRARY */}
+        <button
+          onClick={() => onSelectTab('riffs')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'riffs' && viewMode === 'tabs'
+              ? 'bg-neutral-800 text-white shadow-sm border border-neutral-700/80'
+              : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
+          }`}
+        >
+          <Flame
+            size={14}
+            className={activeTab === 'riffs' ? 'text-amber-400' : 'text-neutral-500'}
+          />
+          <span>Riffs Library</span>
+          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            Tab &amp; Songs
+          </span>
+        </button>
+
+        {/* TAB 6: SPECTRUM & FREQUENCY RESPONSE */}
         <button
           onClick={() => onSelectTab('spectrum')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${

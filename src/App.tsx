@@ -49,7 +49,8 @@ import {
   OutputChannelRoutingMode
 } from './audio/inputChannelRouter';
 import { isNamModelProfile } from './audio/ampModels';
-import { Music2, Power, Radio, LayoutGrid, Columns, Plus } from 'lucide-react';
+import { Music2, Power, Radio, LayoutGrid, Columns, Plus, Flame } from 'lucide-react';
+import { RiffsPracticeLibrary } from './components/riffs/RiffsPracticeLibrary';
 
 export default function App() {
   // Preset & Rig State
@@ -1164,6 +1165,11 @@ export default function App() {
         gateEnabled={conditionerConfig.gateEnabled}
         onOpenSettings={handleOpenSettings}
         onOpenAbout={() => setIsAboutOpen(true)}
+        onOpenRiffsLibrary={() => {
+          setViewMode('tabs');
+          setActiveChainTab('riffs');
+        }}
+        isRiffsLibraryActive={activeChainTab === 'riffs' && viewMode === 'tabs'}
         isMidiActivity={isMidiActivity}
         midiDeviceCount={midiDeviceCount}
       />
@@ -1293,6 +1299,24 @@ export default function App() {
                   onToggleCollapse={() => handleToggleSectionCollapse('backingTrack')}
                   onEnsureAudioReady={async () => {
                     await startAudioEngine(undefined, false);
+                  }}
+                />
+              )}
+
+              {activeChainTab === 'riffs' && (
+                <RiffsPracticeLibrary
+                  onApplyPreset={(presetId) => {
+                    const match = presets.find((p) => p.id === presetId);
+                    if (match) {
+                      handleSelectPreset(match);
+                      showMidiNotice(`Rig Preset: ${match.name}`);
+                    }
+                  }}
+                  isEngineRunning={isRunning}
+                  onEnsureEngineRunning={async () => {
+                    if (!isRunning) {
+                      await startAudioEngine(undefined, false);
+                    }
                   }}
                 />
               )}
@@ -1434,6 +1458,53 @@ export default function App() {
                 await startAudioEngine(undefined, false);
               }}
             />
+
+            {/* Riffs Practice Library & Tablature in Stacked View */}
+            <div className="bg-[#0E1117] border border-[#1E232B] rounded-xl overflow-hidden shadow-md">
+              <div className="p-3 sm:p-3.5 bg-[#0D1117] border-b border-[#1E232B] flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Flame size={15} className="text-amber-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                    Riffs Practice Library &amp; Tablature
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    Movable Shapes &amp; Song Lineage
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setViewMode('tabs');
+                      setActiveChainTab('riffs');
+                    }}
+                    className="text-xs font-mono font-bold text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Switch to Focused Fullscreen Tabs View"
+                  >
+                    <span>Focus View</span>
+                    <span>→</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 sm:p-4">
+                <RiffsPracticeLibrary
+                  onApplyPreset={(presetId) => {
+                    const match = presets.find((p) => p.id === presetId);
+                    if (match) {
+                      handleSelectPreset(match);
+                      showMidiNotice(`Rig Preset: ${match.name}`);
+                    }
+                  }}
+                  isEngineRunning={isRunning}
+                  onEnsureEngineRunning={async () => {
+                    if (!isRunning) {
+                      await startAudioEngine(undefined, false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
           </div>
         )}
       </main>

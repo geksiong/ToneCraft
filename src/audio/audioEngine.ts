@@ -1558,6 +1558,10 @@ export class ToneCraftEngine {
     console.log('[ToneCraftEngine] Audio engine recovery restart completed successfully.');
   }
 
+  public getMasterDestinationNode(): AudioNode | null {
+    return this.masterGainNode || (this.ctx ? this.ctx.destination : null);
+  }
+
   public dispose(): void {
     if (this.peakMeterTimer) clearTimeout(this.peakMeterTimer);
     this.disposeContextOnly();
